@@ -1280,3 +1280,24 @@ table tbody tr:hover > td { background: #f8fafd; }
     .pnode-row { grid-template-columns: 1fr 1fr; }
     .pnode-act { grid-column: 1 / -1; justify-content: flex-start; }
 }
+
+/* ===== 多环境标识 (v2.18+) ===== */
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+.env-badge {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 700; letter-spacing: .5px; white-space: nowrap;
+}
+.env-badge.env-prod { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+.env-badge.env-pre  { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.env-readonly-banner {
+    margin: 12px 24px 0; padding: 8px 14px; border-radius: 8px;
+    background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; font-size: 13px;
+}
+/* 发布差异 */
+.diff-block { font-family: var(--font-mono, ui-monospace, Menlo, monospace); font-size: 12px; line-height: 1.5;
+    background: #f8fafc; border: 1px solid var(--color-border); border-radius: 6px; overflow: auto; max-height: 360px; }
+.diff-block div { padding: 0 10px; white-space: pre; }
+.diff-block .d-add  { background: #dcfce7; color: #166534; }
+.diff-block .d-del  { background: #fee2e2; color: #991b1b; }
+.diff-block .d-hunk { background: #e0f2fe; color: #075985; }
+.diff-block .d-meta { color: #94a3b8; }

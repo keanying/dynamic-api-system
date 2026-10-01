@@ -8,6 +8,21 @@ server:
   workers: 1
   secret_key: "pfk-O7OSzAYadCPEmOkjNFG1JMlpfnKcL3UH"
 
+# 多环境 (v2.18+)：不同端口标识不同环境，同库不同表（pre 表名带 _pre 后缀）
+#   - 启动端口命中某环境的 port 时自动按该环境运行（--env / APP_ENV 优先级更高）
+#   - python main.py --env pre 会自动监听 pre 的端口
+#   - url 用于两套环境页面互相跳转（如预发「发布到生产」后去生产查看差异/审核），
+#     留空则按「当前访问的主机名 + 对方端口」推算
+#   - 生产环境：仅管理员(超级管理员/管理员)可做写操作；
+#     其他人请在预发环境修改，验证后「发布到生产」，由生产管理员核对差异后审核上线
+environments:
+  prod:
+    port: 3000
+    url: ""
+  pre:
+    port: 3002
+    url: ""
+
 database:
   # SQLite (默认开发环境)
   # url: "sqlite+aiosqlite:///./onedata.db"

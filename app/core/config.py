@@ -10,6 +10,8 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from app.core.runtime_env import CURRENT_ENV, IS_PRE, env_port
+
 # 项目根目录
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 CONFIG_FILE = BASE_DIR / "config.yaml"
@@ -174,6 +176,16 @@ def load_config() -> FullConfig:
     log_raw = raw.get("log", {})
     monitor_raw = raw.get("monitor", {})
 
+    # 监听端口 (v2.18+)：environments.<当前环境>.port 优先于 server.port，
+    # 这样 `python main.py --env pre` 会自动监听预发端口。环境变量 SERVER_PORT 仍最高优先。
+    listen_port = env_port(CURRENT_ENV) or server_raw.get("port", 8000)
+
+    # Redis 键前缀按环境隔离 (v2.18+)：pre 表是正式表的副本，API id 会重合，
+    # 若两套环境共用同一前缀，缓存键 api:{id}:... 会互相串数据。
+    redis_prefix = _env("REDIS_KEY_PREFIX", redis_raw.get("key_prefix", "onedata:"))
+    if IS_PRE:
+        redis_prefix = f"{redis_prefix}pre:"
+
     # 处理 SQLite 相对路径，转为绝对路径
     db_url = _env("ONEDATA_DATABASE_URL", db_raw.get("url", "sqlite+aiosqlite:///./onedata.db"))
     if "sqlite" in db_url and "///./" in db_url:
@@ -184,7 +196,7 @@ def load_config() -> FullConfig:
             title=_env("APP_TITLE", raw.get("app", {}).get("title", "OneData Portal")),
             version=_env("APP_VERSION", raw.get("app", {}).get("version", "2.9.0")),
             host=_env("SERVER_HOST", server_raw.get("host", "0.0.0.0")),
-            port=_env("SERVER_PORT", server_raw.get("port", 8000), int),
+            port=_env("SERVER_PORT", listen_port, int),
             debug=_env("SERVER_DEBUG", server_raw.get("debug", True), bool),
             workers=_env("SERVER_WORKERS", server_raw.get("workers", 1), int),
             secret_key=_env("SERVER_SECRET_KEY", server_raw.get("secret_key", "change-me")),
@@ -195,7 +207,7 @@ def load_config() -> FullConfig:
         ),
         server=ServerConfig(
             host=_env("SERVER_HOST", server_raw.get("host", "0.0.0.0")),
-            port=_env("SERVER_PORT", server_raw.get("port", 8000), int),
+            port=_env("SERVER_PORT", listen_port, int),
             debug=_env("SERVER_DEBUG", server_raw.get("debug", True), bool),
             workers=_env("SERVER_WORKERS", server_raw.get("workers", 1), int),
             secret_key=_env("SERVER_SECRET_KEY", server_raw.get("secret_key", "change-me")),
@@ -214,7 +226,7 @@ def load_config() -> FullConfig:
             password=_env("REDIS_PASSWORD", redis_raw.get("password", "")),
             db=_env("REDIS_DB", redis_raw.get("db", 0), int),
             max_connections=_env("REDIS_MAX_CONNECTIONS", redis_raw.get("max_connections", 20), int),
-            key_prefix=_env("REDIS_KEY_PREFIX", redis_raw.get("key_prefix", "onedata:")),
+            key_prefix=redis_prefix,
         ),
         security=SecurityConfig(
             encryption_key=_env("SECURITY_ENCRYPTION_KEY", sec_raw.get("encryption_key", "")),

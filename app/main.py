@@ -41,6 +41,11 @@ async def lifespan(app: FastAPI):
     from app.core.database import init_db
     from app.core.runtime_env import CURRENT_ENV, IS_PRE, TABLE_SUFFIX
     log.info(f"运行环境: {CURRENT_ENV}" + (f"（表名后缀 {TABLE_SUFFIX}）" if IS_PRE else "（正式环境，无表名后缀）"))
+    from app.core.runtime_env import env_port, startup_port
+    _other = "prod" if IS_PRE else "pre"
+    _port = startup_port() or settings.app.port
+    if env_port(_other) and env_port(_other) == _port:
+        log.warning(f"注意：当前以 {CURRENT_ENV} 环境运行，但端口 {_port} 在配置中属于 {_other} 环境，请确认启动参数")
     log.info("正在初始化数据库...")
     await init_db()
     log.info("数据库初始化完成（含自动迁移）")
@@ -117,6 +122,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ========== 生产环境写保护 (v2.18+) ==========
+# 必须在请求日志中间件之前注册：后注册的在外层，这样被拦截的请求也有日志和 trace_id
+from app.core.env_guard import prod_write_guard
+app.middleware("http")(prod_write_guard)
 
 
 # ========== 请求日志中间件 ==========
@@ -239,7 +250,7 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "app" / "static")), na
 
 # 注册 API 路由
 from app.api import auth, projects, api_configs, datasources, monitor, test_api, gateway, views, users, sql_tools, \
-    system, members, approvals, plugin_libraries, owner_approvals, project_variables
+    system, members, approvals, plugin_libraries, owner_approvals, project_variables, releases
 
 app.include_router(auth.router)
 app.include_router(projects.router)
@@ -257,3 +268,4 @@ app.include_router(approvals.router)
 app.include_router(owner_approvals.router)
 app.include_router(project_variables.router)
 app.include_router(plugin_libraries.router)
+app.include_router(releases.router)
