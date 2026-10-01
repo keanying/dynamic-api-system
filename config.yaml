@@ -13,7 +13,7 @@ database:
   # url: "sqlite+aiosqlite:///./onedata.db"
   # MySQL 示例:
   url: "mysql+aiomysql://opinionhub:8drfEYnxAdcW5aP3@localhost:3306/opinionhub"
-#  url: "mysql+aiomysql://BI_Analyst:Tr5ApzkHYXM3vat@rm-bp1t725mxo36124f8.mysql.rds.aliyuncs.com:3306/pft_ai"
+#  url: "mysql+aiomysql://BI_Analyst:Tr5Apzvat@rm-bp1t124f8.mysql.rds.alncs.com:3306/pft_ai"
   echo: false
   pool_size: 15
   pool_recycle: 3600

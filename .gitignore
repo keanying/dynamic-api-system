@@ -11,3 +11,4 @@ wheels/
 logs/*
 # 启动自动备份目录
 backup/
+.idea
