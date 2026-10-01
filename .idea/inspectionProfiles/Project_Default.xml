@@ -1,0 +1,35 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="DuplicatedCode" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <Languages>
+        <language minSize="91" name="Python" />
+      </Languages>
+    </inspection_tool>
+    <inspection_tool class="Eslint" enabled="true" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="false" level="WARNING" enabled_by_default="false">
+      <option name="ignoredPackages">
+        <list>
+          <option value="aiofiles" />
+          <option value="aiomysql" />
+          <option value="cssselect" />
+          <option value="parsel" />
+          <option value="Pillow" />
+          <option value="httpx" />
+          <option value="tenacity" />
+          <option value="pydantic" />
+          <option value="redis" />
+          <option value="openpyxl" />
+          <option value="pandas" />
+          <option value="cryptography" />
+          <option value="aiohttp" />
+          <option value="pyhumps" />
+          <option value="typer" />
+          <option value="loguru" />
+          <option value="curl_cffi" />
+          <option value="fastapi" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>

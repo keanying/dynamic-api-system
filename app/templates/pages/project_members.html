@@ -1,0 +1,161 @@
+{% extends "layouts/app.html" %}
+
+{% block title %}项目成员 - OneData Portal{% endblock %}
+
+{% block breadcrumb %}
+<a href="/admin/projects">项目管理</a>
+<span class="sep">/</span>
+<a href="/admin/projects/{{ project_id }}" id="bcProject">项目</a>
+<span class="sep">/</span>
+<span class="current">成员管理</span>
+{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+    <div class="toolbar-left">
+        <h2 style="font-size:18px;font-weight:700;">项目成员</h2>
+    </div>
+    <div class="toolbar-right">
+        <button class="btn btn-secondary" onclick="location.href='/admin/projects/{{ project_id }}'">返回项目</button>
+        <button class="btn btn-primary" id="addMemberBtn" onclick="openAddMember()" style="display:none;">+ 添加成员</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead>
+                <tr style="text-align:left; color:#64748b; border-bottom:1px solid #e2e8f0;">
+                    <th style="padding:10px 8px;">成员</th>
+                    <th style="padding:10px 8px;">账号</th>
+                    <th style="padding:10px 8px;">项目角色</th>
+                    <th style="padding:10px 8px; width:220px;">操作</th>
+                </tr>
+            </thead>
+            <tbody id="memberTbody"><tr><td colspan="4" style="padding:12px; color:#94a3b8;">加载中...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 添加成员弹窗 -->
+<div class="modal-overlay" id="addMemberModal" style="display:none;">
+    <div class="modal" style="max-width:440px;">
+        <div class="modal-header"><h3>添加项目成员</h3><button class="btn-icon" onclick="closeAddMember()">&times;</button></div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">选择用户</label>
+                <select class="form-select" id="addMemberUser"><option value="">加载中...</option></select>
+                <div class="form-hint">仅列出尚未加入本项目的用户</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">项目角色</label>
+                <select class="form-select" id="addMemberRole">
+                    <option value="developer">研发（可建/改草稿、提交上线、参与审核）</option>
+                    <option value="manager">项目管理员（可管成员、审批上线）</option>
+                    <option value="viewer">只读（仅查看）</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeAddMember()">取消</button>
+            <button class="btn btn-primary" onclick="submitAddMember()">添加</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const PROJECT_ID = {{ project_id }};
+const PROJECT_NAME = "{{ project_name }}";
+const ROLE_LABEL = {manager:'项目管理员', developer:'研发', viewer:'只读'};
+let MY_ROLE = null, IS_SUPER = false;
+
+document.getElementById('bcProject').textContent = PROJECT_NAME || '项目';
+
+async function loadMyRole() {
+    try {
+        const me = await API.get('/api/auth/me');
+        IS_SUPER = !!(me.data && me.data.is_super_admin);
+        if (IS_SUPER) { MY_ROLE = 'manager'; return; }
+        const m = (me.data.memberships || []).find(x => x.project_id === PROJECT_ID);
+        MY_ROLE = m ? m.project_role : null;
+    } catch (e) { MY_ROLE = null; }
+}
+
+async function loadMembers() {
+    await loadMyRole();
+    const addBtn = document.getElementById('addMemberBtn');
+    if (addBtn) addBtn.style.display = (MY_ROLE === 'manager') ? '' : 'none';
+
+    const tbody = document.getElementById('memberTbody');
+    const data = await API.get(`/api/projects/${PROJECT_ID}/members`);
+    if (!data || !data.data) {
+        tbody.innerHTML = '<tr><td colspan="4" style="padding:12px;color:#94a3b8;">无法加载成员（你可能不是项目成员）</td></tr>';
+        return;
+    }
+    const items = data.data.items || [];
+    if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="padding:12px;color:#94a3b8;">暂无成员</td></tr>';
+        return;
+    }
+    const canManage = (MY_ROLE === 'manager');
+    tbody.innerHTML = items.map(m => {
+        let ops = '<span class="text-muted text-sm">—</span>';
+        if (canManage) {
+            ops = `
+                <select onchange="changeRole(${m.user_id}, this.value)" style="font-size:12px;padding:4px 8px;border:1px solid #cbd5e1;border-radius:4px;">
+                    <option value="manager" ${m.project_role==='manager'?'selected':''}>项目管理员</option>
+                    <option value="developer" ${m.project_role==='developer'?'selected':''}>研发</option>
+                    <option value="viewer" ${m.project_role==='viewer'?'selected':''}>只读</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" style="margin-left:8px;padding:4px 10px;" onclick="removeMember(${m.user_id}, '${(m.nickname||'').replace(/'/g,'')}')">移除</button>`;
+        }
+        return `<tr style="border-bottom:1px solid #f1f5f9;">
+            <td style="padding:10px 8px;">${m.nickname || ''} ${m.is_active?'':'<span style="color:#dc2626;font-size:11px;">(已禁用)</span>'}</td>
+            <td style="padding:10px 8px;color:#64748b;">${m.username}</td>
+            <td style="padding:10px 8px;"><span style="font-size:11px;padding:3px 9px;border-radius:4px;background:#ede9fe;color:#6d28d9;">${ROLE_LABEL[m.project_role]||m.project_role}</span></td>
+            <td style="padding:10px 8px;">${ops}</td>
+        </tr>`;
+    }).join('');
+}
+
+async function openAddMember() {
+    document.getElementById('addMemberModal').style.display = 'flex';
+    const sel = document.getElementById('addMemberUser');
+    sel.innerHTML = '<option value="">加载中...</option>';
+    const [usersResp, membersResp] = await Promise.all([
+        API.get('/api/users?page=1&page_size=100'),
+        API.get(`/api/projects/${PROJECT_ID}/members`),
+    ]);
+    const memberIds = new Set((membersResp.data.items || []).map(m => m.user_id));
+    const users = (usersResp.data.items || []).filter(u => !memberIds.has(u.id));
+    if (!users.length) { sel.innerHTML = '<option value="">没有可添加的用户</option>'; return; }
+    sel.innerHTML = users.map(u => `<option value="${u.id}">${u.nickname||u.username}（${u.username}）</option>`).join('');
+}
+function closeAddMember() { document.getElementById('addMemberModal').style.display = 'none'; }
+
+async function submitAddMember() {
+    const userId = parseInt(document.getElementById('addMemberUser').value);
+    const role = document.getElementById('addMemberRole').value;
+    if (!userId) { Toast.error('请选择用户'); return; }
+    const r = await API.post(`/api/projects/${PROJECT_ID}/members`, {user_id: userId, project_role: role});
+    if (r.status) { Toast.success(r.msg || '已添加'); closeAddMember(); loadMembers(); }
+    else { Toast.error(r.msg || '添加失败'); }
+}
+async function changeRole(userId, role) {
+    const r = await API.put(`/api/projects/${PROJECT_ID}/members/${userId}`, {project_role: role});
+    if (r.status) { Toast.success(r.msg || '已更新'); loadMembers(); }
+    else { Toast.error(r.msg || '更新失败'); loadMembers(); }
+}
+function removeMember(userId, name) {
+    showConfirm('移除成员', `确定将「${name}」移出本项目吗？`, async () => {
+        const r = await API.del(`/api/projects/${PROJECT_ID}/members/${userId}`);
+        if (r.status) { Toast.success(r.msg || '已移除'); loadMembers(); }
+        else { Toast.error(r.msg || '移除失败'); }
+    });
+}
+
+loadMembers();
+</script>
+{% endblock %}

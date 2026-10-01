@@ -1,0 +1,159 @@
+{% extends "layouts/app.html" %}
+
+{% block title %}审批中心 - OneData Portal{% endblock %}
+
+{% block breadcrumb %}
+<a href="/admin/projects">项目管理</a>
+<span class="sep">/</span>
+<a href="/admin/projects/{{ project_id }}" id="bcProject">项目</a>
+<span class="sep">/</span>
+<span class="current">上线审批</span>
+{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+    <div class="toolbar-left">
+        <h2 style="font-size:18px;font-weight:700;">上线审批中心</h2>
+    </div>
+    <div class="toolbar-right">
+        <select class="form-select" id="statusFilter" onchange="loadApprovals()" style="width:140px;">
+            <option value="pending">进行中</option>
+            <option value="approved">已通过</option>
+            <option value="rejected">已驳回</option>
+            <option value="withdrawn">已撤回</option>
+            <option value="all">全部</option>
+        </select>
+        <button class="btn btn-secondary" onclick="location.href='/admin/projects/{{ project_id }}'">返回项目</button>
+    </div>
+</div>
+
+<div id="apprList"></div>
+<div id="apprEmpty" style="display:none; text-align:center; padding:60px; color:#94a3b8;">暂无审批单</div>
+
+<!-- 审批决定弹窗 -->
+<div class="modal-overlay" id="decideModal" style="display:none;">
+    <div class="modal" style="max-width:440px;">
+        <div class="modal-header"><h3 id="decideTitle">审批</h3><button class="btn-icon" onclick="closeDecide()">&times;</button></div>
+        <div class="modal-body">
+            <input type="hidden" id="decideApprId">
+            <input type="hidden" id="decideRole">
+            <div class="form-group">
+                <label class="form-label">意见（可选）</label>
+                <textarea class="form-textarea" id="decideComment" rows="3" placeholder="审批意见..."></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeDecide()">取消</button>
+            <button class="btn btn-ghost" style="color:#dc2626;" onclick="doDecide('reject')">驳回</button>
+            <button class="btn btn-primary" onclick="doDecide('approve')">通过</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const PROJECT_ID = {{ project_id }};
+const PROJECT_NAME = "{{ project_name }}";
+let MY_ID = null, MY_ROLE = null, IS_SUPER = false;
+
+document.getElementById('bcProject').textContent = PROJECT_NAME || '项目';
+
+const DEC_LABEL = {pending:'待定', approved:'已通过', rejected:'已驳回'};
+const DEC_COLOR = {pending:'#92400e', approved:'#166534', rejected:'#dc2626'};
+const OVERALL_LABEL = {pending:'进行中', approved:'已通过', rejected:'已驳回', withdrawn:'已撤回'};
+
+async function loadMe() {
+    const me = await API.get('/api/auth/me');
+    MY_ID = me.data.id;
+    IS_SUPER = !!me.data.is_super_admin;
+    if (IS_SUPER) { MY_ROLE = 'manager'; return; }
+    const m = (me.data.memberships || []).find(x => x.project_id === PROJECT_ID);
+    MY_ROLE = m ? m.project_role : null;
+}
+
+async function loadApprovals() {
+    if (MY_ID === null) await loadMe();
+    const status = document.getElementById('statusFilter').value;
+    const data = await API.get(`/api/projects/${PROJECT_ID}/approvals?status=${status}`);
+    const list = document.getElementById('apprList');
+    const empty = document.getElementById('apprEmpty');
+    if (!data || !data.data || !(data.data.items || []).length) {
+        list.innerHTML = ''; empty.style.display = 'block'; return;
+    }
+    empty.style.display = 'none';
+    list.innerHTML = data.data.items.map(a => {
+        const isReviewer = (a.reviewer && a.reviewer.id === MY_ID);
+        const isSubmitter = (a.submitter && a.submitter.id === MY_ID);
+        const pending = a.overall_status === 'pending';
+
+        // 我能否会审：是被指定的会审人 且 还没做
+        const canReviewerAct = pending && isReviewer && a.reviewer_decision === 'pending';
+        const canWithdraw = pending && (isSubmitter || IS_SUPER);
+
+        let actions = '';
+        if (canReviewerAct) actions += `<button class="btn btn-primary btn-sm" onclick="openDecide(${a.id},'reviewer')">会审通过 / 驳回</button> `;
+        if (canWithdraw) actions += `<button class="btn btn-ghost btn-sm" onclick="withdraw(${a.id})">撤回</button>`;
+        // 会审已通过、整体待发起者上线时的提示
+        if (a.overall_status === 'approved') {
+            actions += `<span class="text-muted text-sm" style="align-self:center;">会审已通过，请发起者到项目页点「上线」</span>`;
+        }
+        if (!actions) actions = '<span class="text-muted text-sm">无可执行操作</span>';
+
+        return `
+        <div class="card mb-16">
+            <div class="card-body">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <div style="font-weight:600;font-size:15px;">${a.api_name}</div>
+                    <span style="font-size:12px;padding:3px 10px;border-radius:4px;background:#f1f5f9;color:#475569;">${OVERALL_LABEL[a.overall_status]||a.overall_status}</span>
+                </div>
+                <div class="text-sm text-muted" style="margin-bottom:10px;line-height:1.8;">
+                    提交人：${a.submitter ? a.submitter.nickname : '?'}　|　会审研发：${a.reviewer ? a.reviewer.nickname : '?'}<br>
+                    ${a.remark ? '说明：'+escapeHtml(a.remark)+'<br>' : ''}
+                    提交时间：${a.created_at ? new Date(a.created_at).toLocaleString() : ''}
+                </div>
+                <div style="display:flex;gap:24px;margin-bottom:12px;font-size:13px;">
+                    <div>会审研发：<b style="color:${DEC_COLOR[a.reviewer_decision]}">${DEC_LABEL[a.reviewer_decision]}</b>${a.reviewer_comment?'（'+escapeHtml(a.reviewer_comment)+'）':''}</div>
+                </div>
+                <div style="display:flex;gap:8px;">${actions}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function openDecide(apprId, role) {
+    document.getElementById('decideApprId').value = apprId;
+    document.getElementById('decideRole').value = role;
+    document.getElementById('decideComment').value = '';
+    document.getElementById('decideTitle').textContent = (role === 'manager') ? '项目管理员审批' : '研发会审';
+    document.getElementById('decideModal').style.display = 'flex';
+}
+function closeDecide() { document.getElementById('decideModal').style.display = 'none'; }
+
+async function doDecide(decision) {
+    const apprId = document.getElementById('decideApprId').value;
+    const role = document.getElementById('decideRole').value;
+    const comment = document.getElementById('decideComment').value;
+    const endpoint = (role === 'manager') ? 'manager' : 'reviewer';
+    const r = await API.post(`/api/projects/${PROJECT_ID}/approvals/${apprId}/${endpoint}`, {decision, comment});
+    if (r.status) {
+        let msg = r.msg || '已处理';
+        if (r.data && r.data.api_status === 'approved') msg += '，双方已通过，待提交者上线';
+        Toast.success(msg);
+        closeDecide(); loadApprovals();
+    } else { Toast.error(r.msg || '操作失败'); }
+}
+
+function withdraw(apprId) {
+    showConfirm('撤回', '确定撤回该上线申请吗？', async () => {
+        const r = await API.post(`/api/projects/${PROJECT_ID}/approvals/${apprId}/withdraw`, {});
+        if (r.status) { Toast.success(r.msg || '已撤回'); loadApprovals(); }
+        else { Toast.error(r.msg || '撤回失败'); }
+    });
+}
+
+function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+loadApprovals();
+</script>
+{% endblock %}

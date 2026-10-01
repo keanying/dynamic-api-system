@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}OneData Portal{% endblock %}</title>
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/img/logo.png">
+    <link rel="stylesheet" href="/static/css/style.css?v={{ static_ver | default('1') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <link rel="stylesheet" href="/static/css/code_editor.css?v={{ static_ver | default('1') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% block body %}{% endblock %}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/sql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+    <script src="/static/js/app.js?v={{ static_ver | default('1') }}"></script>
+    <script src="/static/js/code_editor.js?v={{ static_ver | default('1') }}"></script>
+    <script>
+    // 左下角用户信息：从 /api/auth/me 填充真实昵称和角色
+    (function() {
+        const ROLE_LABEL = {
+            super_admin: '超级管理员',
+            admin: '管理员',
+            developer: '研发',
+            user: '普通用户',
+        };
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 仅在已登录（有 token）时才拉取用户信息；登录页无 token，直接跳过避免 401
+            const hasToken = !!localStorage.getItem('token');
+            const roleEl = document.getElementById('sidebarUserRole');
+            if (!hasToken || !roleEl) return;   // 登录页/无侧边栏页面不处理
+            try {
+                const me = await API.get('/api/auth/me');
+                if (me && me.data) {
+                    const nameEl = document.getElementById('sidebarUserName');
+                    if (nameEl) nameEl.textContent = me.data.nickname || me.data.username || '用户';
+                    roleEl.textContent = ROLE_LABEL[me.data.global_role] || '普通用户';
+                }
+            } catch (e) { /* 接口异常时保持占位 */ }
+        });
+    })();
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

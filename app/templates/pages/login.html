@@ -1,0 +1,75 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}登录 - OneData Portal{% endblock %}
+
+{% block body %}
+<div class="login-page">
+    <div class="login-card">
+        <div class="logo">
+            <svg width="36" height="36" viewBox="0 0 28 28" fill="none">
+                <rect width="28" height="28" rx="6" fill="#2563eb"/>
+                <path d="M7 14h14M14 7v14M9 9l10 10M19 9L9 19" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <span class="logo-text">OneData Portal</span>
+        </div>
+        <p class="subtitle">数据开放平台管理后台</p>
+
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label class="form-label">用户名</label>
+                <input type="text" class="form-input" id="username" placeholder="请输入用户名" required autofocus>
+            </div>
+            <div class="form-group">
+                <label class="form-label">密码</label>
+                <input type="password" class="form-input" id="password" placeholder="请输入密码" required>
+            </div>
+            <div id="loginError" style="color: var(--color-danger); font-size: 13px; margin-bottom: 12px; display: none;"></div>
+            <button type="submit" class="btn btn-primary" id="loginBtn">登 录</button>
+        </form>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toast-container"></div>
+
+<script src="/static/js/app.js"></script>
+<script>
+async function handleLogin(e) {
+    e.preventDefault();
+    const btn = document.getElementById('loginBtn');
+    const errEl = document.getElementById('loginError');
+    btn.disabled = true;
+    btn.textContent = '登录中...';
+    errEl.style.display = 'none';
+
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+
+    try {
+        const resp = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+        });
+        const data = await resp.json();
+
+        if (resp.ok && data.status === true) {
+            API.setToken(data.data.token);
+            if (data.data.nickname) {
+                localStorage.setItem('user_nickname', data.data.nickname);
+            }
+            window.location.href = '/admin/dashboard';
+        } else {
+            errEl.textContent = data.msg || '登录失败';
+            errEl.style.display = 'block';
+        }
+    } catch (err) {
+        errEl.textContent = '网络错误: ' + err.message;
+        errEl.style.display = 'block';
+    }
+
+    btn.disabled = false;
+    btn.textContent = '登 录';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,452 @@
+{% extends "layouts/app.html" %}
+
+{% block title %}数据源管理 - OneData Portal{% endblock %}
+
+{% block breadcrumb %}
+<span class="current">数据源管理</span>
+{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+    <div class="toolbar-left">
+        <input type="text" class="search-input" id="dsSearch" placeholder="搜索数据源..." oninput="debounceDsSearch()">
+        <select class="form-select" id="dsTypeFilter" onchange="loadDatasources()" style="width: 140px;">
+            <option value="all">全部类型</option>
+            <option value="mysql">MySQL</option>
+            <option value="starrocks">StarRocks</option>
+            <option value="selectdb">SelectDB</option>
+            <option value="doris">Apache Doris</option>
+            <option value="postgresql">PostgreSQL</option>
+            <option value="redis">Redis</option>
+        </select>
+    </div>
+    <div class="toolbar-right">
+        <button class="btn btn-secondary" id="dsDelApprBtn" onclick="openDsDelApprovals()" style="display:none;">
+            删除审批 <span id="dsDelApprCount" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:0 6px;font-size:11px;margin-left:4px;"></span>
+        </button>
+        <button class="btn btn-primary" onclick="showCreateDs()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            添加数据源
+        </button>
+    </div>
+</div>
+
+<div id="dsList"></div>
+<div id="dsEmpty" class="empty-state" style="display:none;">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+    <h3>暂无数据源</h3>
+    <p>点击上方按钮添加第一个数据源</p>
+</div>
+
+<!-- 添加/编辑数据源弹窗 -->
+<div class="modal-overlay" id="dsModal" style="display:none">
+    <div class="modal modal-lg">
+        <div class="modal-header">
+            <h3 id="dsModalTitle">添加数据源</h3>
+            <button class="btn-icon" onclick="closeDsModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="editDsId">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">数据源名称 <span class="required">*</span></label>
+                    <input type="text" class="form-input" id="dsName" placeholder="如：生产库-MySQL" maxlength="128">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">类型 <span class="required">*</span></label>
+                    <select class="form-select" id="dsType" onchange="toggleDsForm()">
+                        <option value="mysql">MySQL</option>
+                        <option value="starrocks">StarRocks</option>
+                        <option value="selectdb">SelectDB</option>
+                        <option value="doris">Apache Doris</option>
+                        <option value="postgresql">PostgreSQL</option>
+                        <option value="redis">Redis</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- MySQL / PostgreSQL 表单 -->
+            <div id="sqlForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">主机地址 <span class="required">*</span></label>
+                        <input type="text" class="form-input" id="dsHost" placeholder="127.0.0.1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">端口 <span class="required">*</span></label>
+                        <input type="number" class="form-input" id="dsPort" value="3306">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">用户名</label>
+                        <input type="text" class="form-input" id="dsUser" placeholder="root">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">密码</label>
+                        <input type="password" class="form-input" id="dsPassword" placeholder="数据库密码">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">数据库名</label>
+                        <input type="text" class="form-input" id="dsDatabase" placeholder="mydb">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">连接池大小</label>
+                        <input type="number" class="form-input" id="dsPoolSize" value="10" min="1" max="100">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Redis 表单 -->
+            <div id="redisForm" style="display:none">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">主机地址 <span class="required">*</span></label>
+                        <input type="text" class="form-input" id="redisHost" placeholder="127.0.0.1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">端口 <span class="required">*</span></label>
+                        <input type="number" class="form-input" id="redisPort" value="6379">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">密码</label>
+                        <input type="password" class="form-input" id="redisPassword" placeholder="可选">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">DB 索引</label>
+                        <input type="number" class="form-input" id="redisDb" value="0" min="0" max="15">
+                    </div>
+                </div>
+            </div>
+
+            <div id="testResult" style="margin-top: 12px; display: none;">
+                <div id="testResultMsg" class="text-sm"></div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" id="testConnBtn" onclick="testConnection()">测试连接</button>
+            <button class="btn btn-secondary" onclick="closeDsModal()">取消</button>
+            <button class="btn btn-primary" onclick="saveDatasource()">保存</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let dsSearchTimer = null;
+
+function debounceDsSearch() {
+    clearTimeout(dsSearchTimer);
+    dsSearchTimer = setTimeout(() => loadDatasources(), 300);
+}
+
+function toggleDsForm() {
+    const type = document.getElementById('dsType').value;
+    document.getElementById('sqlForm').style.display = type === 'redis' ? 'none' : 'block';
+    document.getElementById('redisForm').style.display = type === 'redis' ? 'block' : 'none';
+    // 默认端口（仅当当前端口看起来是默认值时才更新，避免覆盖用户已填的）
+    const portInput = document.getElementById('dsPort');
+    const defaults = {
+        mysql: '3306',
+        starrocks: '9030',    // StarRocks FE 查询端口（兼容 MySQL 协议）
+        selectdb: '9030',     // SelectDB 也用 9030
+        doris: '9030',        // Doris FE
+        postgresql: '5432',
+    };
+    if (type in defaults) portInput.value = defaults[type];
+    if (type === 'redis') document.getElementById('redisPort').value = '6379';
+}
+
+async function loadDatasources() {
+    const keyword = document.getElementById('dsSearch').value;
+    const dsType = document.getElementById('dsTypeFilter').value;
+    const data = await API.get(`/api/datasources?keyword=${encodeURIComponent(keyword)}&ds_type=${dsType}&page_size=50`);
+    if (!data || !data.data) return;
+
+    const { items } = data.data;
+    const container = document.getElementById('dsList');
+    const empty = document.getElementById('dsEmpty');
+
+    if (items.length === 0) {
+        container.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+    }
+
+    empty.style.display = 'none';
+    container.innerHTML = items.map(ds => `
+        <div class="ds-card">
+            <div class="ds-header">
+                <div class="ds-icon ${ds.type}">${ds.type.toUpperCase().substring(0, 2)}</div>
+                <div class="ds-info">
+                    <div class="ds-name">${escapeHtml(ds.name)}</div>
+                    <div class="ds-conn">${escapeHtml(ds.host)}:${ds.port}${ds.database_name ? '/' + escapeHtml(ds.database_name) : ''}</div>
+                </div>
+            </div>
+            <div class="ds-meta">
+                <span>${connStatusDot(ds.status)}</span>
+                <span style="cursor:${ds.api_count>0?'pointer':'default'};${ds.api_count>0?'color:#2563eb;text-decoration:underline;':''}" ${ds.api_count>0?`onclick="showUsage(${ds.id}, '${escapeHtml(ds.name)}')"`:''}>关联 API: ${ds.api_count}</span>
+                <span>最后测试: ${ds.last_test_at ? formatDate(ds.last_test_at) : '未测试'}</span>
+            </div>
+            <div class="ds-meta" style="margin-top:4px;">
+                <span style="font-size:12px;color:#94a3b8;">创建人: ${escapeHtml(ds.created_by_name || '—')}</span>
+            </div>
+            <div class="ds-actions">
+                <button class="btn btn-secondary btn-sm" onclick="testDs(${ds.id})">测试连接</button>
+                <button class="btn btn-secondary btn-sm" onclick="editDs(${ds.id})">编辑</button>
+                <button class="btn btn-ghost btn-sm" style="color: var(--color-danger);" onclick="deleteDs(${ds.id}, '${escapeHtml(ds.name)}', ${ds.api_count})">删除</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function showCreateDs() {
+    document.getElementById('dsModalTitle').textContent = '添加数据源';
+    document.getElementById('editDsId').value = '';
+    document.getElementById('dsName').value = '';
+    document.getElementById('dsType').value = 'mysql';
+    document.getElementById('dsHost').value = '';
+    document.getElementById('dsPort').value = '3306';
+    document.getElementById('dsUser').value = '';
+    document.getElementById('dsPassword').value = '';
+    document.getElementById('dsDatabase').value = '';
+    document.getElementById('dsPoolSize').value = '10';
+    document.getElementById('redisHost').value = '';
+    document.getElementById('redisPort').value = '6379';
+    document.getElementById('redisPassword').value = '';
+    document.getElementById('redisDb').value = '0';
+    document.getElementById('testResult').style.display = 'none';
+    toggleDsForm();
+    document.getElementById('dsModal').style.display = 'flex';
+}
+
+function closeDsModal() {
+    document.getElementById('dsModal').style.display = 'none';
+}
+
+async function editDs(id) {
+    const data = await API.get(`/api/datasources/${id}`);
+    if (!data || !data.data) return;
+    const ds = data.data;
+
+    document.getElementById('dsModalTitle').textContent = '编辑数据源';
+    document.getElementById('editDsId').value = id;
+    document.getElementById('dsName').value = ds.name;
+    document.getElementById('dsType').value = ds.type;
+    toggleDsForm();
+
+    if (ds.type === 'redis') {
+        document.getElementById('redisHost').value = ds.host;
+        document.getElementById('redisPort').value = ds.port;
+        document.getElementById('redisPassword').value = '';
+        document.getElementById('redisDb').value = ds.database_name || '0';
+    } else {
+        document.getElementById('dsHost').value = ds.host;
+        document.getElementById('dsPort').value = ds.port;
+        document.getElementById('dsUser').value = ds.username;
+        document.getElementById('dsPassword').value = '';
+        document.getElementById('dsDatabase').value = ds.database_name;
+        document.getElementById('dsPoolSize').value = ds.pool_size;
+    }
+
+    document.getElementById('testResult').style.display = 'none';
+    document.getElementById('dsModal').style.display = 'flex';
+}
+
+function getDsFormData() {
+    const type = document.getElementById('dsType').value;
+    const name = document.getElementById('dsName').value.trim();
+
+    if (!name) { Toast.error('请输入数据源名称'); return null; }
+
+    if (type === 'redis') {
+        return {
+            name, type,
+            host: document.getElementById('redisHost').value.trim(),
+            port: parseInt(document.getElementById('redisPort').value) || 6379,
+            password: document.getElementById('redisPassword').value,
+            database_name: document.getElementById('redisDb').value || '0',
+            username: '', pool_size: 10,
+        };
+    } else {
+        return {
+            name, type,
+            host: document.getElementById('dsHost').value.trim(),
+            port: parseInt(document.getElementById('dsPort').value) || 3306,
+            username: document.getElementById('dsUser').value.trim(),
+            password: document.getElementById('dsPassword').value,
+            database_name: document.getElementById('dsDatabase').value.trim(),
+            pool_size: parseInt(document.getElementById('dsPoolSize').value) || 10,
+        };
+    }
+}
+
+async function saveDatasource() {
+    const id = document.getElementById('editDsId').value;
+    const body = getDsFormData();
+    if (!body) return;
+    if (!body.host) { Toast.error('请输入主机地址'); return; }
+
+    let result;
+    if (id) {
+        result = await API.put(`/api/datasources/${id}`, body);
+    } else {
+        result = await API.post('/api/datasources', body);
+    }
+
+    if (result && result.status === true) {
+        Toast.success(result.msg || '保存成功');
+        closeDsModal();
+        loadDatasources();
+    } else {
+        Toast.error(result?.msg || result?.detail || '保存失败');
+    }
+}
+
+async function testDs(id) {
+    Toast.info('正在测试连接...');
+    const result = await API.post(`/api/datasources/${id}/test`);
+    if (result && result.status === true) {
+        Toast.success(result.msg || '连接成功');
+    } else {
+        Toast.error(result?.msg || '连接失败');
+    }
+    loadDatasources();
+}
+
+async function testConnection() {
+    const id = document.getElementById('editDsId').value;
+    if (!id) {
+        Toast.warning('请先保存数据源后再测试连接');
+        return;
+    }
+    const resultEl = document.getElementById('testResult');
+    const msgEl = document.getElementById('testResultMsg');
+    resultEl.style.display = 'block';
+    msgEl.innerHTML = '<span style="color: var(--color-info);">测试中...</span>';
+
+    const result = await API.post(`/api/datasources/${id}/test`);
+    if (result && result.status === true) {
+        msgEl.innerHTML = '<span style="color: var(--color-success);">✓ 连接成功</span>';
+    } else {
+        msgEl.innerHTML = `<span style="color: var(--color-danger);">✗ ${escapeHtml(result?.msg || '连接失败')}</span>`;
+    }
+}
+
+function deleteDs(id, name, apiCount) {
+    if (apiCount > 0) {
+        Toast.error(`该数据源被 ${apiCount} 个 API 引用，不允许删除，请先解除关联`);
+        return;
+    }
+    showConfirm('删除数据源', `确定要删除数据源 "${name}" 吗？\n\n· 超级管理员：立即删除\n· 管理员：发起删除申请，需另一名管理员或超管审批`, async () => {
+        const result = await API.del(`/api/datasources/${id}`);
+        if (result && result.status === true) {
+            Toast.success(result.msg || '操作成功');
+            loadDatasources();
+        } else {
+            Toast.error(result?.msg || result?.detail || '删除失败');
+        }
+    });
+}
+
+async function showUsage(id, name) {
+    const r = await API.get(`/api/datasources/${id}/usage`);
+    if (!r || !r.data) { Toast.error('加载失败'); return; }
+    const d = r.data;
+    let html = `<p style="margin-bottom:10px;">数据源「${name}」当前被 <b>${d.total_apis}</b> 个 API 引用：</p>`;
+    if (d.projects && d.projects.length) {
+        html += '<div style="margin-bottom:10px;">';
+        d.projects.forEach(p => {
+            html += `<div style="padding:6px 0;border-bottom:1px solid #f1f5f9;"><b>${escapeHtml(p.project_name)}</b> — ${p.api_count} 个 API</div>`;
+        });
+        html += '</div>';
+        html += '<p style="color:#dc2626;font-size:13px;">⚠ 存在引用，不可删除。请先在相关项目中解除这些 API 的关联。</p>';
+    } else {
+        html += '<p style="color:#16a34a;">无 API 引用，可以删除。</p>';
+    }
+    showInfoModal('数据源使用情况', html);
+}
+
+// 简单信息弹窗（复用 confirmModal 的样式结构，仅展示）
+function showInfoModal(title, htmlContent) {
+    let modal = document.getElementById('dsUsageModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'dsUsageModal';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `<div class="modal" style="max-width:480px;">
+            <div class="modal-header"><h3 id="dsUsageTitle"></h3><button class="btn-icon" onclick="document.getElementById('dsUsageModal').style.display='none'">&times;</button></div>
+            <div class="modal-body" id="dsUsageBody"></div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="document.getElementById('dsUsageModal').style.display='none'">关闭</button></div>
+        </div>`;
+        document.body.appendChild(modal);
+    }
+    document.getElementById('dsUsageTitle').textContent = title;
+    document.getElementById('dsUsageBody').innerHTML = htmlContent;
+    modal.style.display = 'flex';
+}
+
+// ============ 数据源删除审批 ============
+let DS_CAN_APPROVE = false;
+async function initDsDelApproval() {
+    try {
+        const me = await API.get('/api/auth/me');
+        const role = me.data && me.data.global_role;
+        DS_CAN_APPROVE = (role === 'super_admin' || role === 'admin');
+    } catch (e) { DS_CAN_APPROVE = false; }
+    const btn = document.getElementById('dsDelApprBtn');
+    if (btn) btn.style.display = DS_CAN_APPROVE ? '' : 'none';
+    if (DS_CAN_APPROVE) refreshDsDelCount();
+}
+async function refreshDsDelCount() {
+    try {
+        const r = await API.get('/api/datasources/deletion-requests/list?status=pending');
+        const n = (r.data && r.data.items || []).length;
+        const badge = document.getElementById('dsDelApprCount');
+        if (n > 0) { badge.textContent = n; badge.style.display = ''; }
+        else { badge.style.display = 'none'; }
+    } catch (e) {}
+}
+async function openDsDelApprovals() {
+    const r = await API.get('/api/datasources/deletion-requests/list?status=pending');
+    const items = (r.data && r.data.items) || [];
+    let html;
+    if (!items.length) {
+        html = '<div style="color:#94a3b8;padding:16px;text-align:center;">暂无待审批的删除申请</div>';
+    } else {
+        html = items.map(it => `
+            <div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:10px;">
+                <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(it.datasource_name)}</div>
+                <div style="font-size:12px;color:#64748b;margin-bottom:8px;">发起人：${escapeHtml(it.requester)}　|　${it.created_at?new Date(it.created_at).toLocaleString():''}</div>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-ghost btn-sm" style="color:#dc2626;" onclick="decideDsDel(${it.id},'approve','${escapeHtml(it.datasource_name)}')">批准删除</button>
+                    <button class="btn btn-secondary btn-sm" onclick="decideDsDel(${it.id},'reject')">驳回</button>
+                </div>
+            </div>`).join('');
+    }
+    showInfoModal('数据源删除审批', html);
+}
+function decideDsDel(reqId, decision, name) {
+    const doIt = async () => {
+        const r = await API.post(`/api/datasources/deletion-requests/${reqId}/decide`, {decision});
+        if (r.status) {
+            Toast.success(r.msg || '已处理');
+            const m = document.getElementById('dsUsageModal'); if (m) m.style.display='none';
+            refreshDsDelCount(); loadDatasources();
+        } else { Toast.error(r.msg || '操作失败'); }
+    };
+    if (decision === 'approve') {
+        const m = document.getElementById('dsUsageModal'); if (m) m.style.display='none';
+        showConfirm('批准删除', `确定批准删除数据源「${name}」吗？将永久删除。`, doIt);
+    } else { doIt(); }
+}
+
+loadDatasources();
+initDsDelApproval();
+</script>
+{% endblock %}

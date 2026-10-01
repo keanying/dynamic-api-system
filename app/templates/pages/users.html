@@ -1,0 +1,504 @@
+{% extends "layouts/app.html" %}
+
+{% block title %}用户管理 - OneData Portal{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 16px;">用户管理</h2>
+<div class="toolbar">
+    <div class="toolbar-left">
+        <input type="text" class="search-input" id="searchInput" placeholder="搜索用户..." oninput="debounceSearch()">
+    </div>
+    <div class="toolbar-right">
+        <button class="btn btn-primary btn-3d" onclick="showCreateModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+            添加用户
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table" id="usersTable">
+            <thead>
+                <tr>
+                    <th style="width:60px">#</th>
+                    <th>用户名</th>
+                    <th>账户</th>
+                    <th style="width:120px">角色</th>
+                    <th style="width:100px">状态</th>
+                    <th>创建时间</th>
+                    <th>更新时间</th>
+                    <th style="width:240px; text-align:center">操作</th>
+                </tr>
+            </thead>
+            <tbody id="usersBody">
+                <tr><td colspan="8" class="empty-state">
+                    <div class="empty-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <p>加载中...</p>
+                </td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination-wrapper" id="pagination"></div>
+</div>
+
+<!-- 创建/编辑用户弹窗 -->
+<div class="modal-overlay" id="userModal" style="display:none">
+    <div class="modal" style="max-width:480px">
+        <div class="modal-header">
+            <h3 id="modalTitle">添加用户</h3>
+            <button class="btn-icon" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="editUserId" value="">
+            <div class="form-group">
+                <label>用户名 <span class="required">*</span></label>
+                <input type="text" id="userNickname" placeholder="请输入用户名（显示名称）" class="form-input">
+            </div>
+            <div class="form-group">
+                <label>账户 <span class="required">*</span></label>
+                <input type="text" id="userUsername" placeholder="请输入账户（登录用）" class="form-input">
+            </div>
+            <div class="form-group">
+                <label id="passwordLabel">密码 <span class="required">*</span></label>
+                <input type="password" id="userPassword" placeholder="请输入密码" class="form-input">
+                <small id="passwordHint" style="color:#999;display:none">留空则不修改密码</small>
+            </div>
+            <div class="form-group">
+                <label>全局角色</label>
+                <select id="userRole" class="form-input">
+                    <option value="user">普通用户</option>
+                    <option value="developer">研发</option>
+                    <option value="admin">管理员</option>
+                    <option value="super_admin">超级管理员</option>
+                </select>
+                <small style="color:#999;">超级管理员可管理所有项目与用户；研发/普通用户的项目权限由各项目成员设置决定</small>
+            </div>
+            <div class="form-group">
+                <label>状态</label>
+                <div class="toggle-wrapper">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="userActive" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span id="activeLabel" style="margin-left:8px;color:#666">启用</span>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn btn-primary btn-3d" onclick="saveUser()">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- 删除确认弹窗 -->
+<div class="modal-overlay" id="deleteModal" style="display:none">
+    <div class="modal" style="max-width:400px">
+        <div class="modal-header">
+            <h3>确认删除</h3>
+            <button class="btn-icon" onclick="closeDeleteModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p style="text-align:center;color:#666">确定要删除用户 <strong id="deleteUserName"></strong> 吗？此操作不可恢复。</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeDeleteModal()">取消</button>
+            <button class="btn btn-danger btn-3d" onclick="confirmDelete()">删除</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .toggle-wrapper {
+        display: flex;
+        align-items: center;
+    }
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 44px;
+        height: 24px;
+    }
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: #ccc;
+        border-radius: 24px;
+        transition: .3s;
+    }
+    .toggle-slider:before {
+        content: "";
+        position: absolute;
+        height: 18px; width: 18px;
+        left: 3px; bottom: 3px;
+        background: white;
+        border-radius: 50%;
+        transition: .3s;
+    }
+    .toggle-switch input:checked + .toggle-slider {
+        background: linear-gradient(135deg, #4f8cff, #3b6de7);
+    }
+    .toggle-switch input:checked + .toggle-slider:before {
+        transform: translateX(20px);
+    }
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    .status-badge.active {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+    .status-badge.inactive {
+        background: #fbe9e7;
+        color: #c62828;
+    }
+    .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .status-badge.active .status-dot {
+        background: #4caf50;
+        box-shadow: 0 0 6px rgba(76,175,80,0.5);
+    }
+    .status-badge.inactive .status-dot {
+        background: #e53935;
+        box-shadow: 0 0 6px rgba(229,57,53,0.5);
+    }
+    .btn-action {
+        padding: 5px 12px;
+        font-size: 13px;
+        border-radius: 6px;
+        border: 1px solid #ddd;
+        background: white;
+        cursor: pointer;
+        transition: all .2s;
+        margin: 2px 4px 2px 0;
+        white-space: nowrap;
+        display: inline-block;
+    }
+    .btn-action:hover {
+        border-color: #4f8cff;
+        color: #4f8cff;
+    }
+    .btn-action.edit:hover {
+        border-color: #4f8cff;
+        color: #4f8cff;
+        background: #f0f5ff;
+    }
+    .btn-action.toggle:hover {
+        border-color: #ff9800;
+        color: #ff9800;
+        background: #fff8e1;
+    }
+    .btn-action.delete {
+        color: #999;
+    }
+    .btn-action.delete:hover {
+        border-color: #e53935;
+        color: #e53935;
+        background: #fbe9e7;
+    }
+    .table-responsive {
+        overflow-x: auto;
+    }
+</style>
+
+<script>
+    let currentPage = 1;
+    let deleteUserId = null;
+    let searchTimer = null;
+    let CAN_MANAGE = false;   // 当前用户是否可管理用户（管理员/超管）
+    let MY_ROLE = 'user';
+
+    async function loadMyRole() {
+        try {
+            const me = await API.get('/api/auth/me');
+            MY_ROLE = (me.data && me.data.global_role) || 'user';
+            CAN_MANAGE = (MY_ROLE === 'super_admin' || MY_ROLE === 'admin');
+        } catch (e) { CAN_MANAGE = false; }
+        // 添加用户按钮按权限置灰
+        const addBtn = document.querySelector('button[onclick="showCreateModal()"]');
+        if (addBtn) {
+            if (!CAN_MANAGE) {
+                addBtn.disabled = true;
+                addBtn.style.opacity = '0.5';
+                addBtn.style.cursor = 'not-allowed';
+                addBtn.title = '仅管理员或超级管理员可添加用户';
+            }
+        }
+    }
+
+    function debounceSearch() {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            currentPage = 1;
+            loadUsers();
+        }, 300);
+    }
+
+    async function loadUsers() {
+        const keyword = document.getElementById('searchInput').value;
+        const result = await API.get(`/api/users?page=${currentPage}&page_size=20&keyword=${encodeURIComponent(keyword)}`);
+        if (result && result.status === true) {
+            renderUsers(result.data.items, result.data.total, result.data.page, result.data.page_size);
+        } else if (result) {
+            Toast.error(result.msg || '加载失败');
+        }
+    }
+
+    function renderUsers(users, total, page, pageSize) {
+        const tbody = document.getElementById('usersBody');
+        if (!users || users.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" class="empty-state">
+                <div class="empty-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                        <path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                </div>
+                <p><strong>暂无用户</strong></p>
+                <p style="color:#999">点击上方按钮添加第一个用户</p>
+            </td></tr>`;
+            document.getElementById('pagination').innerHTML = '';
+            return;
+        }
+
+        tbody.innerHTML = users.map((u, i) => {
+            const idx = (page - 1) * pageSize + i + 1;
+            const statusClass = u.is_active ? 'active' : 'inactive';
+            const statusText = u.is_active ? '启用' : '禁用';
+            const toggleText = u.is_active ? '禁用' : '启用';
+            const created = u.created_at ? new Date(u.created_at).toLocaleString('zh-CN') : '-';
+            const updated = u.updated_at ? new Date(u.updated_at).toLocaleString('zh-CN') : '-';
+            const roleMap = {
+                super_admin: ['超级管理员', '#7c2d12', '#fed7aa'],
+                admin:       ['管理员', '#9d174d', '#fce7f3'],
+                developer:   ['研发', '#1e40af', '#dbeafe'],
+                user:        ['普通用户', '#475569', '#f1f5f9'],
+            };
+            const [roleLabel, roleColor, roleBg] = roleMap[u.global_role] || roleMap.user;
+            const roleBadge = `<span style="font-size:11px;padding:3px 9px;border-radius:4px;background:${roleBg};color:${roleColor};font-weight:600;">${roleLabel}</span>`;
+            return `<tr>
+                <td>${idx}</td>
+                <td><strong>${escapeHtml(u.nickname || u.username)}</strong></td>
+                <td>${escapeHtml(u.username)}</td>
+                <td>${roleBadge}</td>
+                <td><span class="status-badge ${statusClass}"><span class="status-dot"></span>${statusText}</span></td>
+                <td>${created}</td>
+                <td>${updated}</td>
+                <td style="text-align:center; white-space:nowrap">
+                    ${renderRowActions(u)}
+                </td>
+            </tr>`;
+        }).join('');
+
+        // 分页
+        const totalPages = Math.ceil(total / pageSize);
+        renderPagination(page, totalPages);
+    }
+
+    function renderRowActions(u) {
+        // 是否可操作该目标用户：需有管理权限；且管理员不能操作超级管理员
+        const targetIsSuper = (u.global_role === 'super_admin');
+        const canOperate = CAN_MANAGE && !(targetIsSuper && MY_ROLE !== 'super_admin');
+        const toggleText = u.is_active ? '禁用' : '启用';
+        if (!canOperate) {
+            const reason = !CAN_MANAGE ? '仅管理员或超级管理员可操作' : '管理员不能操作超级管理员账户';
+            const disabledStyle = 'opacity:0.4;cursor:not-allowed;pointer-events:none;';
+            return `
+                <button class="btn-action edit" style="${disabledStyle}" disabled title="${reason}">编辑</button>
+                <button class="btn-action toggle" style="${disabledStyle}" disabled title="${reason}">${toggleText}</button>
+                <button class="btn-action delete" style="${disabledStyle}" disabled title="${reason}">删除</button>`;
+        }
+        return `
+            <button class="btn-action edit" onclick="showEditModal(${u.id})">编辑</button>
+            <button class="btn-action toggle" onclick="toggleUser(${u.id})">${toggleText}</button>
+            <button class="btn-action delete" onclick="showDeleteModal(${u.id}, '${escapeHtml(u.nickname || u.username)}')">删除</button>`;
+    }
+
+    function renderPagination(page, totalPages) {
+        const container = document.getElementById('pagination');
+        if (totalPages <= 1) { container.innerHTML = ''; return; }
+
+        let html = '<div class="pagination">';
+        html += `<button class="page-btn" ${page <= 1 ? 'disabled' : ''} onclick="goPage(${page-1})">上一页</button>`;
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === page) {
+                html += `<button class="page-btn active">${i}</button>`;
+            } else if (i <= 3 || i > totalPages - 2 || Math.abs(i - page) <= 1) {
+                html += `<button class="page-btn" onclick="goPage(${i})">${i}</button>`;
+            } else if (i === 4 && page > 5) {
+                html += '<span class="page-ellipsis">...</span>';
+            } else if (i === totalPages - 2 && page < totalPages - 4) {
+                html += '<span class="page-ellipsis">...</span>';
+            }
+        }
+        html += `<button class="page-btn" ${page >= totalPages ? 'disabled' : ''} onclick="goPage(${page+1})">下一页</button>`;
+        html += `<span style="margin-left:12px;color:#999;font-size:13px">共 ${totalPages} 页</span>`;
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function goPage(p) {
+        currentPage = p;
+        loadUsers();
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // ===== 创建/编辑弹窗 =====
+    function showCreateModal() {
+        document.getElementById('modalTitle').textContent = '添加用户';
+        document.getElementById('editUserId').value = '';
+        document.getElementById('userNickname').value = '';
+        document.getElementById('userUsername').value = '';
+        document.getElementById('userPassword').value = '';
+        document.getElementById('userPassword').placeholder = '请输入密码';
+        document.getElementById('userActive').checked = true;
+        document.getElementById('activeLabel').textContent = '启用';
+        document.getElementById('passwordLabel').innerHTML = '密码 <span class="required">*</span>';
+        document.getElementById('passwordHint').style.display = 'none';
+        document.getElementById('userRole').value = 'user';
+        document.getElementById('userModal').style.display = 'flex';
+    }
+
+    async function showEditModal(userId) {
+        const result = await API.get(`/api/users/${userId}`);
+        if (!result || result.status !== true) {
+            Toast.error(result?.msg || '获取用户信息失败');
+            return;
+        }
+        const user = result.data;
+        document.getElementById('modalTitle').textContent = '编辑用户';
+        document.getElementById('editUserId').value = user.id;
+        document.getElementById('userNickname').value = user.nickname || '';
+        document.getElementById('userUsername').value = user.username;
+        document.getElementById('userPassword').value = '';
+        document.getElementById('userPassword').placeholder = '留空则不修改';
+        document.getElementById('userActive').checked = user.is_active;
+        document.getElementById('activeLabel').textContent = user.is_active ? '启用' : '禁用';
+        document.getElementById('passwordLabel').innerHTML = '密码';
+        document.getElementById('passwordHint').style.display = 'block';
+        document.getElementById('userRole').value = user.global_role || 'user';
+        document.getElementById('userModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('userModal').style.display = 'none';
+    }
+
+    async function saveUser() {
+        const userId = document.getElementById('editUserId').value;
+        const nickname = document.getElementById('userNickname').value.trim();
+        const username = document.getElementById('userUsername').value.trim();
+        const password = document.getElementById('userPassword').value;
+        const isActive = document.getElementById('userActive').checked;
+
+        if (!nickname) {
+            Toast.error('请输入用户名');
+            return;
+        }
+
+        if (!username) {
+            Toast.error('请输入账户');
+            return;
+        }
+
+        if (!userId && !password) {
+            Toast.error('请输入密码');
+            return;
+        }
+
+        const body = { nickname, username, is_active: isActive };
+        if (password) body.password = password;
+        body.global_role = document.getElementById('userRole').value;
+
+        let result;
+        if (userId) {
+            result = await API.put(`/api/users/${userId}`, body);
+        } else {
+            result = await API.post('/api/users', body);
+        }
+
+        if (result && result.status === true) {
+            Toast.success(result.msg || '保存成功');
+            closeModal();
+            loadUsers();
+        } else {
+            Toast.error(result?.msg || '操作失败');
+        }
+    }
+
+    // ===== 切换状态 =====
+    async function toggleUser(userId) {
+        const result = await API.put(`/api/users/${userId}/toggle`);
+        if (result && result.status === true) {
+            Toast.success(result.msg || '操作成功');
+            loadUsers();
+        } else {
+            Toast.error(result?.msg || '操作失败');
+        }
+    }
+
+    // ===== 删除弹窗 =====
+    function showDeleteModal(userId, username) {
+        deleteUserId = userId;
+        document.getElementById('deleteUserName').textContent = username;
+        document.getElementById('deleteModal').style.display = 'flex';
+    }
+
+    function closeDeleteModal() {
+        document.getElementById('deleteModal').style.display = 'none';
+        deleteUserId = null;
+    }
+
+    async function confirmDelete() {
+        if (!deleteUserId) return;
+        const result = await API.del(`/api/users/${deleteUserId}`);
+        if (result && result.status === true) {
+            Toast.success(result.msg || '删除成功');
+            closeDeleteModal();
+            loadUsers();
+        } else {
+            Toast.error(result?.msg || '删除失败');
+        }
+    }
+
+    // ===== 状态切换标签联动 =====
+    document.getElementById('userActive').addEventListener('change', function() {
+        document.getElementById('activeLabel').textContent = this.checked ? '启用' : '禁用';
+    });
+
+    // ===== 初始化 =====
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadMyRole();   // 先确定权限，再渲染（按钮置灰依赖它）
+        await loadUsers();
+        // 编辑/新建弹窗里：非超管隐藏"超级管理员"选项
+        if (MY_ROLE !== 'super_admin') {
+            const opt = document.querySelector('#userRole option[value="super_admin"]');
+            if (opt) opt.remove();
+        }
+    });
+</script>
+{% endblock %}

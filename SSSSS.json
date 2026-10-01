@@ -1,0 +1,1 @@
+[{"startTime":"${LAST_1D}","endTime":"${LAST_1D}"},{"startTime":"${LAST_7D}","endTime":"${LAST_1D}"},{"startTime":"${LAST_30D}","endTime":"${LAST_1D}"},{"startTime":"${LAST_60D}","endTime":"${LAST_1D}"},{"startTime":"${LAST_90D}","endTime":"${LAST_1D}"}]

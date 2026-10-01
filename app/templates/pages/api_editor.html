@@ -1,0 +1,3441 @@
+{% extends "layouts/app.html" %}
+
+{% block title %}{{ '编辑 API' if api_id else '新建 API' }} - OneData Portal{% endblock %}
+
+{% block extra_css %}
+<style>
+    .code-editor-wrapper {
+        position: relative;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+    }
+    .code-editor-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        background: #1e293b;
+        border-bottom: 1px solid #334155;
+    }
+    .code-editor-toolbar span {
+        color: #94a3b8;
+        font-size: 12px;
+    }
+    .code-editor-container {
+        position: relative;
+        min-height: 200px;
+    }
+    .code-editor-container textarea {
+        width: 100%;
+        min-height: 200px;
+        background: #282c34;
+        color: #abb2bf;
+        caret-color: #e2e8f0;
+        font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        padding: 16px;
+        border: none;
+        outline: none;
+        resize: vertical;
+        white-space: pre;
+        overflow: auto;
+        tab-size: 2;
+        display: none;
+    }
+    .code-editor-container pre {
+        margin: 0;
+        padding: 16px;
+        min-height: 200px;
+        font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        white-space: pre;
+        overflow: auto;
+        background: #282c34;
+        cursor: text;
+    }
+    .code-editor-container pre code {
+        font-family: inherit;
+        font-size: inherit;
+        line-height: inherit;
+        background: transparent !important;
+        padding: 0 !important;
+        display: block;
+        outline: none;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        min-height: 160px;
+    }
+    .code-editor-container pre code.hljs {
+        background: transparent !important;
+        padding: 0 !important;
+    }
+    .test-result-wrapper {
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+        margin-top: 12px;
+    }
+    .test-result-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        background: #1e293b;
+        color: #94a3b8;
+        font-size: 12px;
+    }
+    .test-result-body pre {
+        margin: 0;
+        padding: 16px;
+        max-height: 400px;
+        overflow: auto;
+    }
+    .test-result-body pre code {
+        font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+        font-size: 13px;
+        line-height: 1.6;
+    }
+    .call-url-box {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        background: #f1f5f9;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        margin-top: 6px;
+    }
+    .call-url-box code {
+        flex: 1;
+        font-size: 12px;
+        color: #1e293b;
+        word-break: break-all;
+        user-select: all;
+    }
+    .call-url-box .copy-btn {
+        flex-shrink: 0;
+        padding: 4px 10px;
+        font-size: 12px;
+        cursor: pointer;
+        background: #fff;
+        border: 1px solid #cbd5e1;
+        border-radius: 4px;
+        color: #475569;
+        transition: all 0.2s;
+    }
+    .call-url-box .copy-btn:hover {
+        background: #e2e8f0;
+        color: #1e293b;
+    }
+    .param-validation-error {
+        border: 2px solid #ef4444 !important;
+        background: #fef2f2 !important;
+    }
+    /* 多步骤管线 - 可视化编排 */
+    .pmode-btn { border:none; background:#fff; padding:5px 12px; font-size:12px; color:#64748b; cursor:pointer; }
+    .pmode-btn.pmode-active { background:#4f46e5; color:#fff; }
+    .step-card { border:1px solid #e2e8f0; border-radius:10px; margin-bottom:10px; background:#fff; overflow:hidden; }
+    .step-card-head { display:flex; align-items:center; gap:10px; padding:10px 14px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+    .step-num { width:22px; height:22px; border-radius:50%; background:#4f46e5; color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-weight:600; }
+    .step-card-head .step-name-inp { font-weight:600; font-size:13px; border:1px solid transparent; background:transparent; padding:3px 6px; border-radius:4px; width:140px; }
+    .step-card-head .step-name-inp:hover, .step-card-head .step-name-inp:focus { border-color:#cbd5e1; background:#fff; outline:none; }
+    .step-type-badge { font-size:11px; padding:2px 8px; border-radius:4px; background:#ede9fe; color:#6d28d9; }
+    .step-type-badge.sql { background:#dbeafe; color:#1d4ed8; }
+    .step-card-body { padding:12px 14px; }
+    .step-field { margin-bottom:10px; }
+    .step-field label { display:block; font-size:11px; color:#64748b; margin-bottom:3px; font-weight:500; }
+    .step-field input, .step-field select, .step-field textarea {
+        width:100%; padding:6px 9px; font-size:12.5px; border:1px solid #cbd5e1; border-radius:5px; font-family:inherit;
+    }
+    .step-field textarea { font-family:'Fira Code','JetBrains Mono',monospace; font-size:12px; line-height:1.55; resize:vertical; }
+    .step-field .hint { font-size:10.5px; color:#94a3b8; margin-top:2px; }
+    .step-row { display:flex; gap:10px; }
+    .step-row > * { flex:1; }
+    .step-icon-btn { border:none; background:none; cursor:pointer; color:#94a3b8; padding:3px 6px; border-radius:4px; font-size:13px; }
+    .step-icon-btn:hover { background:#e2e8f0; color:#475569; }
+    .step-icon-btn.del:hover { background:#fee2e2; color:#dc2626; }
+    .kv-row { display:flex; gap:6px; margin-bottom:6px; align-items:center; }
+    .kv-row input { flex:1; padding:5px 8px; font-size:12px; border:1px solid #cbd5e1; border-radius:5px; }
+    .kv-row .kv-del { border:none;background:none;color:#cbd5e1;cursor:pointer;font-size:16px;padding:0 4px; }
+    .kv-row .kv-del:hover { color:#dc2626; }
+    .return-tag { font-size:10.5px; padding:2px 7px; border-radius:4px; background:#dcfce7; color:#15803d; cursor:pointer; border:1px solid #bbf7d0; }
+    .return-tag.off { background:#f1f5f9; color:#94a3b8; border-color:#e2e8f0; }
+
+    /* ===== v2.2 编辑器工作台布局 ===== */
+    .editor-idbar {
+        position: sticky; top: var(--topbar-height); z-index: 40;
+        background: var(--color-surface); border: 1px solid var(--color-border);
+        border-radius: var(--radius); box-shadow: var(--shadow-sm);
+        padding: 12px 16px 10px; margin-bottom: 14px;
+    }
+    .idbar-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    .idbar-field { display: flex; flex-direction: column; gap: 3px; }
+    .idbar-field > label { font-size: 11px; font-weight: 600; letter-spacing: 0.4px; color: var(--color-text-secondary); }
+    .idbar-field .form-input, .idbar-field .form-select { padding: 7px 10px; font-size: 13px; }
+    .idbar-name { flex: 1 1 200px; min-width: 180px; }
+    .idbar-actions { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+    .idbar-sub { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+    .idbar-sub .call-url-box { margin: 0; flex: 1; min-width: 260px; }
+    .idbar-enable { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); white-space: nowrap; }
+
+    .editor-tabs {
+        display: flex; gap: 2px; align-items: center;
+        border-bottom: 2px solid var(--color-border);
+        margin-bottom: 16px; padding: 0 2px;
+    }
+    .editor-tab {
+        appearance: none; background: none; border: none; cursor: pointer;
+        padding: 9px 16px 10px; font-size: 13.5px; font-weight: 500;
+        color: var(--color-text-secondary); position: relative;
+        border-radius: 8px 8px 0 0; transition: color var(--transition), background var(--transition);
+        display: inline-flex; align-items: center; gap: 6px;
+    }
+    .editor-tab:hover { color: var(--color-text); background: rgba(48,86,224,0.05); }
+    .editor-tab.active { color: var(--color-primary); font-weight: 600; }
+    .editor-tab.active::after {
+        content: ''; position: absolute; left: 8px; right: 8px; bottom: -2px;
+        height: 2px; background: var(--color-primary); border-radius: 2px 2px 0 0;
+    }
+    .editor-tab .tab-count {
+        min-width: 17px; height: 17px; line-height: 17px; padding: 0 5px;
+        border-radius: 9px; background: #e8edf7; color: var(--color-text-secondary);
+        font-size: 10.5px; font-family: var(--font-mono); text-align: center;
+    }
+    .editor-tab.active .tab-count { background: var(--color-primary); color: #fff; }
+    .editor-tabs .tab-spacer { flex: 1; }
+    .editor-pane { display: none; }
+    .editor-pane.active { display: block; animation: paneIn 0.16s ease; }
+
+    /* ===== v2.4 左右两栏工作台:左=定义(页签) 右=常驻测试 ===== */
+    .editor-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 16px; align-items: start; }
+    .editor-left { min-width: 0; }
+    .editor-right { position: sticky; top: calc(var(--topbar-height) + 130px); }
+    @media (max-width: 1180px) {
+        .editor-workspace { grid-template-columns: 1fr; }
+        .editor-right { position: static; }
+    }
+    /* 右侧常驻测试面板 */
+    .test-dock { border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); box-shadow: var(--shadow-sm); overflow: hidden; }
+    .test-dock-head { padding: 12px 14px; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; justify-content: space-between; background: linear-gradient(180deg, #fbfcfe, #f5f8fc); }
+    .test-dock-head h3 { font-size: 14px; margin: 0; }
+    .test-dock-body { padding: 12px 14px; }
+    .test-dock-section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.4px; color: var(--color-text-secondary); margin: 0 0 6px; display: flex; align-items: center; justify-content: space-between; }
+    .test-dock textarea { width: 100%; font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--color-border); border-radius: 8px; padding: 9px 11px; resize: vertical; }
+    .test-dock-result { margin-top: 12px; }
+    .test-dock-result pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; font-size: 11.5px; line-height: 1.55; max-height: 320px; overflow: auto; margin: 0; white-space: pre-wrap; }
+    .test-dock-meta { font-size: 11.5px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+    .test-dock-meta .m-ok { color: #16a34a; font-weight: 600; }
+    .test-dock-meta .m-err { color: #dc2626; font-weight: 600; }
+    .test-dock-empty { padding: 26px 10px; text-align: center; color: var(--color-text-muted); font-size: 12.5px; }
+    @keyframes paneIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+
+    /* ===== 参数定义页 ===== */
+    .param-help {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px;
+        margin-bottom: 14px;
+    }
+    .param-help-item {
+        border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+        padding: 10px 12px; background: #fbfcfe; font-size: 12px; line-height: 1.55;
+        color: var(--color-text-secondary);
+    }
+    .param-help-item code {
+        font-family: var(--font-mono); background: #eef2ff; color: var(--color-primary);
+        padding: 1px 5px; border-radius: 4px; font-size: 11.5px;
+    }
+    .param-help-item b { color: var(--color-text); display: block; margin-bottom: 2px; font-size: 12.5px; }
+    .schema-summary { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+    .schema-chip {
+        font-family: var(--font-mono); font-size: 10.5px;
+        background: #f0f4fc; border: 1px solid #dbe4f5; color: #3b5bd6;
+        padding: 1px 7px; border-radius: 10px; cursor: pointer; white-space: nowrap;
+    }
+    .schema-chip:hover { background: #e3ebfa; }
+    .schema-chip .req { color: var(--color-danger); font-weight: 700; }
+    .schema-cols {
+        display: flex; gap: 8px; margin-bottom: 4px; padding: 0 2px;
+        font-size: 10.5px; font-weight: 600; letter-spacing: 0.4px; color: var(--color-text-muted);
+    }
+    .schema-cols span:nth-child(1) { flex: 0 0 150px; }
+    .schema-cols span:nth-child(2) { flex: 0 0 88px; }
+    .schema-cols span:nth-child(3) { flex: 0 0 46px; }
+    .schema-cols span:nth-child(4), .schema-cols span:nth-child(5) { flex: 1; min-width: 100px; }
+    .param-type-badge { font-family: var(--font-mono); }
+    /* ===== 结构预览弹窗 ===== */
+    .sp-tabs { display:flex; gap:2px; border-bottom:1px solid var(--color-border); margin-bottom:14px; }
+    .sp-tab { appearance:none; background:none; border:none; cursor:pointer; padding:8px 14px;
+        font-size:13px; font-weight:500; color:var(--color-text-secondary); position:relative; }
+    .sp-tab.active { color:var(--color-primary); font-weight:600; }
+    .sp-tab.active::after { content:''; position:absolute; left:8px; right:8px; bottom:-1px; height:2px;
+        background:var(--color-primary); border-radius:2px; }
+    .sp-pane { display:none; } .sp-pane.active { display:block; }
+    .sp-section-title { font-size:12px; color:#64748b; margin:12px 0 6px; font-weight:600; }
+    .sp-section-title:first-child { margin-top:0; }
+    .sp-tree { font-family:var(--font-mono); font-size:12px; line-height:1.9; }
+    .sp-tree .t-name { color:#1d4ed8; font-weight:600; }
+    .sp-tree .t-type { color:#0e7490; }
+    .sp-tree .t-req { color:var(--color-danger); font-weight:700; margin-left:2px; }
+    .sp-tree .t-desc { color:#94a3b8; margin-left:8px; font-family:inherit; }
+    .sp-tree .t-path { color:#a78bfa; font-size:11px; margin-left:8px; cursor:pointer; }
+    .sp-tree .t-path:hover { text-decoration:underline; }
+    .sp-code { background:#0f172a; color:#e2e8f0; padding:12px 14px; border-radius:6px;
+        font-size:12px; line-height:1.6; max-height:280px; overflow:auto; margin:0; white-space:pre-wrap;
+        font-family:var(--font-mono); }
+    .sp-bind-table { width:100%; border-collapse:collapse; font-size:12px; }
+    .sp-bind-table th { text-align:left; padding:5px 8px; color:#64748b; font-weight:600; border-bottom:1px solid #e2e8f0; font-size:11px; }
+    .sp-bind-table td { padding:5px 8px; border-bottom:1px solid #f1f5f9; font-family:var(--font-mono); vertical-align:top; }
+    .sp-note { font-size:11.5px; color:#94a3b8; margin-top:6px; }
+
+</style>
+{% endblock %}
+
+{% block breadcrumb %}
+<a href="/admin/projects">项目管理</a>
+<span class="sep">/</span>
+<a href="/admin/projects/{{ project_id }}" id="breadcrumbProject">项目</a>
+<span class="sep">/</span>
+<span class="current">{{ '编辑 API' if api_id else '新建 API' }}</span>
+{% endblock %}
+
+{% block content %}
+<form id="apiForm" onsubmit="saveApi(event)">
+    <!-- ===== 身份条(常驻):API 是谁、怎么访问、保存 ===== -->
+    <div class="editor-idbar">
+        <div class="idbar-row">
+            <div class="idbar-field idbar-name">
+                <label>API 名称 <span class="required">*</span></label>
+                <input type="text" class="form-input" id="apiName" required maxlength="128" placeholder="如：渠道支付统计">
+            </div>
+            <div class="idbar-field">
+                <label>类型</label>
+                <select class="form-select" id="apiType" onchange="onApiTypeChange()">
+                    <option value="sql">数据 API</option>
+                    <option value="html">静态页面 API</option>
+                    <option value="plugin">Python API</option>
+                    <option value="sync" id="apiTypeSyncOption">数据同步 API（仅超管）</option>
+                </select>
+            </div>
+            <div class="idbar-field">
+                <label>方法</label>
+                <select class="form-select font-mono" id="apiMethod">
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="DELETE">DELETE</option>
+                </select>
+            </div>
+            <div class="idbar-field" style="flex:1 1 220px; min-width:200px;">
+                <label>URL 路径 <span class="required">*</span></label>
+                <input type="text" class="form-input font-mono" id="apiPath" required placeholder="/channel/pay-stats" pattern="^/.*">
+            </div>
+            <div class="idbar-actions">
+                <button type="button" class="btn btn-secondary" onclick="history.back()">返回</button>
+                <button type="submit" class="btn btn-primary" id="saveBtn">保存</button>
+                {% if api_id %}
+                <button type="button" class="btn btn-success" onclick="saveAndTest()">保存并测试</button>
+                {% endif %}
+            </div>
+        </div>
+        <div class="idbar-sub">
+            <div class="call-url-box">
+                <span style="font-size:11px; color:#64748b; white-space:nowrap;">调用地址:</span>
+                <code id="fullCallUrl">{{ gateway_prefix }}/{{ project_code | default(project_id) }}/api/users</code>
+                <button type="button" class="copy-btn" onclick="copyCallUrl()">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    复制
+                </button>
+            </div>
+            <div class="call-url-box" id="ownerBox" style="display:none;">
+                <span style="font-size:11px; color:#64748b; white-space:nowrap;">责任人:</span>
+                <code id="ownerName" style="color:#0f766e;">-</code>
+                <button type="button" class="copy-btn" onclick="openTransferDialog()" title="转交责任人">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+                    转交
+                </button>
+            </div>
+            <span class="text-sm text-muted" id="apiTypeHint">通过 SQL/管线 把数据库查询发布为 RESTful API</span>
+            <label class="idbar-enable">
+                <label class="switch"><input type="checkbox" id="apiEnabled" checked><span class="slider"></span></label>
+                启用
+            </label>
+        </div>
+    </div>
+
+    <!-- ===== 左右两栏工作台:左=定义(页签) 右=常驻测试 ===== -->
+    <div class="editor-workspace">
+    <div class="editor-left">
+    <div class="editor-tabs" role="tablist">
+        <button type="button" class="editor-tab active" id="tab-basic" onclick="switchEditorTab('basic')">基础信息</button>
+        <button type="button" class="editor-tab" id="tab-params" data-mode="sql plugin" onclick="switchEditorTab('params')">参数定义 <span class="tab-count" id="paramTabCount">0</span></button>
+        <button type="button" class="editor-tab" id="tab-logic" onclick="switchEditorTab('logic')">执行逻辑</button>
+        <span class="tab-spacer"></span>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="openStructurePreview()" title="查看请求结构 / SQL 渲染中间态 / 响应结构">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            结构预览
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="openTutorial()">使用教程</button>
+    </div>
+
+    <!-- ============ 页1: 基础信息(描述 + 高级配置) ============ -->
+    <div class="editor-pane active" id="pane-basic">
+        <div class="card mb-16">
+            <div class="card-header"><h3>基础配置</h3></div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label class="form-label">描述</label>
+                    <textarea class="form-textarea" id="apiDesc" placeholder="API 功能描述、口径说明、维护人等" rows="2"></textarea>
+                </div>
+                <div class="form-hint">API 名称 / 类型 / 请求方法 / URL 路径 / 调用地址在顶部信息条中设置。</div>
+            </div>
+        </div>
+    <div class="card mb-16">
+        <div class="card-header"><h3>高级配置</h3></div>
+        <div class="card-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">缓存</label>
+                    <div class="form-inline">
+                        <label class="switch">
+                            <input type="checkbox" id="cacheEnabled" onchange="syncPrewarmAvailability()">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="text-sm text-muted">启用缓存</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">缓存 TTL (秒)</label>
+                    <input type="number" class="form-input" id="cacheTtl" value="300" min="1">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">自动预热</label>
+                    <div class="form-inline">
+                        <label class="switch">
+                            <input type="checkbox" id="cachePrewarm">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="text-sm text-muted" id="prewarmHint">缓存到期前自动按历史参数重新查询回填</span>
+                    </div>
+                    <div class="form-hint">
+                        开启后，网关每次请求的参数组合会被记住；后台定时检查缓存剩余时间，
+                        快过期时自动重新查询写回缓存，用户请求时始终命中缓存。
+                        <strong>需要先开启「缓存」</strong>（预热就是把结果提前写进缓存），并且需要 Redis 已启用。
+                    </div>
+                    <div class="form-inline" style="margin-top:10px;">
+                        <label class="switch">
+                            <input type="checkbox" id="prewarmStopDaily">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="text-sm text-muted">跨日停止：每天 0 点起暂停，当天有新请求才恢复</span>
+                    </div>
+                    <div class="form-hint">
+                        开启后，0 点之后昨天那批参数不再被预热，直到当天有真实请求进来才恢复。
+                        适合「今天没人用的参数就别白跑」的场景，避免陈旧参数空耗数据库。
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">缓存操作</label>
+                    <div class="form-inline">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="clearApiCache()">清除该 API 缓存</button>
+                    </div>
+                    <div class="form-hint">立即清空该 API 的所有缓存，同时清除已记录的预热参数。</div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="flex:1;">
+                    <label class="form-label">预热参数覆盖（可选）</label>
+                    <textarea class="form-input" id="prewarmOverrides" rows="3"
+                        style="font-family:ui-monospace,Consolas,monospace;font-size:12px;"
+                        placeholder='留空 = 直接用历史请求参数原样预热&#10;单组：{"startTime":"${TODAY_START}","endTime":"${NOW}"}&#10;多组：[{"startTime":"${T_1}"},{"startTime":"${T_7}"},{"startTime":"${T_30}"}]'></textarea>
+                    <div class="form-inline" style="margin-top:6px;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="previewPrewarmOverrides()">预览求值结果</button>
+                        <span class="text-sm text-muted" id="prewarmPreview" style="margin-left:10px;"></span>
+                    </div>
+                    <div class="form-hint">
+                        预热<strong>始终以历史请求参数为底</strong>（这样不同 supplierId 等业务参数各自都能预热到），
+                        这里只列出<strong>需要被刷新的字段</strong>。<br>
+                        <strong>支持多组</strong>：写成数组即可按多个时间段各缓存一份，例如近1日/近7日/近30日：<br>
+                        <code>[{"startTime":"${T_1}"},{"startTime":"${T_7}"},{"startTime":"${T_30}"}]</code><br>
+                        其它参数保持历史请求原值，最终预热组合数 = 历史参数组合数 × 覆盖组数。<br>
+                        <strong>为什么需要</strong>：历史请求里的时间是写死的（如 2026-08-17），
+                        明天拿它去预热就是在预热过期数据。把时间字段用 <code>${变量}</code> 覆盖后，
+                        每轮预热实时求值成当前时间，业务字段则保持原样。
+                        变量在「项目页 → 环境变量」里维护。
+                    </div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">超时时间 (秒)</label>
+                    <input type="number" class="form-input" id="apiTimeout" value="30" min="1" max="300">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">最大返回行数</label>
+                    <input type="number" class="form-input" id="maxRows" value="10000" min="1">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">限流</label>
+                    <div class="form-inline">
+                        <label class="switch">
+                            <input type="checkbox" id="rateLimitEnabled">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="text-sm text-muted">启用限流</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">QPS 上限</label>
+                    <input type="number" class="form-input" id="rateLimitQps" value="100" min="1">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">API Key 校验</label>
+                <div class="form-inline">
+                    <label class="switch" title="关闭后该 API 无需 API Key 即可访问（HTML 静态页面 API 通常关闭）">
+                        <input type="checkbox" id="requireApiKey" checked onchange="this.dataset.userTouched='1'">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="text-sm text-muted" id="requireApiKeyHint">开启：调用必须携带 API Key；关闭：公开访问</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">独立 API Key</label>
+                <div class="form-inline">
+                    <input type="text" class="form-input" id="apiKey" placeholder="留空则使用项目级 Key">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="generateApiKey()">生成</button>
+                </div>
+                <div class="form-hint">设置后将覆盖项目级 API Key（仅当开启「API Key 校验」时生效）</div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- ============ 页3: 执行逻辑(主工作区,原逻辑定义) ============ -->
+    <div class="editor-pane" id="pane-logic">
+
+    <!-- 数据源选择 -->
+    <div class="card mb-16" data-mode="sql sync" id="datasourceCard">
+        <div class="card-header">
+            <h3>数据源</h3>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="loadDatasources()">刷新</button>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label">选择数据源</label>
+                <select class="form-select" id="apiDatasource">
+                    <option value="">-- 请选择数据源 --</option>
+                </select>
+                <div class="form-hint"><a href="/admin/datasources" target="_blank">管理数据源</a></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SQL 模板 -->
+    <div class="card mb-16" id="sqlModeCard" data-mode="sql">
+        <div class="card-header">
+            <h3>SQL 模板</h3>
+            <div style="display:flex; gap:8px; align-items:center; margin-left:auto;">
+                <span class="text-sm text-muted" id="sqlModeHint">单数据源查询</span>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="openStructurePreview('sql')">渲染预览</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="openTutorial()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px;"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    使用教程
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div style="display:flex; justify-content:flex-end; gap:6px; margin-bottom:8px;">
+                <button type="button" class="btn btn-ghost btn-sm" style="color:#64748b;" onclick="previewRenderedSql()">预览渲染</button>
+            </div>
+            <div id="sqlEditorMount"></div>
+            <textarea id="apiSql" style="display:none;"></textarea>
+            <div class="text-sm text-muted" style="margin-top:8px;">
+                支持
+                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">:param</code>
+                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">#{var}</code>
+                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">$if$</code>
+                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">$for$</code>
+                等语法 — 点右上角「使用教程」查看完整说明和示例。
+            </div>
+        </div>
+    </div>
+
+    <!-- 多步骤管线（默认关闭，需要时开启） -->
+    <div class="card mb-16" id="pipelineCard" data-mode="sql">
+        <div class="card-header">
+            <h3>多步骤管线</h3>
+            <div style="display:flex; gap:10px; align-items:center; margin-left:auto;">
+                <span class="text-sm text-muted">跨多数据源查询 / 聚合关联</span>
+                <label class="switch" title="开启后用多步骤管线替代上方单 SQL">
+                    <input type="checkbox" id="pipelineEnabled" onchange="togglePipelineMode()">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- 关闭状态提示 -->
+            <div id="pipelineDisabledHint" style="padding:20px; text-align:center; color:#94a3b8; font-size:13px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px;">
+                当前为<strong style="color:#475569;">单数据源</strong>模式，使用上方 SQL 模板。<br>
+                需要在一个 API 内查询<strong style="color:#475569;">多个数据库</strong>并做聚合/关联时，打开右上角开关。
+            </div>
+
+            <!-- 开启状态：可视化编排 + JSON 模式切换 -->
+            <div id="pipelineEditor" style="display:none;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                    <div style="font-size:12.5px; color:#475569;">
+                        每步可查询不同数据源，用
+                        <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">${'$'}{步骤名.*.字段}</code>
+                        引用前序步骤结果。
+                        <button type="button" class="btn btn-ghost btn-sm" style="padding:1px 8px;" onclick="openTutorial('pipeline')">查看教程 →</button>
+                    </div>
+                    <div class="seg-toggle" style="display:flex; border:1px solid #cbd5e1; border-radius:6px; overflow:hidden;">
+                        <button type="button" id="modeBtnVisual" class="pmode-btn pmode-active" onclick="switchPipelineMode('visual')">可视化编排</button>
+                        <button type="button" id="modeBtnJson" class="pmode-btn" onclick="switchPipelineMode('json')">JSON 模式</button>
+                    </div>
+                </div>
+
+                <!-- ===== 可视化编排 ===== -->
+                <div id="pipelineVisual">
+                    <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+                        <span style="font-size:12px;color:#64748b;align-self:center;">快速模板：</span>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="loadTemplate('compute')">两步求和</button>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="loadTemplate('dynamic')">动态条件</button>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="loadTemplate('join')">跨库关联</button>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="loadTemplate('aggregate')">分组聚合</button>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="loadTemplate('crossdb')">同源不同库</button>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="loadTemplate('multifield')">多字段汇总</button>
+                    </div>
+                    <div id="stepCards"></div>
+                    <div style="display:flex; gap:8px; margin-top:10px;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="addStep('sql')">+ 添加 SQL 步骤</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="addStep('transform')">+ 添加 数据处理步骤</button>
+                    </div>
+                </div>
+
+                <!-- ===== JSON 模式 ===== -->
+                <div id="pipelineJsonMode" style="display:none;">
+                    <div class="text-sm text-muted" style="margin-bottom:6px;">JSON 数组配置（编辑后切回可视化会重新解析）</div>
+                    <div id="pipelineJsonMount"></div>
+                    <textarea id="pipelineSteps" style="display:none;"></textarea>
+                    <div id="pipelineJsonError" style="display:none; margin-top:8px; color:#dc2626; font-size:12px; font-family:monospace;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 静态页面内容（仅 api_type == html 显示） -->
+    <div class="card mb-16" id="htmlModeCard" data-mode="html" style="display:none;">
+        <div class="card-header">
+            <h3>页面内容</h3>
+            <span class="text-sm text-muted">HTML / CSS / JS 三段式编辑；调用 API 时直接渲染为静态页面</span>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label">HTML</label>
+                <div class="form-hint" style="margin-bottom:6px;">
+                    可以是 <code>&lt;body&gt;</code> 内的片段；也可以直接写完整 <code>&lt;!DOCTYPE html&gt;</code> 文档（系统会原样返回，仅注入 <code>window.__API_PARAMS__</code>）
+                </div>
+                <textarea id="apiHtml" class="form-textarea font-mono" rows="14"
+                    placeholder='<h1>Hello OneData</h1>&#10;<div id="app"></div>'
+                    style="background:#282c34; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:2; white-space:pre; overflow:auto;"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">CSS</label>
+                <div class="form-hint" style="margin-bottom:6px;">内联到 <code>&lt;head&gt;&lt;style&gt;</code> 中</div>
+                <textarea id="apiCss" class="form-textarea font-mono" rows="8"
+                    placeholder="body { font-family: system-ui; padding: 24px; }"
+                    style="background:#282c34; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:2; white-space:pre; overflow:auto;"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">JavaScript</label>
+                <div class="form-hint" style="margin-bottom:6px;">
+                    内联到 <code>&lt;body&gt;</code> 末尾的 <code>&lt;script&gt;</code> 中；可通过 <code>window.__API_PARAMS__</code> 读取 query/body 参数
+                </div>
+                <textarea id="apiJs" class="form-textarea font-mono" rows="12"
+                    placeholder="document.getElementById('app').innerText = JSON.stringify(window.__API_PARAMS__);"
+                    style="background:#282c34; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:2; white-space:pre; overflow:auto;"></textarea>
+            </div>
+            <div class="text-sm text-muted" style="margin-top:8px;">
+                调用方式：浏览器直接访问
+                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;" id="htmlCallHint">
+                    {{ gateway_prefix }}/{{ project_code | default(project_id) }}/...
+                </code>
+                即可看到渲染后的页面。
+            </div>
+        </div>
+    </div>
+
+    <!-- Python 插件内容（仅 api_type == plugin 显示） -->
+    <!-- 数据同步配置（仅 api_type == sync 显示） -->
+    <div class="card mb-16" id="syncModeCard" data-mode="sync" style="display:none;">
+        <div class="card-header">
+            <h3>数据同步配置</h3>
+            <span class="text-sm text-muted">把外部推送的数据写进数据源表（写入类接口，仅超管）</span>
+        </div>
+        <div class="card-body">
+            <div style="background:#fee2e2; border:1px solid #fecaca; color:#991b1b; padding:10px 12px; border-radius:6px; font-size:12.5px; margin-bottom:12px;">
+                ⚠ <strong>这是本系统唯一的「写库」接口</strong>：调用会真实修改数据源里的数据。
+                只有超级管理员能<strong>创建和修改</strong>；调用走 <code>xpftkey</code>（与普通 API 一致）。<br>
+                ⚠️ 持有该 API Key 的人就能往目标表写数据，请按写权限的标准保管：不要对外散发、不要写进前端代码、定期轮换。
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">允许写入的表与字段（白名单）</label>
+                <div class="form-hint" style="margin-bottom:6px;">
+                    只有登记在这里的表名和字段才允许写入 —— 表名/字段名无法参数化，白名单是唯一的防注入手段。
+                    格式：<code>{"表名": ["字段1", "字段2"]}</code>
+                </div>
+                <textarea class="form-input" id="syncTables" rows="8"
+                    style="font-family:ui-monospace,Consolas,monospace;font-size:12.5px;"
+                    placeholder='{
+  "order_table": ["order_id", "order_name", "amount"],
+  "ticket_table": ["ticket_id", "price"]
+}'></textarea>
+                <div class="form-inline" style="margin-top:6px;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="validateSyncTables()">校验格式</button>
+                    <span class="text-sm text-muted" id="syncTablesHint" style="margin-left:10px;"></span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">调用示例</label>
+                <pre style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:6px;font-size:12px;line-height:1.6;overflow:auto;margin:0;" id="syncCurlDemo">POST &lt;上方的调用地址&gt;
+Header: xpftkey: &lt;项目或API的Key&gt;
+
+{
+  "tableName": "order_table",
+  "pkId": ["order_id"],
+  "data": [
+    {"order_id": 121212, "order_name": "测试订单"}
+  ]
+}</pre>
+                <div class="form-hint" style="margin-top:6px;">
+                    <strong>写入规则</strong>：按 <code>pkId</code> 先查该行是否存在 —— 存在则 UPDATE，不存在则 INSERT。
+                    <code>pkId</code> 可以是多个字段（联合判重）。<br>
+                    <strong>出错处理</strong>：逐条写入，遇到错误就停下，<strong>已写入的保留</strong>，
+                    返回 <code>failedIndex</code>（失败行号）、<code>failedReason</code>、<code>failedRow</code> 便于定位补数。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-16" id="pluginModeCard" data-mode="plugin" style="display:none;">
+        <div class="card-header">
+            <h3>Python 插件</h3>
+            <span class="text-sm text-muted">用 Python 脚本作为 API 逻辑，需定义 main(params, ctx)</span>
+        </div>
+        <div class="card-body">
+            <div style="background:#fef3c7; border:1px solid #fde68a; color:#92400e; padding:10px 12px; border-radius:6px; font-size:12.5px; margin-bottom:12px;">
+                ⚠ <strong>安全提示</strong>：插件代码会在服务器上执行任意 Python（可 import 第三方库、访问网络与数据库）。
+                这<strong>不是安全沙箱</strong>，仅限可信成员编写。请勿粘贴来源不明的代码。
+            </div>
+            <div class="form-group">
+                <label class="form-label">脚本代码</label>
+                <div class="form-hint" style="margin-bottom:6px;">
+                    必须定义 <code>def main(params, ctx):</code> 并 <code>return</code> 结果（list/dict/标量，会被 JSON 序列化）。
+                </div>
+                <textarea id="apiPlugin" class="form-textarea font-mono" rows="18"
+                    placeholder="def main(params, ctx):&#10;    # params: 调用参数 dict&#10;    # ctx.query(数据源名, sql, 参数) 查数据&#10;    # ctx.http 调外部 HTTP（requests）&#10;    # ctx.log(msg) 写日志&#10;    rows = ctx.query('my_db', 'SELECT id, name FROM users WHERE id = :id', {'id': params['id']})&#10;    return {'count': len(rows), 'items': rows}"
+                    style="background:#282c34; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:4; white-space:pre; overflow:auto;"></textarea>
+            </div>
+            <div class="text-sm text-muted" style="margin-top:4px; line-height:1.8;">
+                <strong>ctx 能力：</strong><br>
+                · <code>ctx.params</code> — 本次调用参数（dict）<br>
+                · <code>ctx.query(datasource, sql, params)</code> — 查指定数据源，返回 list[dict]（自动参数化，禁 DDL）<br>
+                · <code>ctx.http</code> — requests 模块，调外部 HTTP<br>
+                · <code>ctx.log(msg)</code> — 写一条服务端日志<br>
+                · <code>ctx.vars</code> — 临时读写空间（dict）
+            </div>
+        </div>
+    </div>
+
+    </div><!-- /pane-logic -->
+
+    <!-- ============ 页2: 参数定义 ============ -->
+    <div class="editor-pane" id="pane-params">
+        <div class="param-help">
+            <div class="param-help-item"><b>普通参数 → <code>:参数名</code></b>
+                值走参数化绑定(防注入)。数组值自动展开 IN：<code>id IN :ids</code> 或 <code>id IN (:ids)</code> 均可。</div>
+            <div class="param-help-item"><b>嵌套取值 → <code>:{路径}</code></b>
+                循环里取子字段：<code>$for(ch in channels)$ ... :{ch.channelName} ... $endfor$</code>，中文/任意字符安全。</div>
+            <div class="param-help-item"><b>结构插值 → <code>#{名称}</code></b>
+                仅用于表名/列名/排序方向，只允许字母数字下划线；<u>值类数据一律用左边两种</u>。</div>
+{#            <div class="param-help-item"><b>复杂参数(array / object)</b>#}
+{#                点参数行的「结构」定义内部字段，即可：自动生成嵌套测试参数、执行前按路径校验必填(如 <code>channels[0].prdId</code>)。</div>#}
+        </div>
+        <div class="card mb-16" id="paramCard">
+            <div class="card-header">
+                <h3>参数定义</h3>
+                <div style="display: flex; gap: 6px;">
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="openStructurePreview('req')">预览请求结构</button>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="insertComplexExample()">插入复杂参数示例</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="parseSqlParamsBtn" onclick="parseSqlParams()">从 SQL 解析</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="addParam()">+ 添加参数</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="ptree-head">
+                    <span class="ptree-col-name">参数名</span>
+                    <span class="ptree-col-type">类型</span>
+                    <span class="ptree-col-req">必填</span>
+                    <span class="ptree-col-def">默认值</span>
+                    <span class="ptree-col-desc">描述</span>
+                    <span class="ptree-col-act"></span>
+                </div>
+                <div id="paramTree"></div>
+                <div id="paramEmpty" class="text-muted text-sm text-center" style="padding: 22px;">
+                    暂无参数 —— 可以「从 SQL 解析」自动提取 <code>:参数名</code> 占位符，<br>
+                    或「插入复杂参数示例」看看嵌套结构(渠道→产品列表)怎么定义。
+                </div>
+            </div>
+        </div>
+    </div><!-- /pane-params -->
+
+    </div><!-- /editor-left -->
+
+    <!-- ============ 右侧常驻:在线测试 ============ -->
+    <aside class="editor-right">
+        <div class="test-dock">
+            <div class="test-dock-head">
+                <h3>在线测试</h3>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="generateTestParams()" title="按参数定义生成请求参数">生成参数</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="runTest()" id="testBtn">执行</button>
+                </div>
+            </div>
+            <div class="test-dock-body">
+{% if api_id %}
+                <div class="test-dock-section-label">
+                    <span>请求参数 (JSON)</span>
+                    <span class="text-sm text-muted" id="testUrlPreview" style="font-weight:400;font-size:11px;"></span>
+                </div>
+                <div id="testParamsMount"></div>
+                <textarea id="testParams" rows="8" style="display:none;">{}</textarea>
+                <div class="test-dock-result" id="testResult" style="display:none;">
+                    <div class="test-dock-section-label">
+                        <span>响应结果</span>
+                        <button type="button" class="copy-btn" onclick="copyTestResult()">复制</button>
+                    </div>
+                    <div class="test-dock-meta" id="testMeta"></div>
+                    <pre><code id="testOutput" class="language-json hljs"></code></pre>
+                </div>
+{% else %}
+                <div class="test-dock-empty">
+                    <div style="font-size:13px; font-weight:600; margin-bottom:6px; color:var(--color-text-secondary);">先保存,再测试</div>
+                    保存 API 后即可在此填参数、走真实网关执行并查看返回。
+                </div>
+{% endif %}
+            </div>
+        </div>
+    </aside>
+
+    </div><!-- /editor-workspace -->
+</form>
+
+<!-- ===== 使用教程弹窗 ===== -->
+<div id="tutorialModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(15,23,42,0.55); align-items:center; justify-content:center;">
+  <div style="background:#fff; width:min(860px,94vw); max-height:88vh; border-radius:14px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,0.3);">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:1px solid #e2e8f0;">
+      <h3 style="margin:0; font-size:17px; font-weight:700; color:#0f172a;">SQL 模板 & 多步骤管线 — 使用教程</h3>
+      <button type="button" onclick="closeTutorial()" style="border:none; background:none; font-size:22px; color:#64748b; cursor:pointer; line-height:1;">&times;</button>
+    </div>
+    <div style="display:flex; gap:6px; padding:12px 22px 0; border-bottom:1px solid #e2e8f0; flex-wrap:wrap;">
+      <button type="button" class="tut-tab" data-tab="basic"   onclick="switchTutTab('basic')">基础占位符</button>
+      <button type="button" class="tut-tab" data-tab="cond"    onclick="switchTutTab('cond')">条件 & 循环</button>
+      <button type="button" class="tut-tab" data-tab="like"    onclick="switchTutTab('like')">模糊 & 空值</button>
+      <button type="button" class="tut-tab" data-tab="pipeline" onclick="switchTutTab('pipeline')">多步骤管线</button>
+      <button type="button" class="tut-tab" data-tab="agg"     onclick="switchTutTab('agg')">聚合 & 关联</button>
+    </div>
+    <div style="padding:20px 22px; overflow:auto;" id="tutBody"></div>
+    <div style="padding:12px 22px; border-top:1px solid #e2e8f0; text-align:right;">
+      <button type="button" class="btn btn-secondary" onclick="closeTutorial()">关闭</button>
+    </div>
+  </div>
+</div>
+<style>
+  .tut-tab{border:none;background:none;padding:8px 14px;font-size:13px;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;font-weight:500;}
+  .tut-tab.active{color:#4f46e5;border-bottom-color:#4f46e5;}
+  #tutBody h4{margin:18px 0 8px;font-size:14px;color:#0f172a;}
+  #tutBody h4:first-child{margin-top:0;}
+  #tutBody p{margin:6px 0;font-size:13px;color:#475569;line-height:1.7;}
+  #tutBody pre{background:#0f172a;color:#e2e8f0;padding:13px 15px;border-radius:8px;font-size:12px;line-height:1.65;overflow:auto;margin:8px 0;font-family:'Fira Code','JetBrains Mono',monospace;}
+  #tutBody code{background:#f1f5f9;color:#be185d;padding:1px 5px;border-radius:3px;font-size:12px;}
+  #tutBody pre code{background:none;color:inherit;padding:0;}
+  #tutBody table{width:100%;border-collapse:collapse;margin:8px 0;font-size:12.5px;}
+  #tutBody th,#tutBody td{border:1px solid #e2e8f0;padding:6px 10px;text-align:left;}
+  #tutBody th{background:#f8fafc;color:#334155;}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const PROJECT_ID = {{ project_id }};
+const API_ID = {{ api_id or 'null' }};
+const GATEWAY_PREFIX = '{{ gateway_prefix }}';
+let PROJECT_CODE = '{{ project_code | default("") }}';
+let params = [];
+
+// ========== 使用教程弹窗 ==========
+const TUTORIAL_CONTENT = {
+  basic: `
+    <h4>占位符 :param</h4>
+    <p>在 SQL 里用 <code>:参数名</code> 表示一个参数，系统按"参数定义"里的类型安全绑定（防 SQL 注入）。</p>
+    <pre><code>SELECT id, name FROM users
+WHERE status = :status
+  AND age >= :min_age</code></pre>
+    <p>调用时传 <code>{"status": "active", "min_age": 18}</code> 即可。</p>
+
+    <h4>数组自动展开 IN</h4>
+    <p>参数值是数组时，<code>IN :ids</code> 会自动展开成 <code>IN (:ids__0, :ids__1, ...)</code>，不用自己拼。</p>
+    <pre><code>SELECT * FROM orders WHERE user_id IN :ids
+-- ids=[1,2,3] 自动变成 IN (:ids__0, :ids__1, :ids__2)</code></pre>
+
+    <h4>文本插值 #{var}</h4>
+    <p><code>#{var}</code> 直接替换为文本（用于<strong>字段名/排序方向</strong>这类不能参数化的位置），只允许字母数字下划线，自动防注入。</p>
+    <pre><code>SELECT * FROM users ORDER BY #{sort_col} #{sort_dir}
+-- sort_col=created_at, sort_dir=DESC</code></pre>
+  `,
+  cond: `
+    <h4>条件块 $if / $elseif / $else / $endif$</h4>
+    <p>根据参数动态决定 SQL 片段是否包含进来。</p>
+    <pre><code>SELECT * FROM events WHERE 1=1
+$if(period == 'day')$
+    AND ts >= NOW() - INTERVAL 1 DAY
+$elseif(period == 'week')$
+    AND ts >= NOW() - INTERVAL 7 DAY
+$else$
+    AND ts >= '2000-01-01'
+$endif$</code></pre>
+
+    <h4>循环 $for ... $sep$ ... $endfor$</h4>
+    <pre><code>SELECT $for(c in cols)$#{c}$sep$, $endfor$ FROM users
+-- cols=['id','name','age'] → SELECT id, name, age FROM users</code></pre>
+
+    <h4>嵌套数组分组循环（对象数组 + 子数组，常用于按渠道/分组统计）</h4>
+    <p>参数常见形态：一个数组，里面每个对象既有普通字段，也有子数组字段。循环里用
+    <code>:{变量.字段}</code> 取值——<strong>字符串/数字自动安全绑定，不用手动加引号；
+    数组自动展开成 IN (a, b, c)</strong>。</p>
+
+    <p><strong>案例：按渠道分组统计，每个渠道各自的商品 ID 列表</strong></p>
+    <p>参数：</p>
+    <pre><code>{
+  "channels": [
+    {"channelName": "抖音", "prdId": [476855]},
+    {"channelName": "美团", "prdId": [476897, 476898]}
+  ]
+}</code></pre>
+    <p>模板：</p>
+    <pre><code>$for(ch in channels)$
+select
+    sum(case when spu_id in (:{ch.prdId}) then pay_count else 0 end) as pay_count,
+    :{ch.channelName} as channel
+from report.r_report_dwm_common
+WHERE merchant_id = 37950206
+  AND operated_at >= '2024-12-25 00:00:00'
+  AND operated_at < '2024-12-26 00:00:00'
+$sep$  union all
+$endfor$</code></pre>
+    <p>渲染后（参数已填充预览）：</p>
+    <pre><code>select sum(case when spu_id in (476855) then pay_count else 0 end) as pay_count, '抖音' as channel
+from report.r_report_dwm_common WHERE merchant_id = 37950206 ...
+  union all
+select sum(case when spu_id in (476897, 476898) then pay_count else 0 end) as pay_count, '美团' as channel
+from report.r_report_dwm_common WHERE merchant_id = 37950206 ...</code></pre>
+
+    <p><strong>案例：一个分组里有多个子数组（如商品ID + 工单ID）</strong></p>
+    <pre><code>{
+  "groups": [
+    {
+      "objectName": "渠道111", "objectType": "类型111",
+      "prdId": [706805, 685789],
+      "ticketId": [5080042, 5076968, 5073938]
+    }
+  ]
+}</code></pre>
+    <pre><code>$for(g in groups)$
+select
+    :{g.objectName} as object_name,
+    :{g.objectType} as object_type,
+    count(*) as cnt
+from some_table
+where prd_id in (:{g.prdId})
+  and ticket_id in (:{g.ticketId})
+$sep$union all
+$endfor$
+-- 渲染 → prd_id in (706805, 685789) and ticket_id in (5080042, 5076968, 5073938)</code></pre>
+
+    <p><strong>⚠️ 三条常踩的坑：</strong></p>
+    <table>
+      <tr><th>坑</th><th>正确做法</th></tr>
+      <tr><td><code>:{expr}</code> 外面手动加引号，如 <code>':{ch.name}'</code></td>
+          <td>不要加引号！加了引号会被当成字面量，占位符不会被替换。字符串值系统会自动加引号。</td></tr>
+      <tr><td>循环里写死固定值，如 <code>spu_id in ("476855")</code></td>
+          <td>必须引用循环变量 <code>:{ch.prdId}</code>，否则每一轮结果都一样，起不到"按分组取各自的值"的效果。</td></tr>
+      <tr><td>子数组可能为空，生成 <code>ticket_id in ()</code> 报错/恒假</td>
+          <td>外面包一层 <code>$if(len(g.ticketId) > 0)$ ... $endif$</code>，空数组时整段跳过。</td></tr>
+    </table>
+
+    <h4>多个平级数组同时使用（如同时传 groups + channels）</h4>
+    <p>参数里如果有两个独立的数组（字段名可以完全不同），常见三种用法：</p>
+
+    <p><strong>① 各自循环，结果用 UNION ALL 拼一起</strong>——数组内部用 <code>$sep$</code> 分隔，
+    两个循环块之间自己手写一个 <code>union all</code> 衔接（<code>$sep$</code> 只在本层循环内生效，不会跨循环）：</p>
+    <pre><code>$for(g in groups)$
+select :{g.objectName} as name from t where prd_id in (:{g.prdId})
+$sep$
+union all
+$endfor$
+union all
+$for(ch in channels)$
+select :{ch.oName} as name from t where prd_id in (:{ch.pId})
+$sep$
+union all
+$endfor$</code></pre>
+
+    <p><strong>② 嵌套循环，两个数组做交叉组合</strong>——<code>$for$</code> 可以直接嵌套，
+    内外层各自的 <code>$sep$</code> 互不干扰：</p>
+    <pre><code>$for(g in groups)$
+$for(ch in channels)$
+select :{g.objectName} as g_name, :{ch.oName} as ch_name, count(*) as cnt
+from t where g_prd_id in (:{g.prdId}) and ch_prd_id in (:{ch.pId})
+$sep$
+union all
+$endfor$
+$sep$
+union all
+$endfor$
+-- 2个group × 2个channel → 生成4组组合结果</code></pre>
+
+    <p><strong>③ 各自独立用途，不拼接</strong>——一个数组生成动态统计列，另一个数组单独做筛选：</p>
+    <pre><code>select
+$for(g in groups)$
+    sum(case when prd_id in (:{g.prdId}) then amount else 0 end) as :{g.objectName}
+$sep$,
+$endfor$
+from t
+where ch_id in ($for(ch in channels)$:{ch.oName}$sep$, $endfor$)</code></pre>
+
+    <h4>条件函数 & 运算符</h4>
+    <table>
+      <tr><th>函数/运算</th><th>说明</th></tr>
+      <tr><td><code>len(x)</code></td><td>字符串/数组长度，缺失为 0</td></tr>
+      <tr><td><code>defined(x)</code></td><td>是否传了该参数（None 视为没传）</td></tr>
+      <tr><td><code>empty(x)</code></td><td>是否为空（None/""/[]/false）</td></tr>
+      <tr><td><code>== != &gt; &gt;= &lt; &lt;=</code></td><td>比较</td></tr>
+      <tr><td><code>and / or / not</code></td><td>布尔逻辑</td></tr>
+      <tr><td><code>x in ['a','b']</code></td><td>多值判断</td></tr>
+    </table>
+  `,
+  like: `
+    <h4>LIKE 模糊查询（自动加 % 并转义）</h4>
+    <p>不用自己拼 <code>%</code>，系统自动加且转义用户输入里的 <code>% _ \\</code>，防止注入和误匹配。</p>
+    <table>
+      <tr><th>写法</th><th>输入 "alice" 实际匹配</th></tr>
+      <tr><td><code>:kw|like</code></td><td>%alice%（两侧模糊）</td></tr>
+      <tr><td><code>:kw|like_left</code></td><td>%alice（前缀模糊）</td></tr>
+      <tr><td><code>:kw|like_right</code></td><td>alice%（后缀模糊）</td></tr>
+    </table>
+    <pre><code>SELECT * FROM users
+WHERE name LIKE :kw|like
+   OR email LIKE :kw|like</code></pre>
+
+    <h4>NULL 安全比较</h4>
+    <p>SQL 里 <code>col = NULL</code> 永远为假，可空字段要用 <code>IS NULL</code>。配合条件块：</p>
+    <pre><code>$if(defined(parent_id))$
+    AND parent_id = :parent_id
+$else$
+    AND parent_id IS NULL
+$endif$</code></pre>
+  `,
+  pipeline: `
+    <h4>什么时候用多步骤管线</h4>
+    <p>一个 API 内需要<strong>查询多个数据库</strong>，或者要<strong>基于上一步结果继续查询</strong>、做内存关联/聚合时。打开右上角开关即可启用，关闭则是普通单 SQL。</p>
+
+    <h4>结构：一个 JSON 数组，每个元素是一步</h4>
+    <pre><code>[
+  { "name": "users", "type": "sql",
+    "datasource": "biz_db",
+    "sql": "SELECT id, name FROM users WHERE status = :status" },
+
+  { "name": "orders", "type": "sql",
+    "datasource": "analytics_db",
+    "sql": "SELECT user_id, amount FROM orders WHERE user_id IN :uids",
+    "inputs": { "uids": "\${users.*.id}" } },
+
+  { "name": "result", "type": "transform", "op": "join",
+    "left": "\${users}", "right": "\${orders}",
+    "on": { "left": "id", "right": "user_id" },
+    "is_return": true }
+]</code></pre>
+
+    <h4>步骤间引用语法</h4>
+    <table>
+      <tr><th>写法</th><th>含义</th></tr>
+      <tr><td><code>\${步骤.字段}</code></td><td>取单行字段</td></tr>
+      <tr><td><code>\${步骤.0.字段}</code></td><td>第 N 行字段</td></tr>
+      <tr><td><code>\${步骤.*.id}</code></td><td>所有行的某列（数组），常传给下一步 IN</td></tr>
+      <tr><td><code>\${步骤.*}</code></td><td>整个结果列表</td></tr>
+      <tr><td><code>\${x or 0}</code></td><td>默认值兜底</td></tr>
+      <tr><td><code>\${params.status}</code></td><td>引用 API 原始入参</td></tr>
+    </table>
+    <p><strong>数据源</strong>填数据源名（如 <code>"biz_db"</code>）或 id 字符串。<strong>最终返回</strong>给某步加 <code>"is_return": true</code>，不指定则返回最后一步。</p>
+  `,
+  agg: `
+    <h4>transform 步骤的几种 op</h4>
+    <table>
+      <tr><th>op</th><th>作用</th></tr>
+      <tr><td><code>join</code></td><td>两个步骤结果按字段关联合并</td></tr>
+      <tr><td><code>aggregate</code></td><td>分组聚合 sum/count/avg/min/max</td></tr>
+      <tr><td><code>compute</code></td><td>标量算术：跨步骤结果做 + - * / 等运算</td></tr>
+      <tr><td><code>map</code></td><td>对每行做字段投影/改名</td></tr>
+      <tr><td><code>filter</code></td><td>按条件过滤行</td></tr>
+      <tr><td><code>pick</code></td><td>取首行</td></tr>
+    </table>
+
+    <h4>多步结果做算术（op=compute）</h4>
+    <p>同一个 SQL 用不同参数查多次，再把结果相加/相减/算比率。<code>expr</code> 里用 <code>\${步骤.行号.字段}</code> 引用值。</p>
+    <pre><code>[
+  { "name": "q1", "type": "sql", "datasource": "db",
+    "sql": "SELECT count(1) AS cnt FROM t WHERE 1=1 $if(len(ids)>0)$ AND id IN :ids $endif$",
+    "inputs": { "ids": [1,2,3] } },
+  { "name": "q2", "type": "sql", "datasource": "db",
+    "sql": "SELECT count(1) AS cnt FROM t WHERE 1=1 $if(len(ids)>0)$ AND id IN :ids $endif$",
+    "inputs": { "ids": [4,5,6] } },
+  { "name": "total", "type": "transform", "op": "compute",
+    "expr": "\${q1.0.cnt} + \${q2.0.cnt}",
+    "as": "total_cnt", "is_return": true }
+]</code></pre>
+    <p>支持 <code>+ - * / // % **</code> 和括号。写 <code>as</code> 返回 <code>[{"total_cnt": 结果}]</code>；不写则直接返回标量数字。
+    出于安全只允许数字运算，不能调用函数或访问属性。</p>
+
+    <h4>分组聚合示例（类似 SQL GROUP BY）</h4>
+    <pre><code>{ "name": "summary", "type": "transform", "op": "aggregate",
+  "from": "\${orders}",
+  "group_by": ["dept_id"],
+  "aggregations": {
+     "order_count":  { "fn": "count" },
+     "total_amount": { "fn": "sum", "field": "amount" },
+     "avg_amount":   { "fn": "avg", "field": "amount" },
+     "max_amount":   { "fn": "max", "field": "amount" }
+  },
+  "is_return": true }</code></pre>
+    <p>输出每个 dept_id 一行，含 order_count / total_amount / avg_amount / max_amount。<br>
+    不写 <code>group_by</code> 则对全部数据聚合成 1 行。</p>
+
+    <h4>关联合并示例</h4>
+    <pre><code>{ "type": "transform", "op": "join",
+  "left": "\${users}", "right": "\${orders}",
+  "on": { "left": "id", "right": "user_id" },
+  "join_type": "left",
+  "select": ["id", "name", { "amount": "\${right.amount or 0}" }] }</code></pre>
+    <p><code>join_type</code> 支持 <code>left</code>（默认，保留左表全部）和 <code>inner</code>（仅匹配）。</p>
+  `,
+};
+
+function openTutorial(tab) {
+  document.getElementById('tutorialModal').style.display = 'flex';
+  switchTutTab(tab || 'basic');
+}
+function closeTutorial() {
+  document.getElementById('tutorialModal').style.display = 'none';
+}
+function switchTutTab(tab) {
+  document.querySelectorAll('.tut-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  document.getElementById('tutBody').innerHTML = TUTORIAL_CONTENT[tab] || '';
+}
+// 点遮罩关闭
+document.addEventListener('click', function(e) {
+  if (e.target && e.target.id === 'tutorialModal') closeTutorial();
+});
+
+// ========== API 类型切换 (SQL <-> HTML) ==========
+// 全局工具：把字符串安全转义为可放入 HTML 属性 value="..." 的内容
+// 比 escapeHtml 更严格：必须额外转义 " ' / 反引号 / 回车换行，
+// 否则像默认值 {"foo":"bar"} 里的双引号会闭合属性，导致输入框被"截断"
+function escapeAttr(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\r/g, '&#13;')
+        .replace(/\n/g, '&#10;')
+        .replace(/\t/g, '&#9;');
+}
+// SQL 类型：显示数据源/参数/SQL/管线卡片；隐藏页面内容卡片
+// HTML 类型：显示页面内容卡片；隐藏数据源/SQL/管线/参数卡片
+// 校验同步白名单格式（保存前先自查，避免提交后才被后端打回）
+function validateSyncTables() {
+    const el = document.getElementById('syncTables');
+    const hint = document.getElementById('syncTablesHint');
+    const raw = (el?.value || '').trim();
+    if (!raw) {
+        hint.textContent = '未配置：数据同步 API 必须登记允许写入的表';
+        hint.style.color = '#b91c1c';
+        return false;
+    }
+    let obj;
+    try {
+        obj = JSON.parse(raw);
+    } catch (e) {
+        hint.textContent = 'JSON 格式错误：' + e.message;
+        hint.style.color = '#b91c1c';
+        return false;
+    }
+    if (typeof obj !== 'object' || Array.isArray(obj) || !Object.keys(obj).length) {
+        hint.textContent = '须是对象，形如 {"order_table": ["order_id"]}';
+        hint.style.color = '#b91c1c';
+        return false;
+    }
+    const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
+    for (const [t, cols] of Object.entries(obj)) {
+        if (!IDENT.test(t)) {
+            hint.textContent = `表名不合法：${t}（只允许字母、数字、下划线）`;
+            hint.style.color = '#b91c1c'; return false;
+        }
+        if (!Array.isArray(cols) || !cols.length) {
+            hint.textContent = `表 ${t} 未配置字段`;
+            hint.style.color = '#b91c1c'; return false;
+        }
+        for (const col of cols) {
+            if (!IDENT.test(col)) {
+                hint.textContent = `字段名不合法：${t}.${col}`;
+                hint.style.color = '#b91c1c'; return false;
+            }
+        }
+    }
+    const n = Object.keys(obj).length;
+    const total = Object.values(obj).reduce((s, a) => s + a.length, 0);
+    hint.textContent = `格式正确：${n} 张表、共 ${total} 个字段`;
+    hint.style.color = '#0f766e';
+    return true;
+}
+
+// 非超管不能选「数据同步」类型 —— 后端也会拦，这里只是提前把入口关掉，
+// 避免用户填完一堆配置才在保存时被打回。
+async function applySyncPermission() {
+    try {
+        const res = await API.get('/api/auth/me');
+        const isSuper = res && res.data && res.data.global_role === 'super_admin';
+        const opt = document.getElementById('apiTypeSyncOption');
+        if (opt && !isSuper) {
+            opt.disabled = true;
+            opt.textContent = '数据同步 API（需超级管理员）';
+        }
+        // 已经是 sync 类型但当前不是超管：整个配置区只读
+        const cur = (document.getElementById('apiType')?.value || 'sql').toLowerCase();
+        if (cur === 'sync' && !isSuper) {
+            const st = document.getElementById('syncTables');
+            if (st) st.readOnly = true;
+            const hint = document.getElementById('syncTablesHint');
+            if (hint) {
+                hint.textContent = '只读：数据同步 API 仅超级管理员可修改';
+                hint.style.color = '#b45309';
+            }
+        }
+    } catch (e) {
+        // 拿不到用户信息不阻塞页面，后端仍有兜底校验
+    }
+}
+
+function onApiTypeChange() {
+  const sel = document.getElementById('apiType');
+  const type = (sel && sel.value) || 'sql';
+  // data-mode 可含多个模式（空格分隔），只要包含当前类型就显示
+  document.querySelectorAll('[data-mode]').forEach(el => {
+    const modes = (el.getAttribute('data-mode') || '').split(/\s+/).filter(Boolean);
+    el.style.display = modes.includes(type) ? '' : 'none';
+  });
+  // 插件模式下"从 SQL 解析"无意义，隐藏
+  const parseBtn = document.getElementById('parseSqlParamsBtn');
+  if (parseBtn) parseBtn.style.display = (type === 'sql') ? '' : 'none';
+  const hint = document.getElementById('apiTypeHint');
+  if (hint) {
+    hint.textContent = (type === 'html')
+      ? '直接编辑 HTML/CSS/JS，调用 API 即在浏览器渲染出静态页面'
+      : (type === 'plugin')
+      ? 'Python 插件 API'
+      : (type === 'sync')
+      ? '数据写入接口：按 tableName 把 data 写进数据源表（仅超管可建可调用）'
+      : '通过 SQL/管线 把数据库查询发布为 RESTful API';
+  }
+  // HTML 类型 API 通常是公开页面，切到 HTML 时如果用户没显式开启过校验，自动建议关闭
+  const reqKey = document.getElementById('requireApiKey');
+  if (reqKey && type === 'html' && !reqKey.dataset.userTouched) {
+    reqKey.checked = false;
+  }
+  if (typeof ensureActiveTabVisible === 'function') ensureActiveTabVisible();
+}
+
+// ========== 统一代码编辑器 (CodeEditor) 接入 ==========
+// 3 个编辑器实例 + 兼容垫片：把值同步回隐藏的同名 textarea，
+// 让其它读 document.getElementById('apiSql').value 的旧代码无需改动。
+
+let sqlEditor = null, testParamsEditor = null, pipelineEditor = null;
+
+// 收集当前可引用的步骤（供 ${ 提示）：返回 [{step, fields:[...]}]
+function _collectStepRefs() {
+    const out = [];
+    if (typeof pipelineState !== 'undefined' && Array.isArray(pipelineState)) {
+        pipelineState.forEach(s => {
+            if (!s || !s.name) return;
+            const fields = [];
+            // 从 SQL 的 select 粗略抓字段名（仅做提示，不求精确）
+            if (s.type === 'sql' && s.sql) {
+                const m = s.sql.match(/select\s+([\s\S]*?)\s+from/i);
+                if (m) {
+                    m[1].split(',').forEach(seg => {
+                        const a = seg.match(/(?:as\s+)?([a-zA-Z_]\w*)\s*$/i);
+                        if (a) fields.push(a[1]);
+                    });
+                }
+            }
+            out.push({ step: s.name, fields });
+        });
+    }
+    return out;
+}
+
+// 收集已定义的请求参数名（供 : 提示）
+function _collectParamNames() {
+    try {
+        return (params || []).map(p => p.name).filter(Boolean);
+    } catch { return []; }
+}
+
+function initCodeEditors() {
+    if (typeof CodeEditor === 'undefined') return;
+
+    // 主 SQL 模板编辑器
+    const sqlMount = document.getElementById('sqlEditorMount');
+    if (sqlMount && !sqlEditor) {
+        sqlEditor = new CodeEditor(sqlMount, {
+            language: 'sql',
+            value: document.getElementById('apiSql').value || '',
+            onChange: (v) => { document.getElementById('apiSql').value = v; },
+            suggest: { templateFns: true, params: _collectParamNames },
+        });
+    }
+
+    // 测试参数 JSON 编辑器
+    const tpMount = document.getElementById('testParamsMount');
+    if (tpMount && !testParamsEditor) {
+        testParamsEditor = new CodeEditor(tpMount, {
+            language: 'json',
+            value: document.getElementById('testParams').value || '{}',
+            onChange: (v) => { document.getElementById('testParams').value = v; },
+        });
+    }
+
+    // 管线 JSON 编辑器
+    const plMount = document.getElementById('pipelineJsonMount');
+    if (plMount && !pipelineEditor) {
+        pipelineEditor = new CodeEditor(plMount, {
+            language: 'json',
+            value: document.getElementById('pipelineSteps').value || '',
+            height: 320,
+            onChange: (v) => {
+                document.getElementById('pipelineSteps').value = v;
+                if (typeof validatePipelineJson === 'function') validatePipelineJson();
+            },
+        });
+    }
+}
+
+// ---- 兼容垫片：旧代码用这些函数刷新高亮 / 同步 ----
+function updateSqlHighlight() {
+    if (sqlEditor) sqlEditor.setValue(document.getElementById('apiSql').value || '');
+}
+function updateTestParamsHighlight() {
+    if (testParamsEditor) testParamsEditor.setValue(document.getElementById('testParams').value || '{}');
+}
+function syncPipelineEditor() {
+    if (pipelineEditor) pipelineEditor.setValue(document.getElementById('pipelineSteps').value || '');
+}
+// 旧的 contenteditable 处理器留空，避免 onerror（DOM 已不存在这些元素）
+function onSqlCodeInput() {}
+function onSqlCodeBlur() {}
+function onTestParamsInput() {}
+function onTestParamsBlur() {}
+function highlightSqlCode() { updateSqlHighlight(); }
+function highlightTestParams() { updateTestParamsHighlight(); }
+function restoreCursor() {}
+
+// ========== 调用地址 ==========
+function updateCallUrlPreview() {
+    const path = document.getElementById('apiPath').value || '/api/users';
+    const codeOrId = PROJECT_CODE || PROJECT_ID;
+    const fullUrl = `${window.location.origin}${GATEWAY_PREFIX}/${codeOrId}${path}`;
+    document.getElementById('fullCallUrl').textContent = fullUrl;
+    const testPreview = document.getElementById('testUrlPreview');
+    if (testPreview) {
+        const method = document.getElementById('apiMethod').value;
+        testPreview.textContent = `${method} ${fullUrl}`;
+    }
+}
+
+document.getElementById('apiPath').addEventListener('input', updateCallUrlPreview);
+document.getElementById('apiMethod').addEventListener('change', updateCallUrlPreview);
+
+function copyCallUrl() {
+    const url = document.getElementById('fullCallUrl').textContent;
+    navigator.clipboard.writeText(url).then(() => {
+        Toast.success('调用地址已复制到剪贴板');
+    }).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        Toast.success('调用地址已复制到剪贴板');
+    });
+}
+
+function copyTestResult() {
+    const text = document.getElementById('testOutput').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        Toast.success('测试结果已复制');
+    }).catch(() => {
+        Toast.error('复制失败');
+    });
+}
+
+// ========== 数据源 ==========
+async function openTransferDialog() {
+    if (!API_ID) { Toast.warning('请先保存 API'); return; }
+    // 拉取用户列表供选择
+    let users = [];
+    try {
+        const r = await API.get('/api/users');
+        users = (r && r.data && (r.data.items || r.data.list)) || (Array.isArray(r && r.data) ? r.data : []);
+    } catch (e) {}
+    const opts = users.map(u => `<option value="${u.id}">${u.nickname || u.username} (${u.username})</option>`).join('');
+    const html = `
+      <div id="__transferModal" class="modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:9999;">
+        <div style="background:#fff;border-radius:8px;padding:20px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+          <h3 style="margin:0 0 12px;font-size:16px;">转交责任人</h3>
+          <p style="font-size:12px;color:#64748b;margin:0 0 10px;">当前责任人：<b>${document.getElementById('ownerName').textContent}</b></p>
+          <select id="__newOwner" class="form-select" style="width:100%;margin-bottom:14px;">
+            <option value="">选择新责任人…</option>${opts}
+          </select>
+          <div style="text-align:right;">
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('__transferModal').remove()">取消</button>
+            <button class="btn btn-primary btn-sm" onclick="doTransfer()">确认转交</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+async function doTransfer() {
+    const newOwnerId = parseInt(document.getElementById('__newOwner').value, 10);
+    if (!newOwnerId) { Toast.warning('请选择新责任人'); return; }
+    const res = await API.post('/api/owner-approvals/transfer', { api_id: API_ID, new_owner_id: newOwnerId });
+    if (res && res.status) {
+        Toast.success('转交成功');
+        document.getElementById('__transferModal').remove();
+        loadApiData();
+    } else {
+        Toast.error((res && res.msg) || '转交失败');
+    }
+}
+
+// 自动预热依赖缓存：缓存关掉时禁用预热开关并自动取消勾选，
+// 避免存下「开了预热但没开缓存」这种不会生效的配置（后端也会拒绝）
+function syncPrewarmAvailability() {
+    const cacheOn = document.getElementById('cacheEnabled').checked;
+    const pw = document.getElementById('cachePrewarm');
+    const hint = document.getElementById('prewarmHint');
+    const ov = document.getElementById('prewarmOverrides');
+    if (!pw) return;
+    pw.disabled = !cacheOn;
+    if (ov) ov.disabled = !cacheOn;
+    const sd = document.getElementById('prewarmStopDaily');
+    if (sd) { sd.disabled = !cacheOn; if (!cacheOn) sd.checked = false; }
+    if (!cacheOn) {
+        pw.checked = false;
+        if (hint) { hint.textContent = '需先开启「缓存」才能使用自动预热'; hint.style.color = '#b45309'; }
+    } else {
+        if (hint) { hint.textContent = '缓存到期前自动按历史参数重新查询回填'; hint.style.color = ''; }
+    }
+}
+
+async function previewPrewarmOverrides() {
+    const tpl = document.getElementById('prewarmOverrides').value.trim();
+    const el = document.getElementById('prewarmPreview');
+    if (!tpl) { el.textContent = '未配置覆盖（将直接用历史请求参数预热）'; el.style.color = '#64748b'; return; }
+    const res = await API.post(`/api/projects/${PROJECT_ID}/variables/preview-template`, { template: tpl });
+    if (res && res.status) {
+        const p = res.data.params;
+        if (Array.isArray(p)) {
+            // 多组：分行列出，每组一行，方便核对各时间段是否符合预期
+            el.innerHTML = `共 ${p.length} 组，每组各预热一份缓存：<br>` +
+                p.map((g, i) => `　${i + 1}. ${escapeHtml(JSON.stringify(g))}`).join('<br>');
+        } else {
+            el.textContent = '将覆盖这些字段: ' + JSON.stringify(p);
+        }
+        el.style.color = '#0f766e';
+    } else {
+        el.textContent = (res && res.msg) || '预览失败';
+        el.style.color = '#b91c1c';
+    }
+}
+
+async function clearApiCache() {
+    if (!API_ID) { Toast.warning('请先保存 API'); return; }
+    showConfirm('清除缓存', '确定清除该 API 的所有缓存吗？同时会清掉已记录的预热参数。', async () => {
+        const res = await API.post(`/api/projects/${PROJECT_ID}/apis/${API_ID}/clear-cache`, {});
+        if (res && res.status) {
+            Toast.success(res.msg || '缓存已清除');
+        } else {
+            Toast.error((res && res.msg) || '清除失败');
+        }
+    });
+}
+
+async function loadDatasources() {
+    const data = await API.get('/api/datasources?page_size=100');
+    if (!data || !data.data) return;
+    const sel = document.getElementById('apiDatasource');
+    const currentVal = sel.value;
+    sel.innerHTML = '<option value="">-- 请选择数据源 --</option>';
+    data.data.items.forEach(ds => {
+        sel.innerHTML += `<option value="${ds.id}">${escapeHtml(ds.name)} (${ds.type} - ${ds.host}:${ds.port})</option>`;
+    });
+    if (currentVal) sel.value = currentVal;
+}
+
+// ========== 加载项目编码（如果模板未传入） ==========
+async function loadProjectCode() {
+    if (PROJECT_CODE) return;
+    const data = await API.get(`/api/projects/${PROJECT_ID}`);
+    if (data && data.data && data.data.code) {
+        PROJECT_CODE = data.data.code;
+        updateCallUrlPreview();
+    }
+}
+
+// ========== 加载 API 数据 ==========
+async function loadApiData() {
+    if (!API_ID) return;
+    const data = await API.get(`/api/projects/${PROJECT_ID}/apis/${API_ID}`);
+    if (!data || !data.data) return;
+    const api = data.data;
+
+    document.getElementById('apiName').value = api.name;
+    document.getElementById('apiDesc').value = api.description;
+    document.getElementById('apiPath').value = api.url_path;
+    document.getElementById('apiMethod').value = api.method;
+    document.getElementById('apiEnabled').checked = api.is_enabled;
+    document.getElementById('apiDatasource').value = api.datasource_id || '';
+    // 责任人显示（v2.10）
+    if (api.owner_name) {
+        document.getElementById('ownerName').textContent = api.owner_name;
+        document.getElementById('ownerBox').style.display = '';
+        window.__apiOwnerId = api.owner_id;
+    }
+    // API 类型回填
+    const typeSel = document.getElementById('apiType');
+    if (typeSel) typeSel.value = (api.api_type || 'sql');
+    const _st = document.getElementById('syncTables');
+    if (_st) _st.value = api.sync_tables || '';
+    // HTML 内容回填
+    if (document.getElementById('apiHtml')) document.getElementById('apiHtml').value = api.html_content || '';
+    if (document.getElementById('apiCss')) document.getElementById('apiCss').value = api.css_content || '';
+    if (document.getElementById('apiJs')) document.getElementById('apiJs').value = api.js_content || '';
+    if (document.getElementById('apiPlugin')) document.getElementById('apiPlugin').value = api.plugin_code || '';
+    // 切换显隐
+    onApiTypeChange();
+    document.getElementById('apiSql').value = api.sql_template || '';
+    if (sqlEditor) sqlEditor.setValue(api.sql_template || '');
+    // 加载 pipeline_steps —— 如果是 JSON 字符串，美化缩进，方便编辑
+    let pipelineRaw = api.pipeline_steps || '';
+    if (pipelineRaw.trim()) {
+        try {
+            pipelineRaw = JSON.stringify(JSON.parse(pipelineRaw), null, 2);
+        } catch { /* 保留原样让用户修复 */ }
+    }
+    document.getElementById('pipelineSteps').value = pipelineRaw;
+    if (pipelineEditor) pipelineEditor.setValue(pipelineRaw);
+    // 有管线配置则自动开启多步骤模式
+    const hasPipeline = !!pipelineRaw.trim();
+    document.getElementById('pipelineEnabled').checked = hasPipeline;
+    togglePipelineMode();
+    // 把已有 JSON 解析进可视化编排器
+    if (hasPipeline) {
+        currentPMode = 'visual';
+        jsonToState();
+        renderStepCards();
+    }
+    document.getElementById('cacheEnabled').checked = api.cache_enabled;
+    document.getElementById('cacheTtl').value = api.cache_ttl;
+    document.getElementById('cachePrewarm').checked = !!api.cache_prewarm;
+    document.getElementById('prewarmOverrides').value = api.prewarm_param_overrides || '';
+    document.getElementById('prewarmStopDaily').checked = !!api.prewarm_stop_daily;
+    syncPrewarmAvailability();
+    document.getElementById('apiTimeout').value = api.timeout;
+    document.getElementById('maxRows').value = api.max_rows;
+    document.getElementById('rateLimitEnabled').checked = api.rate_limit_enabled;
+    document.getElementById('rateLimitQps').value = api.rate_limit_qps;
+    document.getElementById('apiKey').value = api.api_key;
+    // 回填 API Key 校验开关（旧数据若没有该字段，默认 true）
+    const reqKeyEl = document.getElementById('requireApiKey');
+    if (reqKeyEl) {
+        reqKeyEl.checked = (api.require_api_key !== undefined && api.require_api_key !== null)
+            ? !!api.require_api_key : true;
+        // 加载历史数据时视为用户已设置，避免类型切换函数把它重置掉
+        reqKeyEl.dataset.userTouched = '1';
+    }
+
+    params = api.parameters || [];
+    renderParams();
+    updateSqlHighlight();
+    updateCallUrlPreview();
+    // Also init test params highlight
+    updateTestParamsHighlight();
+}
+
+
+// ============================================================
+// v2.3 结构预览:请求结构 / SQL 渲染中间态 / 响应结构
+// 用途:在保存或执行之前,检查各中间态定义是否符合预期
+// ============================================================
+function openStructurePreview(tab) {
+    let existing = document.getElementById('__structurePreview');
+    if (existing) existing.remove();
+    const apiTypeNow = (document.getElementById('apiType')?.value || 'sql').toLowerCase();
+    const defaultTab = tab || (apiTypeNow === 'sql' ? 'sql' : 'req');
+    const html = `
+    <div class="modal-overlay" id="__structurePreview" style="display:flex;">
+        <div class="modal" style="max-width: 780px; width: 92%;">
+            <div class="modal-header">
+                <h3>结构预览 <span class="text-sm text-muted" style="font-weight:400">— 中间态检查</span></h3>
+                <button type="button" class="btn-icon" onclick="document.getElementById('__structurePreview').remove()">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height:70vh; overflow:auto;">
+                <div class="sp-tabs">
+                    <button type="button" class="sp-tab" data-sp="req" onclick="spSwitch('req')">① 请求结构</button>
+                    <button type="button" class="sp-tab" data-sp="sql" onclick="spSwitch('sql')">② SQL 渲染</button>
+                    <button type="button" class="sp-tab" data-sp="resp" onclick="spSwitch('resp')">③ 响应结构</button>
+                </div>
+                <div class="sp-pane" id="sp-req"></div>
+                <div class="sp-pane" id="sp-sql"><div class="sp-note">渲染中...</div></div>
+                <div class="sp-pane" id="sp-resp"></div>
+            </div>
+            <div class="modal-footer">
+                <span class="sp-note" style="margin-right:auto;">① 参数定义 → 调用方要传什么 &nbsp; ② 逻辑定义 → 数据库收到什么 &nbsp; ③ 结果输出 → 调用方拿到什么</span>
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('__structurePreview').remove()">关闭</button>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+    spRenderReq();
+    spRenderResp(null);
+    spSwitch(defaultTab);
+    spFetchSqlPreview();   // 异步:SQL 渲染 + 用渲染结果反推输出列
+}
+
+function spSwitch(name) {
+    document.querySelectorAll('#__structurePreview .sp-tab').forEach(el =>
+        el.classList.toggle('active', el.dataset.sp === name));
+    document.querySelectorAll('#__structurePreview .sp-pane').forEach(el =>
+        el.classList.toggle('active', el.id === 'sp-' + name));
+}
+
+// ---------- ① 请求结构:参数树 + 示例 JSON ----------
+function spTypeLabel(c) {
+    if (c.param_type === 'array') {
+        const it = (c.item_schema && c.item_schema.item_type) || 'object';
+        return `array&lt;${it}&gt;`;
+    }
+    return c.param_type;
+}
+
+function spTreeLines(children, ctx, indent) {
+    // ctx.kind='loop': 数组元素视角,引用写 :{循环变量.字段}
+    // ctx.kind='path': 对象直达视角,引用写 :{参数名.字段}
+    const LOOP_VARS = ['x', 'y', 'z', 'w'];
+    let out = '';
+    (children || []).forEach(c => {
+        if (!c.name) return;
+        const ref = ctx.kind === 'loop' ? `${ctx.v}.${c.name}` : `${ctx.p}.${c.name}`;
+        out += `<div style="padding-left:${indent * 18}px;">`
+            + `<span class="t-name">${escapeHtml(c.name)}</span>`
+            + ` : <span class="t-type">${spTypeLabel(c)}</span>`
+            + (c.required ? '<span class="t-req">*</span>' : '')
+            + `<span class="t-path" title="点击复制,SQL 模板中的取值写法" onclick="copyToClipboard(':{${ref}}'); Toast.success('已复制 :{${ref}}')">:{${ref}}</span>`
+            + (c.description ? `<span class="t-desc">${escapeHtml(c.description)}</span>` : '')
+            + `</div>`;
+        if (c.item_schema && (c.item_schema.children || []).length) {
+            if (c.param_type === 'array') {
+                const v = LOOP_VARS[Math.min(ctx.depth + 1, LOOP_VARS.length - 1)];
+                out += `<div style="padding-left:${(indent + 1) * 18}px;" class="sp-note">循环写法: <code>$for(${v} in ${ref})$ ... $endfor$</code></div>`;
+                out += spTreeLines(c.item_schema.children, { kind: 'loop', v, depth: ctx.depth + 1 }, indent + 1);
+            } else {
+                out += spTreeLines(c.item_schema.children, { kind: 'path', p: ref, depth: ctx.depth }, indent + 1);
+            }
+        }
+    });
+    return out;
+}
+
+function spRenderReq() {
+    const pane = document.getElementById('sp-req');
+    if (!pane) return;
+    if (!params.filter(x => x.name).length) {
+        pane.innerHTML = '<div class="sp-note">尚未定义参数。切到「参数定义」页添加,或点「插入复杂参数示例」。</div>';
+        return;
+    }
+    // 参数树
+    let tree = '';
+    params.forEach(pp => {
+        if (!pp.name) return;
+        ensureSchemaParsed(pp);
+        tree += `<div><span class="t-name">${escapeHtml(pp.name)}</span>`
+            + ` : <span class="t-type">${pp.param_type === 'array' && pp._schema ? 'array&lt;' + (pp._schema.item_type || 'object') + '&gt;' : pp.param_type}</span>`
+            + (pp.required ? '<span class="t-req">*</span>' : '')
+            + (pp.description ? `<span class="t-desc">${escapeHtml(pp.description)}</span>` : '')
+            + `</div>`;
+        if (pp._schema && (pp._schema.children || []).length) {
+            if (pp.param_type === 'array') {
+                tree += `<div style="padding-left:18px;" class="sp-note">循环写法: <code>$for(x in ${escapeHtml(pp.name)})$ ... $sep$ union all $endfor$</code></div>`;
+                tree += spTreeLines(pp._schema.children, { kind: 'loop', v: 'x', depth: 0 }, 1);
+            } else {
+                tree += spTreeLines(pp._schema.children, { kind: 'path', p: pp.name, depth: 0 }, 1);
+            }
+        }
+    });
+    // 示例 JSON(复用测试参数生成逻辑,但不写入测试框)
+    const obj = {};
+    params.forEach(pp => {
+        if (!pp.name) return;
+        if ((pp.param_type === 'array' || pp.param_type === 'object')) {
+            ensureSchemaParsed(pp);
+            if (pp._schema && (pp._schema.children || []).length) {
+                obj[pp.name] = buildSchemaExample(pp._schema, pp.param_type === 'array');
+                return;
+            }
+        }
+        obj[pp.name] = coerceExample(pp.default_value, pp.param_type);
+    });
+    pane.innerHTML = `
+        <div class="sp-section-title">参数结构树 <span style="font-weight:400">(<span class="t-req">*</span>=必填,紫色路径可点击复制到 SQL)</span></div>
+        <div class="sp-tree">${tree}</div>
+        <div class="sp-section-title">请求示例(按「示例值/默认值」生成)</div>
+        <pre class="sp-code">${escapeHtml(JSON.stringify(obj, null, 2))}</pre>
+        <div class="sp-note">与「在线测试」页的「生成参数」按钮同源 —— 这里检查结构,那里实际发请求。</div>`;
+}
+
+// ---------- ② SQL 渲染中间态(复用 /api/sql/preview,增加绑定值展示) ----------
+async function spFetchSqlPreview() {
+    const pane = document.getElementById('sp-sql');
+    if (!pane) return;
+    const apiTypeNow = (document.getElementById('apiType')?.value || 'sql').toLowerCase();
+    if (apiTypeNow !== 'sql') {
+        pane.innerHTML = `<div class="sp-note">当前是 ${apiTypeNow === 'plugin' ? 'Python 插件' : 'HTML 页面'} API,无 SQL 渲染中间态;${apiTypeNow === 'plugin' ? '插件里通过 params 直接读取①中的请求结构。' : ''}</div>`;
+        return;
+    }
+    const sql = (typeof sqlEditor !== 'undefined' && sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql')?.value) || '';
+    if (!sql.trim()) { pane.innerHTML = '<div class="sp-note">SQL 模板为空。</div>'; return; }
+
+    // 参数优先级:测试框里的 JSON > 按参数定义生成的示例
+    let previewParams = {};
+    try {
+        const raw = ((typeof testParamsEditor !== 'undefined' && testParamsEditor ? testParamsEditor.getValue()
+            : document.getElementById('testParams')?.value) || '').trim();
+        if (raw && raw !== '{}') previewParams = JSON.parse(raw);
+    } catch (e) {}
+    if (!Object.keys(previewParams).length) {
+        params.forEach(pp => {
+            if (!pp.name) return;
+            ensureSchemaParsed(pp);
+            if ((pp.param_type === 'array' || pp.param_type === 'object') && pp._schema && (pp._schema.children || []).length) {
+                previewParams[pp.name] = buildSchemaExample(pp._schema, pp.param_type === 'array');
+            } else {
+                previewParams[pp.name] = coerceExample(pp.default_value, pp.param_type);
+            }
+        });
+    }
+
+    const res = await API.post('/api/sql/preview', { sql_template: sql, params: previewParams });
+    if (!res || res.status !== true) {
+        pane.innerHTML = `<div class="sp-note" style="color:var(--color-danger)">渲染失败: ${escapeHtml(res?.msg || '未知错误')}</div>`;
+        return;
+    }
+    const d = res.data || {};
+    window.__lastRenderedSql = d.rendered_sql || '';
+
+    const exprRows = (d.expressions || []).map(e => {
+        const badge = e.kind === 'for'
+            ? `<span class="badge" style="background:#ecfccb;color:#4d7c0f;padding:1px 7px;border-radius:4px;font-size:10.5px;">loop × ${e.iter_count || 0}</span>`
+            : `<span class="badge" style="background:${e.value ? '#dcfce7' : '#fee2e2'};color:${e.value ? '#15803d' : '#b91c1c'};padding:1px 7px;border-radius:4px;font-size:10.5px;">${e.value ? 'keep' : 'drop'}</span>`;
+        return `<tr><td><code style="font-size:11.5px;">${escapeHtml(e.expr)}</code></td><td style="text-align:center;">${badge}</td></tr>`;
+    }).join('');
+
+    const binds = d.generated_binds || {};
+    const bindRows = Object.keys(binds).map(k =>
+        `<tr><td>:${escapeHtml(k)}</td><td>${escapeHtml(JSON.stringify(binds[k]))}</td></tr>`).join('');
+
+    pane.innerHTML = `
+        ${exprRows ? `<div class="sp-section-title">控制块求值($if / $for)</div>
+        <table class="sp-bind-table"><thead><tr><th>表达式</th><th style="width:90px;text-align:center;">结果</th></tr></thead><tbody>${exprRows}</tbody></table>` : ''}
+        ${bindRows ? `<div class="sp-section-title">:{表达式} 自动生成的绑定值(参数化,防注入)</div>
+        <table class="sp-bind-table"><thead><tr><th style="width:140px;">占位符</th><th>值</th></tr></thead><tbody>${bindRows}</tbody></table>` : ''}
+        <div class="sp-section-title" style="color:#0f766e;">✦ 参数已填充的 SQL(可直接复制到数据库执行验证)</div>
+        <pre class="sp-code" style="background:#052e2b;color:#5eead4;">${escapeHtml(d.preview_sql || d.rendered_sql || '')}</pre>
+        <div class="sp-section-title">模板 SQL(:占位符 将参数化提交到数据库)</div>
+        <pre class="sp-code">${escapeHtml(d.rendered_sql || '')}</pre>
+        <div class="sp-note">上方为参数填充后的样子,方便直接拿去数据库跑;真实执行走参数化绑定(防注入),结果一致。参数来自「在线测试」页的 JSON,为空时按参数定义示例生成。</div>`;
+
+    // 用渲染结果刷新③的输出列静态推断
+    spRenderResp(d.rendered_sql || '');
+}
+
+// ---------- ③ 响应结构:真实测试结果优先,否则从 SQL 静态推断输出列 ----------
+function spInferJsonTree(value, indent) {
+    if (Array.isArray(value)) {
+        if (!value.length) return `<div style="padding-left:${indent * 18}px;"><span class="t-type">array (空)</span></div>`;
+        return `<div style="padding-left:${indent * 18}px;"><span class="t-type">array&lt;${typeof value[0] === 'object' ? 'object' : typeof value[0]}&gt; × ${value.length}</span></div>`
+            + (typeof value[0] === 'object' && value[0] !== null ? spInferJsonTree(value[0], indent + 1) : '');
+    }
+    if (value !== null && typeof value === 'object') {
+        return Object.keys(value).map(k => {
+            const v = value[k];
+            const t = v === null ? 'null' : Array.isArray(v) ? `array × ${v.length}` : typeof v;
+            let line = `<div style="padding-left:${indent * 18}px;"><span class="t-name">${escapeHtml(k)}</span> : <span class="t-type">${t}</span></div>`;
+            if (v !== null && typeof v === 'object') line += spInferJsonTree(v, indent + 1);
+            return line;
+        }).join('');
+    }
+    return '';
+}
+
+function spExtractSelectColumns(sql) {
+    // 静态推断:取第一段顶层 SELECT 的输出列(alias 优先),仅供参考
+    if (!sql) return [];
+    const m = sql.replace(/\s+/g, ' ').match(/select (.*?) from /i);
+    if (!m) return [];
+    const cols = []; let depth = 0, cur = '';
+    for (const ch of m[1]) {
+        if (ch === '(') depth++;
+        if (ch === ')') depth--;
+        if (ch === ',' && depth === 0) { cols.push(cur.trim()); cur = ''; } else cur += ch;
+    }
+    if (cur.trim()) cols.push(cur.trim());
+    return cols.map(c => {
+        const asM = c.match(/\s+as\s+([\w`\u4e00-\u9fa5]+)\s*$/i);
+        if (asM) return asM[1].replace(/`/g, '');
+        const parts = c.split(/[\s.]+/);
+        return parts[parts.length - 1].replace(/`/g, '');
+    }).filter(Boolean);
+}
+
+function spRenderResp(renderedSql) {
+    const pane = document.getElementById('sp-resp');
+    if (!pane) return;
+    const last = window.__lastTestResult;
+    if (last) {
+        pane.innerHTML = `
+            <div class="sp-section-title">响应结构(来自最近一次在线测试,真实数据推断)</div>
+            <div class="sp-tree">${spInferJsonTree(last, 0)}</div>
+            <div class="sp-section-title">完整返回示例</div>
+            <pre class="sp-code">${escapeHtml(JSON.stringify(last, null, 2).slice(0, 4000))}</pre>`;
+        return;
+    }
+    const cols = spExtractSelectColumns(renderedSql || window.__lastRenderedSql || '');
+    const colHtml = cols.length
+        ? cols.map(c => `<div style="padding-left:36px;"><span class="t-name">${escapeHtml(c)}</span> : <span class="t-type">列值</span></div>`).join('')
+        : '<div style="padding-left:36px;" class="sp-note">(执行一次「在线测试」或先渲染 SQL 后可推断字段)</div>';
+    pane.innerHTML = `
+        <div class="sp-section-title">响应信封(网关标准格式)</div>
+        <div class="sp-tree">
+            <div><span class="t-name">status</span> : <span class="t-type">boolean</span><span class="t-desc">true=成功</span></div>
+            <div><span class="t-name">msg</span> : <span class="t-type">string</span></div>
+            <div><span class="t-name">trace_id</span> : <span class="t-type">string</span><span class="t-desc">全链路追踪ID</span></div>
+            <div><span class="t-name">data</span> : <span class="t-type">array&lt;object&gt;</span><span class="t-desc">结果行,字段=SELECT 输出列:</span></div>
+            ${colHtml}
+        </div>
+        <div class="sp-note">字段列表为从渲染后 SQL 的 SELECT 子句静态推断(union all 取第一段),以实际执行为准;执行过「在线测试」后这里会改用真实返回推断。</div>`;
+}
+
+// ========== v2.2/v2.4 工作页签(左侧:基础信息/参数定义/执行逻辑;测试常驻右侧) ==========
+function switchEditorTab(name) {
+    document.querySelectorAll('.editor-pane').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.editor-tab').forEach(el => el.classList.remove('active'));
+    const pane = document.getElementById('pane-' + name);
+    const tab = document.getElementById('tab-' + name);
+    if (pane) pane.classList.add('active');
+    if (tab) tab.classList.add('active');
+}
+
+function ensureActiveTabVisible() {
+    const active = document.querySelector('.editor-tab.active');
+    if (active && active.style.display === 'none') switchEditorTab('basic');
+}
+
+function updateParamTabCount() {
+    const el = document.getElementById('paramTabCount');
+    if (el) el.textContent = params.filter(x => x.name).length;
+}
+
+// 一键插入「渠道→产品列表」复杂参数示例(对应 :{ch.xxx} 新语法)
+function insertComplexExample() {
+    if (params.some(x => x.name === 'channels')) { Toast.info('已存在 channels 参数'); switchEditorTab('params'); return; }
+    params.push({
+        name: 'channels', param_type: 'array', required: true, default_value: '',
+        description: '渠道及产品配置(嵌套示例)', sort_order: params.length, _schemaOpen: true,
+        item_schema: JSON.stringify({ item_type: 'object', children: [
+            { name: 'channelName', param_type: 'string', required: true, example: '抖音', description: '渠道名称' },
+            { name: 'prdId', param_type: 'array', required: true,
+              item_schema: { item_type: 'string', children: [] }, example: '["476855"]', description: '产品ID列表' },
+        ]}),
+    });
+    renderParams();
+    Toast.success('已插入 channels 嵌套参数示例，SQL 里用 $for(ch in channels)$ + :{ch.字段} 取值');
+}
+
+// ========== 参数管理 ==========
+const PARAM_TYPES = ['string', 'number', 'boolean', 'array', 'object'];
+
+function typeOptions(sel) {
+    return PARAM_TYPES.map(t => `<option value="${t}" ${sel === t ? 'selected' : ''}>${t}</option>`).join('');
+}
+
+// 解析参数上的 item_schema JSON -> 工作副本 p._schema
+function ensureSchemaParsed(p) {
+    if (p._schema !== undefined) return;
+    p._schema = null;
+    if (p.item_schema && String(p.item_schema).trim()) {
+        try { p._schema = JSON.parse(p.item_schema); } catch (e) { p._schema = null; }
+    }
+}
+
+// 工作副本 -> 序列化回 p.item_schema（空结构存空串，兼容旧数据）
+function syncSchema(i) {
+    const p = params[i];
+    const s = p._schema;
+    const hasContent = s && ((s.children && s.children.length) || (s.item_type && s.item_type !== 'object'));
+    p.item_schema = hasContent ? JSON.stringify(s) : '';
+}
+
+// path: '' = 根; '0' = children[0]; '0.1' = children[0].item_schema.children[1]
+function schemaFieldAt(schema, path) {
+    if (path === '' || path === undefined || path === null) return null;
+    const idx = String(path).split('.').map(Number);
+    let node = schema, field = null;
+    for (const k of idx) {
+        if (!node || !node.children || !node.children[k]) return null;
+        field = node.children[k];
+        node = field.item_schema;
+    }
+    return field;
+}
+
+function schemaContainerAt(schema, path) {
+    // 返回 path 指向字段的「子容器」（field.item_schema），path='' 返回根容器
+    if (path === '' || path === undefined) return schema;
+    const field = schemaFieldAt(schema, path);
+    if (!field) return null;
+    if (!field.item_schema) field.item_schema = { item_type: 'object', children: [] };
+    if (!field.item_schema.children) field.item_schema.children = [];
+    return field.item_schema;
+}
+
+function ensureRootSchema(i) {
+    const p = params[i];
+    ensureSchemaParsed(p);
+    if (!p._schema) p._schema = { item_type: p.param_type === 'array' ? 'object' : 'object', children: [] };
+    if (!p._schema.children) p._schema.children = [];
+    return p._schema;
+}
+
+function toggleSchemaEditor(i) {
+    ensureRootSchema(i);
+    params[i]._schemaOpen = !params[i]._schemaOpen;
+    renderParams();
+}
+
+function setSchemaItemType(i, path, value) {
+    const container = schemaContainerAt(ensureRootSchema(i), path);
+    if (!container) return;
+    container.item_type = value;
+    if (value !== 'object') container.children = [];
+    syncSchema(i); renderParams();
+}
+
+function addSchemaChild(i, path) {
+    const container = schemaContainerAt(ensureRootSchema(i), path);
+    if (!container) return;
+    container.item_type = container.item_type || 'object';
+    container.children = container.children || [];
+    container.children.push({ name: '', param_type: 'string', required: false, default_value: '', example: '', description: '' });
+    syncSchema(i); renderParams();
+}
+
+function delSchemaChild(i, path) {
+    const idx = String(path).split('.').map(Number);
+    const last = idx.pop();
+    const container = schemaContainerAt(ensureRootSchema(i), idx.join('.'));
+    if (container && container.children) container.children.splice(last, 1);
+    syncSchema(i); renderParams();
+}
+
+function updSchemaField(i, path, key, value) {
+    const field = schemaFieldAt(ensureRootSchema(i), path);
+    if (!field) return;
+    field[key] = value;
+    if (key === 'param_type') {
+        if (value === 'array' || value === 'object') {
+            if (!field.item_schema) field.item_schema = { item_type: value === 'array' ? 'string' : 'object', children: [] };
+        } else {
+            delete field.item_schema;
+        }
+        syncSchema(i); renderParams(); return;
+    }
+    syncSchema(i);
+}
+
+// 渲染一个容器（根或某字段的子结构）
+// ============================================================
+// v2.6 统一递归卡片渲染:主参数与子参数同构，子参数缩进挂在父卡片内
+//   - 每行:参数名 / 类型 / 必填 / 默认值 / 描述 / [+子参数] [删除]
+//   - array/object 行下方直接缩进渲染其子参数(带左边框层级线)
+//   - 顶层参数 path='0','1'...；子参数 path='0.0','0.1.2'...
+//   路径规则(与后端 item_schema 对齐):
+//     顶层: params[idx]
+//     子级: 父.item_schema(容器).children[ci]
+// ============================================================
+
+// 按点路径取节点。'' 视为非法(顶层用数字索引)。
+function paramNodeAt(path) {
+    const idx = String(path).split('.').map(Number);
+    let node = params[idx[0]];
+    for (let k = 1; k < idx.length; k++) {
+        // k===1 时 node 是顶层参数(容器存 _schema)，更深层的 node 是子参数(容器存 item_schema)
+        const isTopHop = (k === 1);
+        const container = (node.param_type === 'array' || node.param_type === 'object')
+            ? getNodeContainer(node, isTopHop) : null;
+        if (!container || !container.children) return null;
+        node = container.children[idx[k]];
+        if (!node) return null;
+    }
+    return node;
+}
+
+// 取某节点的「子容器」(存放 children 的地方)。顶层参数容器存在 _schema，
+// 子参数存在 item_schema。统一成 {item_type, children} 结构。
+function getNodeContainer(node, isTop) {
+    if (isTop) {
+        ensureSchemaParsed(node);
+        if (!node._schema) node._schema = { item_type: node.param_type === 'array' ? 'object' : 'object', children: [] };
+        if (!node._schema.children) node._schema.children = [];
+        return node._schema;
+    }
+    if (!node.item_schema || typeof node.item_schema === 'string') {
+        node.item_schema = { item_type: node.param_type === 'array' ? 'string' : 'object', children: [] };
+    }
+    if (!node.item_schema.children) node.item_schema.children = [];
+    return node.item_schema;
+}
+
+// 同步顶层参数的 _schema -> item_schema 字符串(供保存)
+function syncTopParam(topIdx) {
+    const p = params[topIdx];
+    if (!p) return;                       // 参数已被删除,无需同步
+    const s = p._schema;
+    const hasContent = s && ((s.children && s.children.length) || (s.item_type && s.item_type !== 'object'));
+    p.item_schema = hasContent ? JSON.stringify(s) : '';
+}
+
+// 统一字段更新:topIdx 用于保存同步
+function updNode(path, key, value) {
+    const node = paramNodeAt(path);
+    if (!node) return;
+    node[key] = value;
+    if (key === 'param_type') {
+        if (value === 'array' || value === 'object') {
+            const isTop = String(path).indexOf('.') === -1;
+            getNodeContainer(node, isTop);   // 初始化容器
+            node._treeOpen = true;
+        }
+    }
+    syncTopParam(Number(String(path).split('.')[0]));
+    renderParamTree();
+    if (key === 'name') updateParamTabCount();
+}
+
+function toggleNodeOpen(path) {
+    const node = paramNodeAt(path);
+    if (!node) return;
+    const isTop = String(path).indexOf('.') === -1;
+    getNodeContainer(node, isTop);
+    node._treeOpen = !node._treeOpen;
+    renderParamTree();
+}
+
+function addChildNode(path) {
+    const node = paramNodeAt(path);
+    if (!node) return;
+    const isTop = String(path).indexOf('.') === -1;
+    const container = getNodeContainer(node, isTop);
+    container.children.push({ name: '', param_type: 'string', required: false, default_value: '', description: '' });
+    node._treeOpen = true;
+    syncTopParam(Number(String(path).split('.')[0]));
+    renderParamTree();
+    updateParamTabCount();
+}
+
+function delNode(path) {
+    const idx = String(path).split('.').map(Number);
+    if (idx.length === 1) {
+        // 顶层参数删除:直接移除,无需 syncTopParam(该参数已不存在)
+        params.splice(idx[0], 1);
+    } else {
+        const parent = paramNodeAt(idx.slice(0, -1).join('.'));
+        const parentIsTop = idx.length === 2;
+        const container = getNodeContainer(parent, parentIsTop);
+        container.children.splice(idx[idx.length - 1], 1);
+        // 仅子参数删除时,才需把顶层参数的 _schema 回写 item_schema
+        syncTopParam(idx[0]);
+    }
+    renderParamTree();
+    updateParamTabCount();
+}
+
+// 数组元素类型切换(array 容器)
+function setNodeItemType(path, value) {
+    const node = paramNodeAt(path);
+    if (!node) return;
+    const isTop = String(path).indexOf('.') === -1;
+    const container = getNodeContainer(node, isTop);
+    container.item_type = value;
+    if (value !== 'object') container.children = [];
+    syncTopParam(Number(String(path).split('.')[0]));
+    renderParamTree();
+}
+
+// 渲染单个参数节点(递归)。depth: 0=顶层
+function renderParamNode(node, path, depth) {
+    const isContainer = (node.param_type === 'array' || node.param_type === 'object');
+    const isTop = depth === 0;
+    // 首次渲染时,容器若已有子参数则默认展开(重载已保存的多层结构时能全部显示)
+    if (isContainer && node._treeOpen === undefined) {
+        const c = getNodeContainer(node, isTop);
+        node._treeOpen = (c.children && c.children.length > 0);
+    }
+    const open = isContainer && node._treeOpen;
+    const container = isContainer ? getNodeContainer(node, isTop) : null;
+    const childCount = container ? (container.children || []).length : 0;
+    const isArrayOfBasic = node.param_type === 'array' && container && container.item_type !== 'object';
+
+    // 默认值单元格:容器类型显示占位说明,基础类型是输入框
+    const defCell = isContainer
+        ? `<span class="pnode-def-fixed" title="${node.param_type === 'array' ? '空数组' : '空对象'}">${node.param_type === 'array' ? '[]' : '{}'} 由子参数决定</span>`
+        : `<input type="text" class="pnode-input" value="${escapeAttr(node.default_value ?? '')}" placeholder="默认值" onchange="updNode('${path}','default_value',this.value)">`;
+
+    let html = `<div class="pnode ${isContainer ? 'pnode-container' : ''} ${open ? 'pnode-open' : ''}" data-depth="${depth}">
+        <div class="pnode-row">
+            <input type="text" class="pnode-input pnode-name" value="${escapeAttr(node.name || '')}" placeholder="${isTop ? '参数名' : '子参数名'}" onchange="updNode('${path}','name',this.value)">
+            <select class="pnode-select" onchange="updNode('${path}','param_type',this.value)">${typeOptions(node.param_type)}</select>
+            <label class="pnode-req"><input type="checkbox" ${node.required ? 'checked' : ''} onchange="updNode('${path}','required',this.checked)"></label>
+            ${defCell}
+            <input type="text" class="pnode-input" value="${escapeAttr(node.description || '')}" placeholder="描述" onchange="updNode('${path}','description',this.value)">
+            <div class="pnode-act">
+                ${isContainer ? `<button type="button" class="btn btn-primary btn-xs pnode-add" onclick="${node.param_type === 'array' && isArrayOfBasic ? '' : `addChildNode('${path}')`}" ${isArrayOfBasic ? 'disabled title="数组元素为基础类型，无子参数"' : ''}>+子参数</button>` : ''}
+                <button type="button" class="btn btn-danger btn-xs pnode-del" onclick="delNode('${path}')">删除</button>
+            </div>
+        </div>`;
+
+    // 容器:缩进渲染子级
+    if (open) {
+        html += `<div class="pnode-children">`;
+        if (node.param_type === 'array') {
+            // 数组元素类型选择器(行内一条)
+            html += `<div class="pnode-arrmeta">
+                <span class="pnode-arrmeta-label">数组元素类型</span>
+                <select class="pnode-select" style="width:130px;" onchange="setNodeItemType('${path}',this.value)">
+                    ${['string','number','boolean','object'].map(t => `<option value="${t}" ${(container.item_type||'object')===t?'selected':''}>${t}</option>`).join('')}
+                </select>
+                ${container.item_type !== 'object' ? '<span class="text-muted text-sm">基础类型元素，无需定义子参数</span>' : ''}
+            </div>`;
+        }
+        if (!isArrayOfBasic) {
+            const kids = container.children || [];
+            if (!kids.length) {
+                html += `<div class="pnode-empty">未定义子参数 —— 该${node.param_type === 'array' ? '数组元素' : '对象'}默认为 <code>${node.param_type === 'array' ? '{}' : '{}'}</code>，点「+子参数」添加</div>`;
+            } else {
+                kids.forEach((c, ci) => {
+                    html += renderParamNode(c, `${path}.${ci}`, depth + 1);
+                });
+            }
+        }
+        html += `</div>`;
+    }
+    html += `</div>`;
+    return html;
+}
+
+function schemaFieldCount(p) {
+    ensureSchemaParsed(p);
+    const s = p._schema;
+    if (!s) return 0;
+    return (s.children || []).length;
+}
+
+function renderParamTree() {
+    const box = document.getElementById('paramTree');
+    const empty = document.getElementById('paramEmpty');
+    const head = document.querySelector('.ptree-head');
+    if (!box) return;
+    if (params.length === 0) {
+        box.innerHTML = '';
+        empty.style.display = 'block';
+        if (head) head.style.display = 'none';
+        updateParamTabCount();
+        return;
+    }
+    empty.style.display = 'none';
+    if (head) head.style.display = '';
+    // 顶层参数确保 _treeOpen 与 _schema 初始化(容器类型默认展开一次)
+    box.innerHTML = params.map((p, i) => {
+        if ((p.param_type === 'array' || p.param_type === 'object')) {
+            ensureSchemaParsed(p);
+            if (p._treeOpen === undefined) p._treeOpen = (p._schemaOpen !== undefined ? p._schemaOpen : true);
+        }
+        return renderParamNode(p, String(i), 0);
+    }).join('');
+    updateParamTabCount();
+}
+
+// 兼容旧调用名
+function renderParams() { renderParamTree(); }
+
+function addParam() {
+    params.push({ name: '', param_type: 'string', required: false, default_value: '', description: '', item_schema: '', sort_order: params.length });
+    renderParamTree();
+}
+function removeParam(index) {
+    params.splice(index, 1);
+    renderParamTree();
+}
+
+function parseSqlParams() {
+    const sql = document.getElementById('apiSql').value;
+    const matches = sql.match(/:(\w+)/g);
+    if (!matches) { Toast.info('未找到参数占位符'); return; }
+
+    const names = [...new Set(matches.map(m => m.substring(1)))];
+    const existingNames = params.map(p => p.name);
+
+    names.forEach(name => {
+        if (!existingNames.includes(name)) {
+            params.push({ name, param_type: 'string', required: false, default_value: '', description: '', item_schema: '', sort_order: params.length });
+        }
+    });
+    renderParams();
+    Toast.success(`解析到 ${names.length} 个参数`);
+}
+
+// 通用 SQL 格式化（关键字换行 + 缩进），供主编辑器和管线步骤共用
+function formatSqlText(sql) {
+    if (!sql || !sql.trim()) return '';
+    let s = sql.replace(/\s+/g, ' ').trim();
+    // 主关键字前换行
+    const major = ['SELECT','FROM','WHERE','GROUP BY','HAVING','ORDER BY','LIMIT','OFFSET',
+                   'LEFT JOIN','RIGHT JOIN','INNER JOIN','JOIN','UNION ALL','UNION',
+                   'INSERT INTO','UPDATE','DELETE FROM','SET','VALUES'];
+    major.forEach(kw => {
+        s = s.replace(new RegExp(`\\s*\\b${kw}\\b\\s*`, 'gi'), '\n' + kw + ' ');
+    });
+    // AND/OR 换行并缩进（让 WHERE 条件清晰）
+    s = s.replace(/\s*\b(AND|OR)\b\s*/gi, '\n  $1 ');
+    // $if$ / $endif$ 等模板控制块独立成行
+    s = s.replace(/\s*(\$if\([^)]*\)\$|\$elseif\([^)]*\)\$|\$else\$|\$endif\$|\$for\([^)]*\)\$|\$sep\$|\$endfor\$)\s*/g, '\n$1\n');
+    // 清理多余空行
+    s = s.replace(/\n{2,}/g, '\n').replace(/[ \t]+\n/g, '\n').trim();
+    return s;
+}
+
+function formatSql() {
+    const el = document.getElementById('apiSql');
+    let sql = (sqlEditor ? sqlEditor.getValue() : el.value) || '';
+    const formatted = formatSqlText(sql);
+    el.value = formatted;
+    if (sqlEditor) sqlEditor.setValue(formatted);
+}
+
+// ========== 多步骤管线: 插入示例 ==========
+// ====================================================================
+// 多步骤管线 · 可视化编排器
+// ====================================================================
+// 单一数据源 pipelineState（步骤数组）。可视化表单和 JSON textarea 双向同步。
+
+let pipelineState = [];          // [{name,type,datasource,sql,inputs:[{k,v}],...}]
+let currentPMode = 'visual';     // 'visual' | 'json'
+let stepSqlEditors = {};         // 步骤索引 -> CodeEditor 实例（可视化编排里的 SQL）
+
+const PIPELINE_TEMPLATES = {
+    compute: [
+        { name:"q1", type:"sql", datasource:"biz_db",
+          sql:"select count(1) as cnt from src_crawler_weibo_cookies\nwhere 1=1\n$if(len(ids) > 0)$ and id in :ids $endif$",
+          inputs:{ ids:[1,2,3] } },
+        { name:"q2", type:"sql", datasource:"biz_db",
+          sql:"select count(1) as cnt from src_crawler_weibo_cookies\nwhere 1=1\n$if(len(ids) > 0)$ and id in :ids $endif$",
+          inputs:{ ids:[4,5,6] } },
+        { name:"total", type:"transform", op:"compute",
+          expr:"${q1.0.cnt} + ${q2.0.cnt}", as:"total_cnt", is_return:true }
+    ],
+    dynamic: [
+        { name:"step_filter", type:"sql", datasource:"biz_db",
+          sql:"select id from src_crawler_weibo_cookies\nwhere 1=1\n$if(defined(status))$ and status = :status $endif$" },
+        { name:"step_count", type:"sql", datasource:"biz_db",
+          sql:"select count(1) as cnt from src_crawler_weibo_cookies\nwhere 1=1\n$if(len(ids) > 0)$ and id in :ids $endif$",
+          inputs:{ ids:"${step_filter.*.id}" }, is_return:true }
+    ],
+    join: [
+        { name:"users", type:"sql", datasource:"biz_db",
+          sql:"SELECT id, name, dept_id FROM users WHERE status = :status" },
+        { name:"orders", type:"sql", datasource:"analytics_db",
+          sql:"SELECT user_id, amount FROM orders WHERE user_id IN :user_ids",
+          inputs:{ user_ids:"${users.*.id}" } },
+        { name:"result", type:"transform", op:"join",
+          left:"${users}", right:"${orders}",
+          on:{ left:"id", right:"user_id" },
+          select:["id","name","dept_id",{ amount:"${right.amount or 0}" }],
+          is_return:true }
+    ],
+    aggregate: [
+        { name:"orders", type:"sql", datasource:"biz_db",
+          sql:"SELECT dept_id, amount FROM orders WHERE created_at >= :since" },
+        { name:"summary", type:"transform", op:"aggregate",
+          from:"${orders}", group_by:["dept_id"],
+          aggregations:{ order_count:{fn:"count"}, total_amount:{fn:"sum",field:"amount"} },
+          is_return:true }
+    ],
+    crossdb: [
+        { name:"users", type:"sql", datasource:"biz_db", database:"user_db",
+          sql:"SELECT id, name FROM users WHERE status = :status" },
+        { name:"logs", type:"sql", datasource:"biz_db", database:"log_db",
+          sql:"SELECT user_id, count(1) AS login_cnt\nFROM login_log\nWHERE user_id IN :uids\nGROUP BY user_id",
+          inputs:{ uids:"${users.*.id}" } },
+        { name:"result", type:"transform", op:"join",
+          left:"${users}", right:"${logs}",
+          on:{ left:"id", right:"user_id" },
+          select:["id","name",{ login_cnt:"${right.login_cnt or 0}" }],
+          is_return:true }
+    ],
+    multifield: [
+        { name:"income", type:"sql", datasource:"biz_db",
+          sql:"SELECT ROUND(sum(amount)/100,2) AS v FROM orders WHERE day = CURDATE()" },
+        { name:"orders", type:"sql", datasource:"biz_db",
+          sql:"SELECT count(1) AS v FROM orders WHERE day = CURDATE()" },
+        { name:"refund", type:"sql", datasource:"biz_db",
+          sql:"SELECT COALESCE(sum(amount),0)/100 AS v FROM refund WHERE day = CURDATE()" },
+        { name:"result", type:"transform", op:"combine",
+          fields:{
+            "今日收入": "${income.0.v}",
+            "订单数":   "${orders.0.v}",
+            "退款额":   "${refund.0.v}",
+            "净收入":   "${income.0.v} - ${refund.0.v}"
+          },
+          is_return:true }
+    ]
+};
+
+// ---- 数据源下拉选项（从已加载的 #apiDatasource 复制）----
+function dsOptions(selected) {
+    const sel = document.getElementById('apiDatasource');
+    let html = '<option value="">-- 选数据源 --</option>';
+    if (sel) {
+        [...sel.options].forEach(o => {
+            if (!o.value) return;
+            const nm = o.textContent.split(' (')[0];
+            html += `<option value="${nm}" ${nm===selected?'selected':''}>${o.textContent}</option>`;
+        });
+    }
+    // 选中值不在列表里也保留
+    if (selected && !(sel && [...sel.options].some(o=>o.textContent.split(' (')[0]===selected))) {
+        html += `<option value="${selected}" selected>${selected}</option>`;
+    }
+    return html;
+}
+
+// ---- inputs 对象 <-> kv 数组互转 ----
+function inputsToKv(inputs) {
+    if (!inputs || typeof inputs !== 'object') return [];
+    return Object.entries(inputs).map(([k,v]) => ({
+        k, v: (typeof v === 'string') ? v : JSON.stringify(v)
+    }));
+}
+function kvToInputs(kv) {
+    const o = {};
+    (kv||[]).forEach(({k,v}) => {
+        if (!k || !k.trim()) return;
+        let val = v;
+        const t = (v||'').trim();
+        // 尝试解析数组/数字/对象，否则当字符串（引用 ${..} 也是字符串）
+        if (t.startsWith('[') || t.startsWith('{') || /^-?\d+(\.\d+)?$/.test(t)) {
+            try { val = JSON.parse(t); } catch { val = v; }
+        }
+        o[k.trim()] = val;
+    });
+    return o;
+}
+
+// ---- 渲染所有步骤卡片 ----
+function renderStepCards() {
+    const box = document.getElementById('stepCards');
+    if (!box) return;
+    // 重建前：若有步骤编辑器处于全屏，先退出，避免遮罩残留/页面滚动锁死
+    try {
+        Object.values(stepSqlEditors).forEach(e => {
+            if (e && e.wrap && e.wrap.classList.contains('ce-maxed')) e._toggleMax();
+        });
+    } catch (x) {}
+    // 渲染前销毁旧的步骤编辑器实例引用（DOM 将被重建）
+    stepSqlEditors = {};
+    if (pipelineState.length === 0) {
+        box.innerHTML = '<div style="padding:24px;text-align:center;color:#94a3b8;font-size:13px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;">还没有步骤。点下方按钮添加，或上方选一个快速模板。</div>';
+        return;
+    }
+    box.innerHTML = pipelineState.map((s,i) => renderOneStep(s,i)).join('');
+    // 为每个 SQL 步骤挂一个 CodeEditor（实时高亮 + $ 提示 + 最大化）
+    pipelineState.forEach((s, i) => {
+        if (s.type !== 'sql') return;
+        const mount = document.getElementById('stepSqlMount-' + i);
+        if (!mount || typeof CodeEditor === 'undefined') return;
+        const ed = new CodeEditor(mount, {
+            language: 'sql',
+            value: s.sql || '',
+            height: 150,
+            onChange: (v) => {
+                pipelineState[i].sql = v;
+                syncFromState();
+            },
+            suggest: {
+                templateFns: true,
+                // 当前步骤可引用更早步骤的结果
+                stepRefs: () => {
+                    const out = [];
+                    for (let k = 0; k < i; k++) {
+                        const ps = pipelineState[k];
+                        if (!ps || !ps.name) continue;
+                        const fields = [];
+                        if (ps.type === 'sql' && ps.sql) {
+                            const m = ps.sql.match(/select\s+([\s\S]*?)\s+from/i);
+                            if (m) m[1].split(',').forEach(seg => {
+                                const a = seg.match(/(?:as\s+)?([a-zA-Z_]\w*)\s*$/i);
+                                if (a) fields.push(a[1]);
+                            });
+                        }
+                        out.push({ step: ps.name, fields });
+                    }
+                    return out;
+                },
+                params: _collectParamNames,
+            },
+        });
+        stepSqlEditors[i] = ed;
+    });
+    // DOM 插入后下一帧统一 refresh，确保所有步骤编辑器度量准确
+    requestAnimationFrame(() => {
+        Object.values(stepSqlEditors).forEach(e => { try { e.refresh(); } catch (x) {} });
+    });
+}
+
+function renderOneStep(s, i) {
+    const isSql = s.type === 'sql';
+    const retOn = !!s.is_return;
+    let body = '';
+    if (isSql) {
+        body = `
+            <div class="step-row">
+                <div class="step-field">
+                    <label>数据源</label>
+                    <select onchange="updateStep(${i},'datasource',this.value)">${dsOptions(s.datasource)}</select>
+                    <div class="hint">不同步骤可选不同数据源（含不同类型，如 MySQL + StarRocks）</div>
+                </div>
+                <div class="step-field">
+                    <label>覆盖库名 database（可选）</label>
+                    <input value="${(s.database||'').replace(/"/g,'&quot;')}" oninput="updateStep(${i},'database',this.value)" placeholder="留空=用数据源默认库">
+                    <div class="hint">同源不同库：复用上面数据源的连接，只切到这个库</div>
+                </div>
+            </div>
+            <div class="step-field">
+                <label>SQL（支持 :参数 / $if$ / #{} 等模板语法 · 实时高亮 · 可最大化）</label>
+                <div id="stepSqlMount-${i}"></div>
+            </div>
+            <div class="step-field">
+                <label>参数 inputs（这一步的参数从哪来；留空则用 API 调用方传的参数）</label>
+                <div id="kv-${i}">${(s._kv||[]).map((r,j)=>kvRow(i,j,r)).join('')}</div>
+                <button type="button" class="btn btn-ghost btn-sm" style="margin-top:4px;padding:2px 8px;" onclick="addKv(${i})">+ 加参数</button>
+                <div class="hint">值可写死 <code>[1,2,3]</code>，或引用上一步 <code>\${步骤名.*.字段}</code></div>
+            </div>
+            <div class="step-field">
+                <label><input type="checkbox" ${s.single_row?'checked':''} onchange="updateStep(${i},'single_row',this.checked)" style="width:auto;margin-right:4px;">只取首行（single_row）</label>
+            </div>`;
+    } else {
+        const op = s.op || 'compute';
+        body = `
+            <div class="step-field">
+                <label>处理类型 op</label>
+                <select onchange="updateStep(${i},'op',this.value)">
+                    ${['compute','combine','unpivot','mergerows','join','aggregate','map','filter','pick'].map(o=>`<option value="${o}" ${o===op?'selected':''}>${o} — ${opDesc(o)}</option>`).join('')}
+                </select>
+            </div>
+            ${renderOpFields(s,i,op)}`;
+    }
+    return `
+    <div class="step-card">
+        <div class="step-card-head">
+            <span class="step-num">${i+1}</span>
+            <input class="step-name-inp" value="${s.name||''}" onchange="updateStep(${i},'name',this.value)" placeholder="步骤名" title="步骤名，用于被后续步骤引用">
+            <span class="step-type-badge ${isSql?'sql':''}">${isSql?'SQL 查询':'数据处理'}</span>
+            <span style="flex:1"></span>
+            <span class="return-tag ${retOn?'':'off'}" onclick="setReturnStep(${i})" title="最终返回哪一步的结果">${retOn?'✓ 返回此步':'设为返回'}</span>
+            <button type="button" class="step-icon-btn" onclick="moveStep(${i},-1)" title="上移" ${i===0?'disabled style=opacity:.3':''}>↑</button>
+            <button type="button" class="step-icon-btn" onclick="moveStep(${i},1)" title="下移" ${i===pipelineState.length-1?'disabled style=opacity:.3':''}>↓</button>
+            <button type="button" class="step-icon-btn del" onclick="removeStep(${i})" title="删除">✕</button>
+        </div>
+        <div class="step-card-body">${body}</div>
+    </div>`;
+}
+
+function opDesc(o){return {compute:'标量算术',combine:'组装一行多字段',unpivot:'指标转多行',mergerows:'按维度合并多行',join:'两表关联',aggregate:'分组聚合',map:'行投影',filter:'行过滤',pick:'取首行'}[o]||'';}
+
+function renderOpFields(s,i,op){
+    if(op==='compute') return `
+        <div class="step-field"><label>算术表达式 expr</label>
+            <input value="${(s.expr||'').replace(/"/g,'&quot;')}" oninput="updateStep(${i},'expr',this.value)" placeholder="\${q1.0.cnt} + \${q2.0.cnt}">
+            <div class="hint">用 \${步骤.行号.字段} 引用值，支持 + - * / 括号</div></div>
+        <div class="step-field"><label>结果字段名 as（可选）</label>
+            <input value="${s.as||''}" oninput="updateStep(${i},'as',this.value)" placeholder="total_cnt">
+            <div class="hint">填了返回 [{名字:结果}]，不填直接返回数字</div></div>`;
+    if(op==='combine') return `
+        <div class="step-field">
+            <label>输出字段（字段名 → 引用/算术/常量）—— 返回多字段用这个</label>
+            <div id="cf-${i}">${(s._cf||[]).map((r,j)=>combineRow(i,j,r)).join('')}</div>
+            <button type="button" class="btn btn-ghost btn-sm" style="margin-top:4px;padding:2px 8px;" onclick="addCombineField(${i})">+ 加字段</button>
+            <div class="hint">值：<code>\${q1.0.cnt}</code> 取值 · <code>\${q1.0.a}+\${q2.0.b}</code> 算术 · <code>今日汇总</code> 常量</div>
+        </div>`;
+    if(op==='unpivot') return `
+        <div class="step-row">
+            <div class="step-field"><label>名称列名</label><input value="${s.name_field||'指标'}" oninput="updateStep(${i},'name_field',this.value)" placeholder="指标"></div>
+            <div class="step-field"><label>值列名</label><input value="${s.value_field||'值'}" oninput="updateStep(${i},'value_field',this.value)" placeholder="值"></div>
+        </div>
+        <div class="step-field">
+            <label>每项一行（名称 → 引用/算术/常量）—— 几个值转成多行用这个</label>
+            <div id="up-${i}">${(s._up||[]).map((r,j)=>unpivotRow(i,j,r)).join('')}</div>
+            <button type="button" class="btn btn-ghost btn-sm" style="margin-top:4px;padding:2px 8px;" onclick="addUnpivotItem(${i})">+ 加一行</button>
+            <div class="hint">输出 [{名称列:"收入",值列:100},{名称列:"订单",值列:50}...]</div>
+        </div>`;
+    if(op==='mergerows') return `
+        <div class="step-field"><label>对齐字段 key（多个用逗号分隔，如 dept 或 dept,day）</label>
+            <input value="${Array.isArray(s.key)?s.key.join(','):(s.key||'')}" oninput="updateStep(${i},'key_raw',this.value)" placeholder="dept">
+            <div class="hint">几个结果集按这个字段对齐，合成多行</div></div>
+        <div class="step-field">
+            <label>要合并的结果集（每行一个引用）</label>
+            <div id="ms-${i}">${(s._ms||[]).map((r,j)=>mergeSrcRow(i,j,r)).join('')}</div>
+            <button type="button" class="btn btn-ghost btn-sm" style="margin-top:4px;padding:2px 8px;" onclick="addMergeSrc(${i})">+ 加结果集</button>
+        </div>
+        <div class="step-field"><label>缺值填充 fill（某源缺这行时用，默认空）</label>
+            <input value="${s.fill!==undefined&&s.fill!==null?String(s.fill):''}" oninput="updateStep(${i},'fill',this.value)" placeholder="0"></div>`;
+    if(op==='join') return `
+        <div class="step-row">
+            <div class="step-field"><label>左表 left</label><input value="${(s.left||'').replace(/"/g,'&quot;')}" oninput="updateStep(${i},'left',this.value)" placeholder="\${users}"></div>
+            <div class="step-field"><label>右表 right</label><input value="${(s.right||'').replace(/"/g,'&quot;')}" oninput="updateStep(${i},'right',this.value)" placeholder="\${orders}"></div>
+        </div>
+        <div class="step-row">
+            <div class="step-field"><label>左表关联字段</label><input value="${(s.on&&s.on.left)||''}" oninput="updateStep(${i},'on_left',this.value)" placeholder="id"></div>
+            <div class="step-field"><label>右表关联字段</label><input value="${(s.on&&s.on.right)||''}" oninput="updateStep(${i},'on_right',this.value)" placeholder="user_id"></div>
+            <div class="step-field"><label>类型</label><select onchange="updateStep(${i},'join_type',this.value)"><option value="left" ${s.join_type!=='inner'?'selected':''}>left 保留左表全部</option><option value="inner" ${s.join_type==='inner'?'selected':''}>inner 仅匹配</option></select></div>
+        </div>
+        <div class="step-field"><label>输出字段 select（JSON 数组，可选）</label>
+            <textarea rows="2" oninput="updateStep(${i},'select_raw',this.value)" placeholder='["id","name",{"amount":"\${right.amount or 0}"}]'>${s.select?JSON.stringify(s.select):''}</textarea></div>`;
+    if(op==='aggregate') return `
+        <div class="step-field"><label>数据来源 from</label><input value="${(s.from||'').replace(/"/g,'&quot;')}" oninput="updateStep(${i},'from',this.value)" placeholder="\${orders}"></div>
+        <div class="step-field"><label>分组字段 group_by（逗号分隔，留空=全表聚合）</label>
+            <input value="${Array.isArray(s.group_by)?s.group_by.join(','):''}" oninput="updateStep(${i},'group_by_raw',this.value)" placeholder="dept_id,status"></div>
+        <div class="step-field"><label>聚合定义 aggregations（JSON）</label>
+            <textarea rows="3" oninput="updateStep(${i},'agg_raw',this.value)" placeholder='{"cnt":{"fn":"count"},"total":{"fn":"sum","field":"amount"}}'>${s.aggregations?JSON.stringify(s.aggregations,null,1):''}</textarea>
+            <div class="hint">fn 支持 count/sum/avg/min/max；count 外都要 field</div></div>`;
+    if(op==='map'||op==='filter'||op==='pick') return `
+        <div class="step-field"><label>数据来源 from</label><input value="${(s.from||'').replace(/"/g,'&quot;')}" oninput="updateStep(${i},'from',this.value)" placeholder="\${上一步名}"></div>
+        ${op==='filter'?`<div class="step-field"><label>过滤条件 where（JSON，字段=值）</label><textarea rows="2" oninput="updateStep(${i},'where_raw',this.value)" placeholder='{"status":"active"}'>${s.where?JSON.stringify(s.where):''}</textarea></div>`:''}
+        ${op==='map'?`<div class="step-field"><label>投影 select（JSON 数组）</label><textarea rows="2" oninput="updateStep(${i},'select_raw',this.value)" placeholder='["id",{"name2":"\${row.name}"}]'>${s.select?JSON.stringify(s.select):''}</textarea></div>`:''}`;
+    return '';
+}
+
+function kvRow(i,j,r){
+    return `<div class="kv-row">
+        <input value="${(r.k||'').replace(/"/g,'&quot;')}" placeholder="参数名 如 ids" oninput="updateKv(${i},${j},'k',this.value)">
+        <input value="${(r.v||'').replace(/"/g,'&quot;')}" placeholder="值 [1,2,3] 或 \${q1.*.id}" oninput="updateKv(${i},${j},'v',this.value)">
+        <button type="button" class="kv-del" onclick="delKv(${i},${j})">×</button>
+    </div>`;
+}
+
+function combineRow(i,j,r){
+    return `<div class="kv-row">
+        <input value="${(r.k||'').replace(/"/g,'&quot;')}" placeholder="字段名 如 income" oninput="updateCombineField(${i},${j},'k',this.value)">
+        <input value="${(r.v||'').replace(/"/g,'&quot;')}" placeholder="\${q1.0.x} 或 \${a}+\${b} 或 常量" oninput="updateCombineField(${i},${j},'v',this.value)">
+        <button type="button" class="kv-del" onclick="delCombineField(${i},${j})">×</button>
+    </div>`;
+}
+function addCombineField(i){ pipelineState[i]._cf=pipelineState[i]._cf||[]; pipelineState[i]._cf.push({k:'',v:''}); renderStepCards(); }
+function updateCombineField(i,j,f,v){ pipelineState[i]._cf[j][f]=v; syncFromState(); }
+function delCombineField(i,j){ pipelineState[i]._cf.splice(j,1); syncFromState(); renderStepCards(); }
+
+function unpivotRow(i,j,r){
+    return `<div class="kv-row">
+        <input value="${(r.k||'').replace(/"/g,'&quot;')}" placeholder="名称 如 收入" oninput="updateUnpivotItem(${i},${j},'k',this.value)">
+        <input value="${(r.v||'').replace(/"/g,'&quot;')}" placeholder="\${q1.0.v} 或 \${a}+\${b} 或 常量" oninput="updateUnpivotItem(${i},${j},'v',this.value)">
+        <button type="button" class="kv-del" onclick="delUnpivotItem(${i},${j})">×</button>
+    </div>`;
+}
+function addUnpivotItem(i){ pipelineState[i]._up=pipelineState[i]._up||[]; pipelineState[i]._up.push({k:'',v:''}); renderStepCards(); }
+function updateUnpivotItem(i,j,f,v){ pipelineState[i]._up[j][f]=v; syncFromState(); }
+function delUnpivotItem(i,j){ pipelineState[i]._up.splice(j,1); syncFromState(); renderStepCards(); }
+
+function mergeSrcRow(i,j,r){
+    return `<div class="kv-row">
+        <input value="${(r.v||'').replace(/"/g,'&quot;')}" placeholder="\${q1} 或 \${步骤名}" oninput="updateMergeSrc(${i},${j},this.value)">
+        <button type="button" class="kv-del" onclick="delMergeSrc(${i},${j})">×</button>
+    </div>`;
+}
+function addMergeSrc(i){ pipelineState[i]._ms=pipelineState[i]._ms||[]; pipelineState[i]._ms.push({v:''}); renderStepCards(); }
+function updateMergeSrc(i,j,v){ pipelineState[i]._ms[j].v=v; syncFromState(); }
+function delMergeSrc(i,j){ pipelineState[i]._ms.splice(j,1); syncFromState(); renderStepCards(); }
+
+// ---- 状态操作 ----
+function addStep(type){
+    const n = pipelineState.length+1;
+    if(type==='sql') pipelineState.push({name:'step'+n,type:'sql',datasource:'',sql:'',_kv:[]});
+    else pipelineState.push({name:'step'+n,type:'transform',op:'compute',expr:'',as:''});
+    if(pipelineState.length===1) pipelineState[0].is_return=true;
+    syncFromState(); renderStepCards();
+}
+async function removeStep(i){
+    const nm = pipelineState[i].name || ('步骤' + (i+1));
+    if(!await confirmAsync('删除步骤', `确定删除步骤「${nm}」吗？此步骤的配置将丢失。`, {okText:'删除', danger:true})) return;
+    const wasRet=pipelineState[i].is_return;
+    pipelineState.splice(i,1);
+    if(wasRet && pipelineState.length) pipelineState[pipelineState.length-1].is_return=true;
+    syncFromState(); renderStepCards();
+}
+function moveStep(i,d){
+    const j=i+d; if(j<0||j>=pipelineState.length) return;
+    [pipelineState[i],pipelineState[j]]=[pipelineState[j],pipelineState[i]];
+    syncFromState(); renderStepCards();
+}
+function setReturnStep(i){
+    pipelineState.forEach((s,k)=>s.is_return=(k===i));
+    syncFromState(); renderStepCards();
+}
+function updateStep(i,field,val){
+    const s=pipelineState[i];
+    if(field==='on_left'){ s.on=s.on||{}; s.on.left=val; }
+    else if(field==='on_right'){ s.on=s.on||{}; s.on.right=val; }
+    else if(field==='group_by_raw'){ s.group_by=val.split(',').map(x=>x.trim()).filter(Boolean); }
+    else if(field==='key_raw'){ const a=val.split(',').map(x=>x.trim()).filter(Boolean); s.key=a.length>1?a:(a[0]||''); }
+    else if(field==='agg_raw'){ try{s.aggregations=JSON.parse(val);}catch{} s._aggRaw=val; }
+    else if(field==='select_raw'){ try{s.select=JSON.parse(val);}catch{} s._selRaw=val; }
+    else if(field==='where_raw'){ try{s.where=JSON.parse(val);}catch{} s._whereRaw=val; }
+    else if(field==='op'){ s.op=val; syncFromState(); renderStepCards(); return; }
+    else s[field]=val;
+    syncFromState();
+}
+function addKv(i){ pipelineState[i]._kv=pipelineState[i]._kv||[]; pipelineState[i]._kv.push({k:'',v:''}); renderStepCards(); }
+function updateKv(i,j,f,v){ pipelineState[i]._kv[j][f]=v; syncFromState(); }
+function delKv(i,j){ pipelineState[i]._kv.splice(j,1); syncFromState(); renderStepCards(); }
+
+// 格式化某步 SQL（CodeEditor 自带格式化按钮，这里兼容旧调用）
+function formatStepSql(i){
+    const ed = stepSqlEditors[i];
+    if (ed) ed.format();
+}
+// CodeEditor 默认实时高亮，无需预览切换；保留空函数兼容旧引用
+function toggleStepSqlPreview(i){}
+function renderStepSqlPreview(i){}
+
+// ---- 可视化 state -> JSON textarea ----
+function stateToJson(){
+    return pipelineState.map(s=>{
+        const o={name:s.name,type:s.type};
+        if(s.type==='sql'){
+            o.datasource=s.datasource||'';
+            if(s.database && s.database.trim()) o.database=s.database.trim();
+            o.sql=s.sql||'';
+            const inp=kvToInputs(s._kv);
+            if(Object.keys(inp).length) o.inputs=inp;
+            if(s.single_row) o.single_row=true;
+        }else{
+            o.op=s.op||'compute';
+            if(o.op==='compute'){ o.expr=s.expr||''; if(s.as) o.as=s.as; }
+            else if(o.op==='combine'){
+                const f={};
+                (s._cf||[]).forEach(r=>{ if(r.k&&r.k.trim()) f[r.k.trim()]=r.v; });
+                o.fields=f;
+            }
+            else if(o.op==='unpivot'){
+                const it={};
+                (s._up||[]).forEach(r=>{ if(r.k&&r.k.trim()) it[r.k.trim()]=r.v; });
+                o.items=it;
+                o.name_field=s.name_field||'指标';
+                o.value_field=s.value_field||'值';
+            }
+            else if(o.op==='mergerows'){
+                const ks=(Array.isArray(s.key)?s.key:(s.key||'').split(',')).map(x=>String(x).trim()).filter(Boolean);
+                o.key = ks.length>1 ? ks : (ks[0]||'');
+                o.sources=(s._ms||[]).map(r=>r.v).filter(v=>v&&v.trim());
+                if(s.fill!==undefined && s.fill!=='' && s.fill!==null){
+                    const n=Number(s.fill); o.fill = (s.fill!=='' && !isNaN(n)) ? n : s.fill;
+                }
+            }
+            else if(o.op==='join'){ o.left=s.left||''; o.right=s.right||''; o.on=s.on||{}; if(s.join_type)o.join_type=s.join_type; if(s.select)o.select=s.select; }
+            else if(o.op==='aggregate'){ o.from=s.from||''; if(s.group_by&&s.group_by.length)o.group_by=s.group_by; if(s.aggregations)o.aggregations=s.aggregations; }
+            else { o.from=s.from||''; if(s.where)o.where=s.where; if(s.select)o.select=s.select; }
+        }
+        if(s.is_return) o.is_return=true;
+        return o;
+    });
+}
+function syncFromState(){
+    const json=JSON.stringify(stateToJson(),null,2);
+    const ta=document.getElementById('pipelineSteps');
+    if(ta) ta.value=json;
+    if(typeof pipelineEditor!=='undefined' && pipelineEditor) pipelineEditor.setValue(json);
+}
+
+// ---- JSON textarea -> 可视化 state ----
+function jsonToState(){
+    const ta=document.getElementById('pipelineSteps');
+    // 优先用 CodeEditor 当前值（textarea 是兼容垫片，可能未及时同步）
+    const raw = (typeof pipelineEditor!=='undefined' && pipelineEditor) ? pipelineEditor.getValue() : (ta ? ta.value : '');
+    if(ta) ta.value = raw;
+    if(!raw || !raw.trim()){ pipelineState=[]; return true; }
+    let arr;
+    try{ arr=JSON.parse(raw); }catch(e){ Toast.error('JSON 解析失败，无法切换到可视化: '+e.message); return false; }
+    if(!Array.isArray(arr)){ Toast.error('顶层必须是数组'); return false; }
+    pipelineState=arr.map(o=>{
+        const s={name:o.name||'',type:o.type||'sql',is_return:!!o.is_return};
+        if(s.type==='sql'){
+            s.datasource=o.datasource||''; s.database=o.database||''; s.sql=o.sql||'';
+            s._kv=inputsToKv(o.inputs); s.single_row=!!o.single_row;
+        }else{
+            s.op=o.op||'compute';
+            Object.assign(s,o);
+            if(s.op==='combine' && o.fields && typeof o.fields==='object'){
+                s._cf=Object.entries(o.fields).map(([k,v])=>({k, v:(typeof v==='string'?v:JSON.stringify(v))}));
+            }
+            if(s.op==='unpivot' && o.items && typeof o.items==='object'){
+                s._up=Object.entries(o.items).map(([k,v])=>({k, v:(typeof v==='string'?v:JSON.stringify(v))}));
+                s.name_field=o.name_field||'指标';
+                s.value_field=o.value_field||'值';
+            }
+            if(s.op==='mergerows'){
+                s._ms=(Array.isArray(o.sources)?o.sources:[]).map(v=>({v:(typeof v==='string'?v:JSON.stringify(v))}));
+                s.key=o.key||'';   // 渲染时 Array.isArray 判断单/多
+                if(o.fill!==undefined) s.fill=o.fill;
+            }
+        }
+        return s;
+    });
+    return true;
+}
+
+// ---- 模式切换 ----
+function switchPipelineMode(mode){
+    if(mode===currentPMode) return;
+    if(mode==='json'){
+        syncFromState();
+        document.getElementById('pipelineVisual').style.display='none';
+        document.getElementById('pipelineJsonMode').style.display='block';
+        document.getElementById('modeBtnVisual').classList.remove('pmode-active');
+        document.getElementById('modeBtnJson').classList.add('pmode-active');
+        // JSON 编辑器此刻才可见，重新对齐度量（隐藏时 getComputedStyle 不准）
+        if(pipelineEditor) requestAnimationFrame(()=>pipelineEditor.refresh());
+    }else{
+        if(!jsonToState()) return;   // 解析失败不切
+        document.getElementById('pipelineVisual').style.display='block';
+        document.getElementById('pipelineJsonMode').style.display='none';
+        document.getElementById('modeBtnJson').classList.remove('pmode-active');
+        document.getElementById('modeBtnVisual').classList.add('pmode-active');
+        renderStepCards();
+    }
+    currentPMode=mode;
+}
+
+// ---- 快速模板 ----
+async function loadTemplate(kind){
+    const tpl=PIPELINE_TEMPLATES[kind];
+    if(!tpl) return;
+    const labels={compute:'两步求和',dynamic:'动态条件',join:'跨库关联',aggregate:'分组聚合',crossdb:'同源不同库',multifield:'多字段汇总'};
+    const label=labels[kind]||kind;
+    if(pipelineState.length>0){
+        if(!await confirmAsync('载入模板',
+            `当前已配置 ${pipelineState.length} 个步骤。载入「${label}」模板会清空它们并替换为模板内容，确定继续吗？`,
+            {okText:'替换', cancelText:'保留当前'})) return;
+    }
+    pipelineState=tpl.map(o=>{
+        const s={name:o.name,type:o.type,is_return:!!o.is_return};
+        if(o.type==='sql'){ s.datasource=o.datasource||''; s.database=o.database||''; s.sql=o.sql||''; s._kv=inputsToKv(o.inputs); s.single_row=!!o.single_row; }
+        else { s.op=o.op; Object.assign(s,o);
+            if(s.op==='combine'&&o.fields){ s._cf=Object.entries(o.fields).map(([k,v])=>({k,v:(typeof v==='string'?v:JSON.stringify(v))})); }
+            if(s.op==='unpivot'&&o.items){ s._up=Object.entries(o.items).map(([k,v])=>({k,v:(typeof v==='string'?v:JSON.stringify(v))})); s.name_field=o.name_field||'指标'; s.value_field=o.value_field||'值'; }
+            if(s.op==='mergerows'){ s._ms=(Array.isArray(o.sources)?o.sources:[]).map(v=>({v:(typeof v==='string'?v:JSON.stringify(v))})); s.key=o.key||''; if(o.fill!==undefined)s.fill=o.fill; }
+        }
+        return s;
+    });
+    syncFromState(); renderStepCards();
+    Toast.success('已载入模板，按需修改数据源和表名');
+}
+
+// 兼容旧调用名
+function insertPipelineExample(kind){ loadTemplate(kind); }
+
+// ========== 多步骤管线开关 ==========
+function togglePipelineMode() {
+    const cb=document.getElementById('pipelineEnabled');
+    const on = cb ? cb.checked : false;
+    const ed=document.getElementById('pipelineEditor');
+    const dh=document.getElementById('pipelineDisabledHint');
+    if(ed) ed.style.display = on ? 'block' : 'none';
+    if(dh) dh.style.display = on ? 'none' : 'block';
+    const hint = document.getElementById('sqlModeHint');
+    const sqlCard = document.getElementById('sqlModeCard');
+    if (on) {
+        // 多步骤管线开启：SQL 模板不参与执行，直接隐藏并禁用编辑，避免误编辑/误解
+        if(sqlCard) sqlCard.style.display = 'none';
+        _setSqlEditorDisabled(true);
+        if(currentPMode==='visual') renderStepCards();
+    } else {
+        // 关闭管线：恢复 SQL 卡显示，但仅限 SQL 类型。
+        // html(静态页面)/plugin(Python) 类型本就不用 SQL 模板，必须保持隐藏，
+        // 否则会把 onApiTypeChange() 刚隐藏的 SQL 卡又显示出来。
+        const _type = (document.getElementById('apiType')?.value) || 'sql';
+        if(sqlCard) sqlCard.style.display = (_type === 'sql') ? '' : 'none';
+        if(hint){ hint.textContent='单数据源查询'; hint.style.color=''; }
+        _setSqlEditorDisabled(_type !== 'sql');
+    }
+}
+
+// 禁用/启用 SQL 模板编辑器(CodeMirror 或降级 textarea)
+function _setSqlEditorDisabled(disabled) {
+    try {
+        if (sqlEditor && sqlEditor.cm && typeof sqlEditor.cm.setOption === 'function') {
+            sqlEditor.cm.setOption('readOnly', disabled ? 'nocursor' : false);
+        }
+    } catch (e) {}
+    const ta = document.getElementById('apiSql');
+    if (ta) ta.disabled = disabled;
+    const wrap = document.querySelector('#sqlModeCard .code-editor-wrap, #sqlModeCard .cm-editor, #sqlModeCard textarea');
+    if (wrap) wrap.style.pointerEvents = disabled ? 'none' : '';
+}
+
+function formatPipeline() {
+    // CodeEditor 自带格式化（按钮已在编辑器工具栏），这里兼容旧调用
+    if (pipelineEditor) {
+        pipelineEditor.format();
+    } else {
+        const ta = document.getElementById('pipelineSteps');
+        if (!ta || !ta.value.trim()) return;
+        try {
+            ta.value = JSON.stringify(JSON.parse(ta.value), null, 2);
+            validatePipelineJson();
+        } catch (e) {
+            if (window.Toast) Toast.error('JSON 格式错误，无法格式化: ' + e.message);
+        }
+    }
+}
+
+// CodeEditor 实时高亮，无需手动预览切换；保留空函数兼容旧引用
+function togglePipelinePreview(){}
+function renderPipelinePreview(){}
+
+function validatePipelineJson() {
+    const ta = document.getElementById('pipelineSteps');
+    const errBox = document.getElementById('pipelineJsonError');
+    if(!ta||!errBox) return true;
+    if (!ta.value.trim()) { errBox.style.display = 'none'; return true; }
+    try {
+        const p = JSON.parse(ta.value);
+        if (!Array.isArray(p)) throw new Error('顶层必须是数组 []');
+        errBox.style.display = 'none';
+        return true;
+    } catch (e) {
+        errBox.textContent = '✗ JSON 错误: ' + e.message;
+        errBox.style.display = 'block';
+        return false;
+    }
+}
+
+// ========== 预览渲染后的 SQL ==========
+// 把当前 SQL 模板 + 测试参数发到后端，让模板引擎处理 $if$ 块，
+// 把最终会执行的 SQL 显示出来供用户检查。
+async function previewRenderedSql() {
+    const sql = (sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql').value) || '';
+    if (!sql.trim()) {
+        Toast.warning('SQL 模板为空');
+        return;
+    }
+
+    // 收集测试参数；如果用户没填测试参数，用各参数定义的 default
+    let testParams = {};
+    try {
+        const raw = ((testParamsEditor ? testParamsEditor.getValue() : document.getElementById('testParams').value)
+            || '{}').trim();
+        testParams = raw ? JSON.parse(raw) : {};
+    } catch {
+        testParams = {};
+    }
+
+    const res = await API.post('/api/sql/preview', {
+        sql_template: sql,
+        params: testParams,
+    });
+    if (!res || res.status !== true) {
+        Toast.error(res?.msg || '渲染失败');
+        return;
+    }
+
+    showSqlPreviewModal(res.data);
+}
+
+function showSqlPreviewModal(data) {
+    // data: { rendered_sql, placeholders, expressions: [{expr, value}] }
+    let existing = document.getElementById('__sqlPreviewModal');
+    if (existing) existing.remove();
+
+    const exprRows = (data.expressions || []).map(e => {
+        const kindBadge = {
+            'if':     '<span style="display:inline-block; padding:1px 6px; background:#eef2ff; color:#3730a3; border-radius:3px; font-size:10px; margin-right:6px; font-family:var(--font-mono);">if</span>',
+            'elseif': '<span style="display:inline-block; padding:1px 6px; background:#fef3c7; color:#92400e; border-radius:3px; font-size:10px; margin-right:6px; font-family:var(--font-mono);">elseif</span>',
+            'for':    '<span style="display:inline-block; padding:1px 6px; background:#ecfccb; color:#4d7c0f; border-radius:3px; font-size:10px; margin-right:6px; font-family:var(--font-mono);">for</span>',
+        }[e.kind] || '';
+        let resultCell;
+        if (e.kind === 'for') {
+            resultCell = `<span class="badge" style="background:#ecfccb; color:#4d7c0f; padding:2px 8px; border-radius:4px; font-size:11px;">loop × ${e.iter_count || 0}</span>`;
+        } else {
+            resultCell = `<span class="badge" style="background:${e.value ? '#dcfce7' : '#fee2e2'}; color:${e.value ? '#15803d' : '#b91c1c'}; padding:2px 8px; border-radius:4px; font-size:11px;">${e.value ? 'keep' : 'drop'}</span>`;
+        }
+        return `<tr>
+            <td>${kindBadge}<code style="font-size:11.5px;">${escapeHtml(e.expr)}</code></td>
+            <td style="text-align:center;">${resultCell}</td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="2" style="color:#94a3b8; text-align:center; padding:8px;">（无控制块）</td></tr>';
+
+    const placeholders = (data.placeholders || []).map(p =>
+        `<code style="background:#eef2ff; color:#3730a3; padding:2px 7px; border-radius:4px; margin-right:4px; font-size:11.5px;">:${escapeHtml(p)}</code>`
+    ).join('') || '<span style="color:#94a3b8;">（无）</span>';
+
+    const html = `
+        <div class="modal-overlay" id="__sqlPreviewModal" style="display:flex;">
+            <div class="modal" style="max-width: 720px; width: 90%;">
+                <div class="modal-header">
+                    <h3>SQL 渲染预览</h3>
+                    <button class="btn-icon" onclick="document.getElementById('__sqlPreviewModal').remove()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div style="margin-bottom: 14px;">
+                        <div style="font-size:12px; color:#64748b; margin-bottom:6px; font-weight:500;">条件块求值</div>
+                        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                            <thead><tr style="border-bottom:1px solid #e2e8f0;">
+                                <th style="text-align:left; padding:6px 0; color:#64748b; font-weight:500;">表达式</th>
+                                <th style="text-align:center; padding:6px 0; width:80px; color:#64748b; font-weight:500;">结果</th>
+                            </tr></thead>
+                            <tbody>${exprRows}</tbody>
+                        </table>
+                    </div>
+                    <div style="margin-bottom: 14px;">
+                        <div style="font-size:12px; color:#64748b; margin-bottom:6px; font-weight:500;">渲染后占位符</div>
+                        <div>${placeholders}</div>
+                    </div>
+                    <div style="margin-bottom:14px;">
+                        <div style="font-size:12px; color:#0f766e; margin-bottom:6px; font-weight:600;">✦ 参数已填充的 SQL（可直接复制到数据库执行验证）</div>
+                        <pre style="background:#052e2b; color:#5eead4; padding:14px; border-radius:6px; font-size:12px; line-height:1.6; max-height:300px; overflow:auto; margin:0; white-space:pre-wrap;">${escapeHtml(data.preview_sql || data.rendered_sql || '')}</pre>
+                        <div style="font-size:11px; color:#94a3b8; margin-top:5px;">注：这是把参数值填进去后的样子，方便你直接拿去数据库跑。真实执行走参数化绑定（防注入），结果一致。</div>
+                    </div>
+                    <div>
+                        <div style="font-size:12px; color:#64748b; margin-bottom:6px; font-weight:500;">模板 SQL（含 :参数 占位符，真实提交形式）</div>
+                        <pre style="background:#0f172a; color:#e2e8f0; padding:14px; border-radius:6px; font-size:12px; line-height:1.6; max-height:220px; overflow:auto; margin:0; white-space:pre-wrap;">${escapeHtml(data.rendered_sql || '')}</pre>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="document.getElementById('__sqlPreviewModal').remove()">关闭</button>
+                    <button class="btn btn-primary" onclick="copyToClipboard(${JSON.stringify(data.preview_sql || data.rendered_sql || '')}); Toast.success('已复制填充后的 SQL');">复制可执行 SQL</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+// 简易剪贴板助手（api_editor 自用）
+function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).catch(() => {});
+    } else {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch {}
+        document.body.removeChild(ta);
+    }
+}
+
+// ========== 保存 API ==========
+async function saveApi(e) {
+    if (e) e.preventDefault();
+
+    // 读取 API 类型；HTML 模式下不需要 SQL/管线/数据源/参数
+    const apiType = (document.getElementById('apiType')?.value || 'sql').toLowerCase();
+
+    // 数据同步：保存前先自查白名单和数据源，避免提交后才被后端打回
+    if (apiType === 'sync') {
+        if (!validateSyncTables()) {
+            Toast.error('请先修正「允许写入的表与字段」配置');
+            return;
+        }
+        const dsId = document.getElementById('apiDatasource')?.value;
+        if (!dsId) {
+            Toast.error('数据同步 API 必须选择数据源（数据要写到哪个库）');
+            return;
+        }
+    }
+    const isHtml = apiType === 'html';
+    const isPlugin = apiType === 'plugin';
+
+    // 关键：只有开关打开时才提交 pipeline_steps，否则强制空字符串
+    // 防止单源 API 因残留 JSON 被误判为管线模式
+    const pipelineOn = !isHtml && !isPlugin && document.getElementById('pipelineEnabled').checked;
+    // 若在可视化模式，先把表单状态同步成 JSON；若在 JSON 模式，取编辑器当前值
+    if (pipelineOn && typeof currentPMode !== 'undefined') {
+        if (currentPMode === 'visual') {
+            syncFromState();
+        } else if (pipelineEditor) {
+            document.getElementById('pipelineSteps').value = pipelineEditor.getValue();
+        }
+    }
+    const pipelineVal = pipelineOn ? (document.getElementById('pipelineSteps').value || '') : '';
+
+    const body = {
+        name: document.getElementById('apiName').value.trim(),
+        description: document.getElementById('apiDesc').value.trim(),
+        url_path: document.getElementById('apiPath').value.trim(),
+        method: document.getElementById('apiMethod').value,
+        is_enabled: document.getElementById('apiEnabled').checked,
+        api_type: apiType,
+        sync_tables: (document.getElementById('syncTables')?.value || '').trim(),
+        // 插件可选用主数据源（也可在脚本里 ctx.query 指定其它源）；HTML 不需要
+        datasource_id: isHtml ? null : (parseInt(document.getElementById('apiDatasource').value) || null),
+        sql_template: (isHtml || isPlugin) ? '' : ((sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql').value) || ''),
+        pipeline_steps: pipelineVal,
+        html_content: isHtml ? (document.getElementById('apiHtml')?.value || '') : '',
+        css_content:  isHtml ? (document.getElementById('apiCss')?.value  || '') : '',
+        js_content:   isHtml ? (document.getElementById('apiJs')?.value   || '') : '',
+        plugin_code:  isPlugin ? (document.getElementById('apiPlugin')?.value || '') : '',
+        cache_enabled: document.getElementById('cacheEnabled').checked,
+        cache_ttl: parseInt(document.getElementById('cacheTtl').value) || 300,
+        cache_prewarm: document.getElementById('cachePrewarm').checked,
+        prewarm_param_overrides: document.getElementById('prewarmOverrides').value.trim(),
+        prewarm_stop_daily: document.getElementById('prewarmStopDaily').checked,
+        timeout: parseInt(document.getElementById('apiTimeout').value) || 30,
+        max_rows: parseInt(document.getElementById('maxRows').value) || 10000,
+        rate_limit_enabled: document.getElementById('rateLimitEnabled').checked,
+        rate_limit_qps: parseInt(document.getElementById('rateLimitQps').value) || 100,
+        api_key: document.getElementById('apiKey').value.trim(),
+        require_api_key: document.getElementById('requireApiKey')
+            ? document.getElementById('requireApiKey').checked : true,
+        parameters: isHtml ? [] : params.map(p => {
+            const { _schema, _schemaOpen, ...clean } = p;
+            return clean;
+        }),
+    };
+
+    if (!body.name) { Toast.error('请输入 API 名称'); return false; }
+    if (!body.url_path) { Toast.error('请输入 URL 路径'); return false; }
+
+    // 插件模式校验
+    if (isPlugin) {
+        if (!body.plugin_code.trim()) {
+            Toast.error('请输入插件代码');
+            return false;
+        }
+        if (!/def\s+main\s*\(/.test(body.plugin_code)) {
+            Toast.error('插件代码必须定义 main(params, ctx) 函数');
+            return false;
+        }
+    }
+
+    // HTML 模式的轻量校验
+    if (isHtml) {
+        if (!body.html_content.trim()) {
+            Toast.error('页面 HTML 内容不能为空');
+            return false;
+        }
+    }
+
+    // 开启管线模式时才校验 JSON（仅 SQL 类型下生效）
+    if (pipelineOn) {
+        if (!body.pipeline_steps.trim()) {
+            Toast.error('已开启多步骤管线，请填写步骤配置（或关闭开关使用单 SQL）');
+            return false;
+        }
+        try {
+            const parsed = JSON.parse(body.pipeline_steps);
+            if (!Array.isArray(parsed)) {
+                Toast.error('管线步骤必须是 JSON 数组');
+                return false;
+            }
+        } catch (err) {
+            Toast.error('管线步骤 JSON 解析失败: ' + err.message);
+            return false;
+        }
+    }
+
+    let result;
+    if (API_ID) {
+        result = await API.put(`/api/projects/${PROJECT_ID}/apis/${API_ID}`, body);
+    } else {
+        result = await API.post(`/api/projects/${PROJECT_ID}/apis`, body);
+    }
+
+    if (result && result.status === true) {
+        Toast.success(result.msg || '保存成功');
+        if (!API_ID && result.data && result.data.id) {
+            window.location.href = `/admin/projects/${PROJECT_ID}/apis/${result.data.id}`;
+        }
+        return true;
+    } else {
+        Toast.error(result?.msg || result?.detail || '保存失败');
+        return false;
+    }
+}
+
+async function saveAndTest() {
+    const saved = await saveApi();
+    if (saved) runTest();
+}
+
+// ========== 根据参数定义自动生成测试 JSON ==========
+// 解析「示例值」字符串为对应类型的值
+function coerceExample(raw, type) {
+    if (raw === undefined || raw === null || raw === '') {
+        return type === 'number' ? 0 : type === 'boolean' ? false
+             : type === 'array' ? [] : type === 'object' ? {} : '';
+    }
+    if (type === 'number') { const n = Number(raw); return isNaN(n) ? 0 : n; }
+    if (type === 'boolean') return raw === true || raw === 'true' || raw === '1';
+    if (type === 'array' || type === 'object') {
+        try { return JSON.parse(raw); } catch (e) { return type === 'array' ? [String(raw)] : {}; }
+    }
+    return String(raw);
+}
+
+// 按 item_schema 递归生成示例值
+function buildSchemaExample(container, isArray) {
+    const itemType = (container && container.item_type) || 'object';
+    const children = (container && container.children) || [];
+    const buildObj = () => {
+        const o = {};
+        children.forEach(c => {
+            if (!c.name) return;
+            if ((c.param_type === 'array' || c.param_type === 'object') && c.item_schema
+                && (c.item_schema.children || []).length) {
+                o[c.name] = buildSchemaExample(c.item_schema, c.param_type === 'array');
+            } else {
+                o[c.name] = coerceExample(c.default_value ?? c.example, c.param_type);
+            }
+        });
+        return o;
+    };
+    if (isArray) {
+        if (itemType === 'object') return children.length ? [buildObj()] : [];
+        return [coerceExample('', itemType)];
+    }
+    return buildObj();
+}
+
+function generateTestParams() {
+    const obj = {};
+    params.forEach(p => {
+        if (!p.name) return;
+        // 有嵌套结构定义的 array/object：按结构生成示例
+        if (p.param_type === 'array' || p.param_type === 'object') {
+            ensureSchemaParsed(p);
+            if (p._schema && (p._schema.children || []).length) {
+                obj[p.name] = buildSchemaExample(p._schema, p.param_type === 'array');
+                return;
+            }
+        }
+        let val = p.default_value;
+        // 根据类型生成合适的默认值
+        if (p.param_type === 'number') {
+            val = val !== '' && val !== undefined && val !== null ? Number(val) : 0;
+        } else if (p.param_type === 'boolean') {
+            val = val === 'true' || val === true || val === '1';
+        } else if (p.param_type === 'array') {
+            try { val = JSON.parse(val || '[]'); } catch(e) { val = []; }
+        } else if (p.param_type === 'object') {
+            try { val = JSON.parse(val || '{}'); } catch(e) { val = {}; }
+        } else {
+            // string
+            val = val !== undefined && val !== null ? String(val) : '';
+        }
+        obj[p.name] = val;
+    });
+    const jsonStr = JSON.stringify(obj, null, 2);
+    document.getElementById('testParams').value = jsonStr;
+    if (testParamsEditor) testParamsEditor.setValue(jsonStr);
+    if (params.length > 0) {
+        Toast.success(`已生成 ${params.length} 个参数`);
+    } else {
+        Toast.info('暂无参数定义');
+    }
+}
+
+// ========== 参数类型校验 ==========
+function validateParamType(name, value, expectedType) {
+    switch (expectedType) {
+        case 'number':
+            if (typeof value !== 'number' || isNaN(value)) {
+                return `参数 "${name}" 应为 number 类型，当前值: ${JSON.stringify(value)}`;
+            }
+            break;
+        case 'boolean':
+            if (typeof value !== 'boolean') {
+                return `参数 "${name}" 应为 boolean 类型，当前值: ${JSON.stringify(value)}`;
+            }
+            break;
+        case 'array':
+            if (!Array.isArray(value)) {
+                return `参数 "${name}" 应为 array 类型，当前值: ${JSON.stringify(value)}`;
+            }
+            break;
+        case 'object':
+            if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+                return `参数 "${name}" 应为 object 类型，当前值: ${JSON.stringify(value)}`;
+            }
+            break;
+        case 'string':
+            // string 类型宽松，允许数字等自动转换
+            break;
+    }
+    return null;
+}
+
+// ========== 在线测试 (含必填参数校验 + 类型校验) ==========
+async function runTest() {
+    if (!API_ID) return;
+    const btn = document.getElementById('testBtn');
+    btn.disabled = true;
+    btn.textContent = '执行中...';
+
+    // 1. 解析测试参数 JSON
+    let testParams = {};
+    try {
+        const rawParams = (testParamsEditor ? testParamsEditor.getValue() : document.getElementById('testParams').value) || '{}';
+        testParams = JSON.parse(rawParams);
+    } catch (e) {
+        Toast.error('参数 JSON 格式错误，请检查语法');
+        btn.disabled = false;
+        btn.textContent = '执行测试';
+        return;
+    }
+
+    // 2. 校验必填参数
+    const missingParams = [];
+    params.forEach(p => {
+        if (p.required && p.name) {
+            const val = testParams[p.name];
+            if (val === undefined || val === null || val === '') {
+                // 如果有默认值则跳过
+                if (!p.default_value && p.default_value !== 0 && p.default_value !== '0') {
+                    missingParams.push(p.name);
+                }
+            }
+        }
+    });
+
+    if (missingParams.length > 0) {
+        Toast.error(`缺少必填参数: ${missingParams.join(', ')}`);
+        btn.disabled = false;
+        btn.textContent = '执行测试';
+        // 高亮参数编辑区
+        const wrapper = document.getElementById('testParamsMount');
+        if (wrapper) {
+            wrapper.style.outline = '2px solid #ef4444';
+            setTimeout(() => { wrapper.style.outline = ''; }, 3000);
+        }
+        return;
+    }
+
+    // 3. 校验参数类型
+    const typeErrors = [];
+    params.forEach(p => {
+        if (!p.name || testParams[p.name] === undefined || testParams[p.name] === null) return;
+        const err = validateParamType(p.name, testParams[p.name], p.param_type);
+        if (err) typeErrors.push(err);
+    });
+
+    if (typeErrors.length > 0) {
+        Toast.error(typeErrors[0]); // 显示第一个类型错误
+        btn.disabled = false;
+        btn.textContent = '执行测试';
+        return;
+    }
+
+    // 4. 通过真实网关路由执行测试
+    const apiPath = document.getElementById('apiPath').value;
+    const apiMethod = document.getElementById('apiMethod').value;
+    const codeOrId = PROJECT_CODE || PROJECT_ID;
+    const gatewayUrl = `${GATEWAY_PREFIX}/${codeOrId}${apiPath}`;
+
+    // ★ HTML 类型 API：不能用 fetch+JSON 解析，直接打开浏览器新标签预览页面
+    const apiTypeNow = (document.getElementById('apiType')?.value || 'sql').toLowerCase();
+    if (apiTypeNow === 'html') {
+        // 拼接 query string（HTML API 仅支持 GET 风格预览）
+        const apiKeyVal = document.getElementById('apiKey').value.trim();
+        const reqKey = document.getElementById('requireApiKey');
+        const needKey = reqKey ? reqKey.checked : true;
+        const qs = Object.entries(testParams)
+            .filter(([k, v]) => v !== '' && v !== null && v !== undefined)
+            .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+        if (needKey && apiKeyVal) {
+            qs.push(`api_key=${encodeURIComponent(apiKeyVal)}`);
+        }
+        const previewUrl = qs.length ? `${gatewayUrl}?${qs.join('&')}` : gatewayUrl;
+
+        // 在新标签页打开渲染好的页面
+        window.open(previewUrl, '_blank', 'noopener');
+
+        // 同步在测试结果区给个友好提示
+        document.getElementById('testResult').style.display = 'block';
+        document.getElementById('testMeta').innerHTML = `
+            <span>类型: <strong>HTML 页面</strong></span> &nbsp;|&nbsp;
+            <span>路径: <strong>${gatewayUrl}</strong></span> &nbsp;|&nbsp;
+            <span style="color:#22c55e;font-weight:600;">已在新标签打开预览</span>
+        `;
+        const outputEl = document.getElementById('testOutput');
+        outputEl.className = '';
+        outputEl.textContent = `已在浏览器新标签页打开预览：\n${previewUrl}\n\n如果浏览器拦截了弹窗，请手动复制上面的 URL 访问。`;
+        btn.disabled = false;
+        btn.textContent = '执行测试';
+        Toast.success('已打开 HTML 页面预览');
+        return;
+    }
+
+    const start = Date.now();
+    let result;
+
+    try {
+        // ★ 走内部测试接口 /api/test/{api_id}，按 api_id 直接查库执行，
+        //   不经过网关的 status 过滤 —— 这样【已下线(offline)的 API 也能在后台测试】。
+        //   （网关的 offline 拦截是"对外停用"语义，不应影响开发者的内部测试。）
+        //   用 API.post（而非原生 fetch）：它会自动带上登录 token（Authorization），
+        //   否则内部接口会返回 1001 未登录。
+        result = await API.post(`/api/test/${API_ID}`, { params: testParams });
+        if (!result) {
+            // API.post 在 401 时会自动跳登录并返回 null；其它情况给个兜底
+            result = { status: false, msg: '请求失败或未登录', data: null };
+        }
+    } catch (e) {
+        result = { status: false, msg: e.message || '请求失败', data: null };
+    }
+    const traceId = (result && result.trace_id) ? result.trace_id : '';
+
+    const elapsed = Date.now() - start;
+
+    document.getElementById('testResult').style.display = 'block';
+    const statusStr = result?.status === true
+        ? '<span style="color:#22c55e;font-weight:600;">成功</span>'
+        : '<span style="color:#ef4444;font-weight:600;">失败</span>';
+    const finalTrace = (result && result.trace_id) ? result.trace_id : traceId;
+    document.getElementById('testMeta').innerHTML = `
+        <span>方法: <strong>${apiMethod}</strong></span> &nbsp;|&nbsp;
+        <span>路径: <strong>${gatewayUrl}</strong></span> &nbsp;|&nbsp;
+        <span>耗时: <strong>${elapsed}ms</strong></span> &nbsp;|&nbsp;
+        <span>状态: ${statusStr}</span> &nbsp;|&nbsp;
+        <span>trace_id: <code style="font-size:12px;">${finalTrace || '-'}</code></span>
+    `;
+
+    // 高亮显示返回结果
+    const outputEl = document.getElementById('testOutput');
+    window.__lastTestResult = result;   // 供「结构预览-响应结构」推断真实结构
+    const jsonStr = JSON.stringify(result, null, 2);
+    outputEl.textContent = jsonStr;
+    if (typeof hljs !== 'undefined') {
+        outputEl.className = 'language-json hljs';
+        hljs.highlightElement(outputEl);
+    }
+
+    btn.disabled = false;
+    btn.textContent = '执行测试';
+}
+
+// ========== 生成独立 API Key ==========
+async function generateApiKey() {
+    const apiId = '{{ api_id }}';
+    const projectId = '{{ project_id }}';
+
+    if (apiId && apiId !== 'None' && apiId !== '') {
+        // 已有 API，调用后端生成接口（始终生成全新的独立 Key）
+        const result = await API.post(`/api/projects/${projectId}/apis/${apiId}/generate-key`);
+        if (result && result.status === true) {
+            document.getElementById('apiKey').value = result.data.api_key;
+            Toast.success(result.msg || '独立 API Key 已生成');
+        } else {
+            Toast.error(result?.msg || '生成失败');
+        }
+    } else {
+        // 新建 API，客户端生成全新的独立 Key
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let key = 'pfk_';
+        for (let i = 0; i < 32; i++) key += chars.charAt(Math.floor(Math.random() * chars.length));
+        document.getElementById('apiKey').value = key;
+        Toast.success('独立 API Key 已生成');
+    }
+}
+
+// ========== 初始化 ==========
+loadProjectCode(); // 加载项目编码
+onApiTypeChange();  // 初始化时根据默认类型（sql）显隐对应卡片
+initCodeEditors();  // 先创建 3 个 CodeEditor 实例（新建/编辑都需要）
+loadDatasources().then(() => {
+    applySyncPermission();
+    loadApiData().then(() => {
+        updateCallUrlPreview();
+        updateSqlHighlight();
+        // 确保多步骤管线开关初始状态正确（新建 API 时 loadApiData 提前 return，
+        // 不会走到里面的 togglePipelineMode，这里兜底）
+        togglePipelineMode();
+        if (currentPMode === 'visual') renderStepCards();
+        // 加载完成后自动根据参数定义生成测试 JSON
+        if (API_ID && params.length > 0) {
+            generateTestParams();
+        } else {
+            updateTestParamsHighlight();
+        }
+        // 全部就绪后下一帧统一 refresh，确保度量在元素可见时计算
+        requestAnimationFrame(() => {
+            try { if (sqlEditor) sqlEditor.refresh(); } catch (e) {}
+            try { if (testParamsEditor) testParamsEditor.refresh(); } catch (e) {}
+            try { if (pipelineEditor) pipelineEditor.refresh(); } catch (e) {}
+        });
+    });
+});
+</script>
+{% endblock %}

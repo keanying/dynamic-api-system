@@ -1,0 +1,201 @@
+{% extends "layouts/app.html" %}
+
+{% block title %}插件库 - OneData Portal{% endblock %}
+
+{% block breadcrumb %}
+<span class="current">插件库</span>
+{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+    <div class="toolbar-left">
+        <h2 style="font-size:18px;font-weight:700;">插件库</h2>
+        <span class="text-sm text-muted" style="margin-left:12px;">可复用的 Python 函数集，供 API 插件引用</span>
+    </div>
+    <div class="toolbar-right">
+        <button class="btn btn-secondary" onclick="toggleTutorial()">使用教程</button>
+        <button class="btn btn-primary" id="newLibBtn" onclick="openLib()" style="display:none;">+ 新建插件库</button>
+    </div>
+</div>
+
+<!-- 教程 -->
+<div class="card mb-16" id="tutorialCard" style="display:none;">
+    <div class="card-header"><h3>插件库使用教程</h3></div>
+    <div class="card-body" style="line-height:1.9; font-size:13.5px;">
+        <p><b>1. 插件库是什么</b><br>
+        插件库是一段可复用的 Python 代码，里面定义若干工具函数。多个 API 插件可以共享同一个库，避免重复写相同逻辑。</p>
+
+        <p><b>2. 新建一个库</b>（仅超级管理员）<br>
+        点「新建插件库」，填写库名（英文标识，如 <code>utils</code>），在代码区定义函数，例如：</p>
+        <pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;">def format_money(cents):
+    return round(cents / 100, 2)
+
+def add_label(rows, prefix):
+    for r in rows:
+        r["label"] = prefix + str(r.get("id", ""))
+    return rows</pre>
+
+        <p><b>3. 在 API 插件里引用</b><br>
+        在插件 API 的代码<b>开头</b>用注释声明引用，多个库用逗号分隔：</p>
+        <pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;"># require: utils
+def main(params, ctx):
+    rows = ctx.query("my_db", "SELECT id FROM t")
+    rows = add_label(rows, "U-")          # 直接调用库里的函数
+    return {"money": format_money(12345), "rows": rows}</pre>
+        <p>声明 <code># require: utils</code> 后，库里定义的 <code>format_money</code>、<code>add_label</code> 等函数就能在 <code>main</code> 里直接调用，就像它们写在同一个文件里一样。</p>
+
+        <p><b>4. 注意事项</b><br>
+        · 库名只能是字母/数字/下划线，不以数字开头<br>
+        · 引用多个库：<code># require: utils, http_helper</code><br>
+        · 被禁用或不存在的库会导致 API 执行报错<br>
+        · ⚠ 插件库代码与插件一样会在服务器执行任意 Python，仅限可信成员维护</p>
+    </div>
+</div>
+
+<div id="libList"></div>
+<div id="libEmpty" style="display:none; text-align:center; padding:60px; color:#94a3b8;">暂无插件库</div>
+
+<!-- 编辑弹窗 -->
+<div class="modal-overlay" id="libModal" style="display:none;">
+    <div class="modal" style="max-width:680px;">
+        <div class="modal-header"><h3 id="libModalTitle">新建插件库</h3><button class="btn-icon" onclick="closeLib()">&times;</button></div>
+        <div class="modal-body">
+            <input type="hidden" id="libId">
+            <div class="form-row" style="display:flex;gap:12px;">
+                <div class="form-group" style="flex:1;">
+                    <label class="form-label">库名（英文标识）</label>
+                    <input class="form-input" id="libName" placeholder="utils">
+                    <div class="form-hint">引用时用，如 # require: utils</div>
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label class="form-label">显示名称</label>
+                    <input class="form-input" id="libTitle" placeholder="通用工具">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">描述</label>
+                <input class="form-input" id="libDesc" placeholder="这个库是做什么的">
+            </div>
+            <div class="form-group">
+                <label class="form-label">代码（定义函数）</label>
+                <textarea id="libCode" class="form-textarea font-mono" rows="14"
+                    style="background:#282c34;color:#abb2bf;font-size:13px;line-height:1.6;padding:12px;white-space:pre;overflow:auto;tab-size:4;"
+                    placeholder="def my_func(x):&#10;    return x * 2"></textarea>
+            </div>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+                <input type="checkbox" id="libEnabled" checked> 启用
+            </label>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeLib()">取消</button>
+            <button class="btn btn-primary" onclick="saveLib()">保存</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let IS_SUPER = false;
+
+function toggleTutorial() {
+    const t = document.getElementById('tutorialCard');
+    t.style.display = (t.style.display === 'none') ? 'block' : 'none';
+}
+
+async function loadMe() {
+    const me = await API.get('/api/auth/me');
+    IS_SUPER = !!(me.data && me.data.is_super_admin);
+    document.getElementById('newLibBtn').style.display = IS_SUPER ? '' : 'none';
+}
+
+async function loadLibs() {
+    await loadMe();
+    const data = await API.get('/api/plugin-libraries');
+    const list = document.getElementById('libList');
+    const empty = document.getElementById('libEmpty');
+    const items = (data.data && data.data.items) || [];
+    if (!items.length) { list.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    list.innerHTML = items.map(l => {
+        const ops = IS_SUPER
+            ? `<button class="btn btn-secondary btn-sm" onclick='editLib(${l.id})'>编辑</button>
+               <button class="btn btn-ghost btn-sm" style="color:#dc2626;" onclick="delLib(${l.id}, '${l.name}')">删除</button>`
+            : '<span class="text-muted text-sm">只读</span>';
+        return `
+        <div class="card mb-16">
+            <div class="card-body">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <div>
+                        <span style="font-weight:600;font-size:15px;">${escapeHtml(l.title || l.name)}</span>
+                        <code style="margin-left:8px;background:#f1f5f9;padding:2px 8px;border-radius:4px;font-size:12px;"># require: ${escapeHtml(l.name)}</code>
+                        ${l.is_enabled ? '' : '<span style="color:#dc2626;font-size:11px;margin-left:8px;">已禁用</span>'}
+                    </div>
+                    <div style="display:flex;gap:8px;">${ops}</div>
+                </div>
+                ${l.description ? `<div class="text-sm text-muted" style="margin-bottom:8px;">${escapeHtml(l.description)}</div>` : ''}
+                <pre style="background:#282c34;color:#abb2bf;padding:10px;border-radius:6px;overflow:auto;font-size:12px;max-height:200px;margin:0;">${escapeHtml(l.code || '')}</pre>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function openLib() {
+    document.getElementById('libId').value = '';
+    document.getElementById('libName').value = '';
+    document.getElementById('libName').disabled = false;
+    document.getElementById('libTitle').value = '';
+    document.getElementById('libDesc').value = '';
+    document.getElementById('libCode').value = '';
+    document.getElementById('libEnabled').checked = true;
+    document.getElementById('libModalTitle').textContent = '新建插件库';
+    document.getElementById('libModal').style.display = 'flex';
+}
+function closeLib() { document.getElementById('libModal').style.display = 'none'; }
+
+async function editLib(id) {
+    const r = await API.get(`/api/plugin-libraries/${id}`);
+    const l = r.data;
+    document.getElementById('libId').value = l.id;
+    document.getElementById('libName').value = l.name;
+    document.getElementById('libName').disabled = true;   // 库名不可改（引用依赖它）
+    document.getElementById('libTitle').value = l.title || '';
+    document.getElementById('libDesc').value = l.description || '';
+    document.getElementById('libCode').value = l.code || '';
+    document.getElementById('libEnabled').checked = !!l.is_enabled;
+    document.getElementById('libModalTitle').textContent = '编辑插件库';
+    document.getElementById('libModal').style.display = 'flex';
+}
+
+async function saveLib() {
+    const id = document.getElementById('libId').value;
+    const body = {
+        title: document.getElementById('libTitle').value.trim(),
+        description: document.getElementById('libDesc').value.trim(),
+        code: document.getElementById('libCode').value,
+        is_enabled: document.getElementById('libEnabled').checked,
+    };
+    let r;
+    if (id) {
+        r = await API.put(`/api/plugin-libraries/${id}`, body);
+    } else {
+        body.name = document.getElementById('libName').value.trim();
+        r = await API.post('/api/plugin-libraries', body);
+    }
+    if (r.status) { Toast.success(r.msg || '已保存'); closeLib(); loadLibs(); }
+    else { Toast.error(r.msg || '保存失败'); }
+}
+
+function delLib(id, name) {
+    showConfirm('删除插件库', `确定删除「${name}」吗？引用了它的 API 将无法执行。`, async () => {
+        const r = await API.del(`/api/plugin-libraries/${id}`);
+        if (r.status) { Toast.success(r.msg || '已删除'); loadLibs(); }
+        else { Toast.error(r.msg || '删除失败'); }
+    });
+}
+
+function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+loadLibs();
+</script>
+{% endblock %}

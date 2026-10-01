@@ -1,0 +1,115 @@
+# OneData Portal 配置文件
+# 所有配置项统一在此管理
+
+server:
+  host: "0.0.0.0"
+  port: 3000
+  debug: false
+  workers: 1
+  secret_key: "pfk-O7OSzAYadCPEmOkjNFG1JMlpfnKcL3UH"
+
+database:
+  # SQLite (默认开发环境)
+  # url: "sqlite+aiosqlite:///./onedata.db"
+  # MySQL 示例:
+  url: "mysql+aiomysql://opinionhub:8drfEYnxAdcW5aP3@localhost:3306/opinionhub"
+#  url: "mysql+aiomysql://BI_Analyst:Tr5ApzkHYXM3vat@rm-bp1t725mxo36124f8.mysql.rds.aliyuncs.com:3306/pft_ai"
+  echo: false
+  pool_size: 15
+  pool_recycle: 3600
+  max_overflow: 50
+
+# localhost Ef2AAHEB6jxNA4ST
+# 172.16.0.142 TDS.connector@123
+redis:
+  enabled: true
+  host: "localhost"
+  port: 6378
+  password: "Ef2AAHEB6jxNA4ST"
+  db: 0
+  max_connections: 20
+  key_prefix: "PFK:"
+
+security:
+  # API Key 加密密钥
+  encryption_key: "ElDOTWgmNlx5sJMJRaIojkqrd4cWZmPF"
+  # 默认管理员账号
+  admin_username: "admin"
+  admin_password: "admin123"
+  # JWT
+  jwt_secret: "bqYqO1g3pS5FBtjgXRHEUAhjylhl74cE"
+  jwt_expire_hours: 24
+  # IP 白名单 (空列表表示不限制)
+  ip_whitelist: []
+  # 请求体大小限制 (bytes)
+  max_request_body: 1048576  # 1MB
+  # 参数数组最大长度
+  max_array_length: 100
+
+query:
+  # 默认最大返回行数
+  default_max_rows: 10000
+  # 默认超时时间 (秒)
+  default_timeout: 30
+  # 慢查询阈值 (毫秒)
+  slow_query_threshold: 500
+  # 慢查询告警阈值 (毫秒)
+  slow_query_alert_threshold: 1000
+  # DDL 拦截关键字
+  ddl_keywords:
+    - "DROP"
+    - "CREATE"
+    - "ALTER"
+    - "TRUNCATE"
+    - "INSERT"
+    - "UPDATE"
+    - "DELETE"
+    - "GRANT"
+    - "REVOKE"
+
+cache:
+  # 默认缓存 TTL (秒)
+  default_ttl: 300
+  # 空结果缓存 TTL (秒)
+  null_ttl: 60
+  # TTL 随机偏移范围 (秒), 防止缓存雪崩
+  ttl_jitter: 30
+  # --- 缓存自动预热 (v2.13+) ---
+  # 仅对「开启了缓存 + 开启了自动预热」的 API 生效，且需要 redis.enabled: true。
+  # 后台调度器扫描间隔(秒)：每轮检查快过期的缓存并提前重新查询回填
+  prewarm_interval: 120
+  # 单个 API 最多记住多少组请求参数(超过则淘汰最久没被请求的)
+  # 参数组合越多，每轮预热要跑的查询就越多，按你的数据库承受能力调整
+  prewarm_max_params: 200
+  # 缓存剩余寿命低于此比例时提前刷新(仅 prewarm_strategy=near_expiry 时生效)
+  prewarm_threshold_ratio: 0.2
+  # 预热策略:
+  #   always      每轮扫描把记录的参数组合全部刷一遍(默认)。缓存内容始终是最近
+  #               一轮扫描的最新数据，扫描间隔就等于数据新鲜度上限，不受各 API
+  #               自身 TTL 影响。
+  #   near_expiry 只在缓存快过期时才刷，省数据库资源，但两次刷新之间缓存是旧的。
+  prewarm_strategy: "always"
+
+log:
+  # 日志目录
+  log_dir: "./logs"
+  # 日志保留天数
+  retention_days: 3
+  # 日志级别
+  level: "INFO"
+  # 异步日志队列大小
+  queue_size: 10000
+
+monitor:
+  # 告警: 失败率阈值 (百分比)
+  failure_rate_threshold: 10
+  # 告警: 平均耗时阈值 (毫秒)
+  avg_latency_threshold: 2000
+  # 告警: 单次耗时阈值 (毫秒)
+  single_latency_threshold: 5000
+  # 指标采集间隔 (秒)
+  collect_interval: 60
+gateway:
+  # API 调用地址前缀 (默认 /v1/data)
+  prefix: "/v1/data"
+

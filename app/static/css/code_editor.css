@@ -1,0 +1,158 @@
+/* ============================================================
+ * CodeEditor 组件样式 v3 —— 像素级对齐（修复全选错位）
+ *
+ * 对齐铁律（pre 高亮层 与 textarea 输入层 必须逐项一致）:
+ *   font(family/size/weight/style) · line-height · letter-spacing
+ *   tab-size · padding · border-width · white-space · word-* · text-indent
+ * 另外 JS 的 _syncMetrics() 会用 getComputedStyle 再强制对齐一次，
+ * 双保险，杜绝浏览器 user-agent 默认样式差异。
+ * ============================================================ */
+
+.ce-wrap {
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #282c34;
+    display: flex;
+    flex-direction: column;
+}
+
+.ce-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    background: #21252b;
+    border-bottom: 1px solid #181a1f;
+    font-size: 11px;
+    flex: 0 0 auto;
+}
+.ce-lang {
+    color: #61afef;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    font-family: 'Fira Code', 'JetBrains Mono', monospace;
+}
+.ce-hint { color: #5c6370; }
+.ce-btn {
+    background: #2c313a;
+    color: #abb2bf;
+    border: 1px solid #3b4048;
+    border-radius: 4px;
+    padding: 3px 9px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all .12s;
+}
+.ce-btn:hover { background: #3b4048; color: #fff; }
+
+.ce-body {
+    position: relative;
+    flex: 1 1 auto;
+    height: 220px;
+    overflow: hidden;
+}
+
+/* ---- 对齐核心：pre 与 textarea 共用同一套盒模型 ---- */
+.ce-pre,
+.ce-ta {
+    box-sizing: border-box;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 14px 16px;
+    border: 0 solid transparent;
+    font-family: 'Fira Code', 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    font-weight: 400;
+    font-style: normal;
+    line-height: 21px;            /* 固定 px 行高，避免 1.6 倍率亚像素误差 */
+    letter-spacing: 0;
+    tab-size: 2;
+    -moz-tab-size: 2;
+    white-space: pre;
+    word-wrap: normal;
+    word-break: normal;
+    word-spacing: 0;
+    overflow-wrap: normal;
+    text-align: left;
+    text-indent: 0;
+    text-rendering: auto;
+    -webkit-font-smoothing: auto;
+    overflow: auto;
+}
+
+.ce-pre {
+    pointer-events: none;
+    background: #282c34;
+    color: #abb2bf;
+    z-index: 1;
+}
+
+.ce-ta {
+    z-index: 2;
+    background: transparent;
+    color: transparent;
+    caret-color: #e2e8f0;
+    outline: none;
+    resize: none;
+    /* 透明文字但保留选区高亮 */
+    -webkit-text-fill-color: transparent;
+}
+.ce-ta::selection { background: rgba(80,140,255,0.40); -webkit-text-fill-color: transparent; }
+.ce-ta::-moz-selection { background: rgba(80,140,255,0.40); }
+
+/* 全屏遮罩 */
+.ce-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(15,23,42,0.65);
+    z-index: 9998;
+}
+.ce-wrap.ce-maxed {
+    position: fixed;
+    inset: 4vh 5vw;
+    z-index: 9999;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+}
+.ce-wrap.ce-maxed .ce-body {
+    flex: 1 1 auto;
+    height: auto;
+}
+
+/* 自动补全弹层 */
+.ce-pop {
+    position: absolute;
+    z-index: 30;
+    min-width: 240px;
+    max-width: 340px;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #21252b;
+    border: 1px solid #3b4048;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    padding: 4px;
+}
+.ce-pop-item {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 6px 9px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.ce-pop-item:hover,
+.ce-pop-item.active { background: #2c5fd6; }
+.ce-pop-label {
+    color: #e2e8f0;
+    font-family: 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 12px;
+}
+.ce-pop-desc { color: #8b95a5; font-size: 10.5px; }
+.ce-pop-item.active .ce-pop-desc { color: #c7d2e8; }

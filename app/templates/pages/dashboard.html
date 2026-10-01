@@ -1,0 +1,312 @@
+{% extends "layouts/app.html" %}
+
+{% block title %}仪表盘 - OneData Portal{% endblock %}
+
+{% block breadcrumb %}
+<span class="current">仪表盘</span>
+{% endblock %}
+
+{% block content %}
+<!-- 统计卡片 -->
+<div class="stats-grid" id="statsGrid">
+    <div class="stat-card">
+        <div class="stat-label">总 API 数</div>
+        <div class="stat-value" id="statApis">-</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">总调用次数</div>
+        <div class="stat-value" id="statCalls">-</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">今日调用</div>
+        <div class="stat-value" id="statToday">-</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">平均耗时</div>
+        <div class="stat-value" id="statAvgTime">-</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">失败率</div>
+        <div class="stat-value" id="statFailRate">-</div>
+    </div>
+</div>
+
+<!-- 今日调用分布 (v2.4) -->
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+        <h3>今日调用分布 <span class="text-sm text-muted" style="font-weight:400" id="hourlyMeta"></span></h3>
+        <div class="text-sm text-muted" id="hourlyLegend" style="display:flex;gap:14px;align-items:center;">
+            <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:16px;height:2px;border-radius:2px;background:var(--color-primary);display:inline-block;"></span>调用量</span>
+            <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:16px;height:0;border-top:2px dashed #f43f5e;display:inline-block;"></span>失败</span>
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="hourlyChart" style="width:100%;height:200px;"></div>
+        <div id="hourlyEmpty" class="empty-state" style="display:none; padding:24px;"><p>今日暂无调用</p></div>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+    <!-- 耗时排行 -->
+    <div class="card">
+        <div class="card-header">
+            <h3>API 耗时排行</h3>
+        </div>
+        <div class="card-body">
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>#</th><th>API 名称</th><th>平均耗时</th><th>调用次数</th></tr>
+                    </thead>
+                    <tbody id="latencyRank"></tbody>
+                </table>
+            </div>
+            <div id="latencyEmpty" class="empty-state" style="display:none; padding: 30px;">
+                <p>暂无数据</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 调用排行 -->
+    <div class="card">
+        <div class="card-header">
+            <h3>API 调用次数排行</h3>
+        </div>
+        <div class="card-body">
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>#</th><th>API 名称</th><th>调用次数</th><th>平均耗时</th></tr>
+                    </thead>
+                    <tbody id="callRank"></tbody>
+                </table>
+            </div>
+            <div id="callEmpty" class="empty-state" style="display:none; padding: 30px;">
+                <p>暂无数据</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 最近调用日志 -->
+<div class="card">
+    <div class="card-header">
+        <h3>最近调用日志</h3>
+        <a href="/admin/logs" class="btn btn-ghost btn-sm">查看全部</a>
+    </div>
+    <div class="card-body">
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr><th>时间</th><th>API 名称</th><th>方法</th><th>耗时</th><th>状态</th><th>IP</th></tr>
+                </thead>
+                <tbody id="recentLogs"></tbody>
+            </table>
+        </div>
+        <div id="logsEmpty" class="empty-state" style="display:none; padding: 30px;">
+            <p>暂无调用日志</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadDashboard() {
+    // 统计数据
+    const stats = await API.get('/api/monitor/dashboard');
+    if (stats && stats.data) {
+        document.getElementById('statApis').textContent = stats.data.total_apis;
+        document.getElementById('statCalls').textContent = stats.data.total_calls.toLocaleString();
+        document.getElementById('statToday').textContent = stats.data.today_calls.toLocaleString();
+        document.getElementById('statAvgTime').textContent = formatMs(stats.data.avg_response_time);
+        document.getElementById('statFailRate').textContent = stats.data.failure_rate + '%';
+    }
+
+    // 耗时排行
+    const latency = await API.get('/api/monitor/api-latency-rank?limit=10');
+    const latencyBody = document.getElementById('latencyRank');
+    if (latency && latency.data && latency.data.length > 0) {
+        latencyBody.innerHTML = latency.data.map((item, i) => `
+            <tr>
+                <td>${i + 1}</td>
+                <td>${escapeHtml(item.api_name)}</td>
+                <td>${formatMs(item.value)}</td>
+                <td>${item.call_count}</td>
+            </tr>
+        `).join('');
+    } else {
+        document.getElementById('latencyEmpty').style.display = 'block';
+    }
+
+    // 调用排行
+    const calls = await API.get('/api/monitor/api-call-rank?limit=10');
+    const callBody = document.getElementById('callRank');
+    if (calls && calls.data && calls.data.length > 0) {
+        callBody.innerHTML = calls.data.map((item, i) => `
+            <tr>
+                <td>${i + 1}</td>
+                <td>${escapeHtml(item.api_name)}</td>
+                <td>${item.call_count}</td>
+                <td>${formatMs(item.avg_time)}</td>
+            </tr>
+        `).join('');
+    } else {
+        document.getElementById('callEmpty').style.display = 'block';
+    }
+
+    // 最近日志
+    const logs = await API.get('/api/monitor/logs?page_size=10');
+    const logsBody = document.getElementById('recentLogs');
+    if (logs && logs.data && logs.data.items && logs.data.items.length > 0) {
+        logsBody.innerHTML = logs.data.items.map(log => `
+            <tr>
+                <td>${formatDate(log.created_at)}</td>
+                <td>${escapeHtml(log.api_name)}</td>
+                <td>${methodBadge(log.method)}</td>
+                <td>${formatMs(log.response_time_ms)}</td>
+                <td>${statusBadge(log.response_status)}</td>
+                <td class="font-mono text-sm">${escapeHtml(log.client_ip)}</td>
+            </tr>
+        `).join('');
+    } else {
+        document.getElementById('logsEmpty').style.display = 'block';
+    }
+}
+
+loadDashboard();
+
+// ===== 今日调用分布 (v2.4) =====
+async function loadHourly() {
+    const res = await API.get('/api/monitor/today-hourly');
+    if (!res || res.status !== true) return;
+    const d = res.data || {};
+    const items = d.items || [];
+    const chart = document.getElementById('hourlyChart');
+    const empty = document.getElementById('hourlyEmpty');
+    const meta = document.getElementById('hourlyMeta');
+
+    meta.textContent = d.total ? `今日共 ${d.total.toLocaleString()} 次` + (d.peak_hour !== null ? ` · 峰值 ${String(d.peak_hour).padStart(2,'0')}:00` : '') : '';
+
+    if (!d.total) { chart.style.display = 'none'; empty.style.display = 'block'; return; }
+    chart.style.display = ''; empty.style.display = 'none';
+
+    const W = chart.clientWidth || 900, H = 210;
+    const padL = 34, padR = 12, padT = 12, padB = 24;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const maxV = Math.max(1, ...items.map(x => x.call_count));
+    const niceMax = Math.ceil(maxV / 4) * 4 || 4;
+    // 每个整点的 x 坐标（曲线用点，非柱）
+    const X = i => padL + (plotW / 23) * i;
+    const Y = v => padT + plotH - (v / niceMax) * plotH;
+
+    // y 轴网格
+    let ygrid = '';
+    for (let g = 0; g <= 4; g++) {
+        const v = niceMax / 4 * g;
+        const y = Y(v);
+        ygrid += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--color-border)" stroke-width="1" ${g?'stroke-dasharray="3 3"':''}/>`;
+        ygrid += `<text x="${padL-6}" y="${y+3}" text-anchor="end" font-size="10" fill="var(--color-text-muted)">${Math.round(v)}</text>`;
+    }
+    // x 轴标签
+    let xlabels = '';
+    items.forEach((it, i) => {
+        if (i % 3 === 0) xlabels += `<text x="${X(i)}" y="${H-8}" text-anchor="middle" font-size="10" fill="var(--color-text-muted)">${String(it.hour).padStart(2,'0')}</text>`;
+    });
+
+    // 平滑曲线路径（Catmull-Rom -> 三次贝塞尔）
+    const pts = items.map((it, i) => [X(i), Y(it.call_count)]);
+    function smoothPath(p) {
+        if (p.length < 2) return '';
+        let dd = `M ${p[0][0]},${p[0][1]}`;
+        for (let i = 0; i < p.length - 1; i++) {
+            const p0 = p[i - 1] || p[i], p1 = p[i], p2 = p[i + 1], p3 = p[i + 2] || p2;
+            const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+            const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+            dd += ` C ${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
+        }
+        return dd;
+    }
+    const linePath = smoothPath(pts);
+    const areaPath = linePath + ` L ${X(23)},${Y(0)} L ${X(0)},${Y(0)} Z`;
+
+    // 失败曲线（叠加，红色，通常很低）
+    const errPts = items.map((it, i) => [X(i), Y(it.error_count)]);
+    const errPath = smoothPath(errPts);
+    const hasErr = items.some(it => it.error_count > 0);
+
+    // 数据点圆点
+    let dots = '';
+    items.forEach((it, i) => {
+        dots += `<circle cx="${X(i)}" cy="${Y(it.call_count)}" r="2.5" fill="var(--color-primary)" class="hr-dot" data-i="${i}"/>`;
+    });
+
+    chart.innerHTML = `
+        <div class="hourly-wrap" style="position:relative;">
+            <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="overflow:visible; display:block;">
+                <defs>
+                    <linearGradient id="hrArea" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="var(--color-primary)" stop-opacity="0.22"/>
+                        <stop offset="100%" stop-color="var(--color-primary)" stop-opacity="0.01"/>
+                    </linearGradient>
+                </defs>
+                ${ygrid}
+                <path d="${areaPath}" fill="url(#hrArea)" stroke="none"/>
+                <path d="${linePath}" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+                ${hasErr ? `<path d="${errPath}" fill="none" stroke="#f43f5e" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="4 3"/>` : ''}
+                ${dots}
+                <line id="hrCursor" x1="0" y1="${padT}" x2="0" y2="${padT+plotH}" stroke="var(--color-primary)" stroke-width="1" stroke-dasharray="3 3" style="display:none;"/>
+                <circle id="hrFocus" r="4.5" fill="#fff" stroke="var(--color-primary)" stroke-width="2.5" style="display:none;"/>
+                <rect id="hrHit" x="${padL}" y="${padT}" width="${plotW}" height="${plotH}" fill="transparent" style="cursor:crosshair;"/>
+            </svg>
+            <div id="hrTooltip" class="hr-tooltip" style="display:none;"></div>
+        </div>`;
+
+    // ---- 交互:hover 显示每小时值 ----
+    const svg = chart.querySelector('svg');
+    const hit = chart.querySelector('#hrHit');
+    const cursor = chart.querySelector('#hrCursor');
+    const focus = chart.querySelector('#hrFocus');
+    const tip = chart.querySelector('#hrTooltip');
+    const wrap = chart.querySelector('.hourly-wrap');
+
+    function nearestIndex(svgX) {
+        // svgX 为 viewBox 坐标；反推最近整点
+        let i = Math.round((svgX - padL) / (plotW / 23));
+        return Math.max(0, Math.min(23, i));
+    }
+    hit.addEventListener('mousemove', (e) => {
+        const rect = svg.getBoundingClientRect();
+        const scale = W / rect.width;                 // viewBox 与实际像素比
+        const svgX = (e.clientX - rect.left) * scale;
+        const i = nearestIndex(svgX);
+        const it = items[i];
+        const cx = X(i), cy = Y(it.call_count);
+        cursor.setAttribute('x1', cx); cursor.setAttribute('x2', cx); cursor.style.display = '';
+        focus.setAttribute('cx', cx); focus.setAttribute('cy', cy); focus.style.display = '';
+        tip.style.display = 'block';
+        tip.innerHTML = `
+            <div class="hr-tip-time">${String(it.hour).padStart(2,'0')}:00 - ${String(it.hour).padStart(2,'0')}:59</div>
+            <div class="hr-tip-row"><span class="hr-dot-ok"></span>调用 <b>${it.call_count.toLocaleString()}</b></div>
+            <div class="hr-tip-row"><span class="hr-dot-suc"></span>成功 <b>${it.success_count.toLocaleString()}</b></div>
+            <div class="hr-tip-row"><span class="hr-dot-err"></span>失败 <b>${it.error_count.toLocaleString()}</b></div>
+            <div class="hr-tip-row hr-tip-avg">平均耗时 <b>${it.avg_time} ms</b></div>`;
+        // 定位 tooltip（跟随光标，靠近数据点，超右边界翻到左侧）
+        const px = (cx / scale);                       // 实际像素 x
+        const py = (cy / scale);
+        const tw = tip.offsetWidth || 150;
+        let left = px + 14;
+        if (left + tw > rect.width) left = px - tw - 14;
+        tip.style.left = Math.max(0, left) + 'px';
+        tip.style.top = Math.max(0, py - 10) + 'px';
+    });
+    hit.addEventListener('mouseleave', () => {
+        cursor.style.display = 'none';
+        focus.style.display = 'none';
+        tip.style.display = 'none';
+    });
+}
+loadHourly();
+window.addEventListener('resize', () => { clearTimeout(window.__hrz); window.__hrz = setTimeout(loadHourly, 300); });
+</script>
+{% endblock %}

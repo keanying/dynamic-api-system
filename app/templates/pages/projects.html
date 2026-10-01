@@ -1,0 +1,278 @@
+{% extends "layouts/app.html" %}
+
+{% block title %}项目管理 - OneData Portal{% endblock %}
+
+{% block breadcrumb %}
+<span class="current">项目管理</span>
+{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+    <div class="toolbar-left">
+        <input type="text" class="search-input" id="searchInput" placeholder="搜索项目..." oninput="debounceSearch()">
+    </div>
+    <div class="toolbar-right">
+        <button class="btn btn-secondary" id="delApprovalBtn" onclick="openDelApprovals()">
+            删除审批 <span id="delApprovalCount" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:0 6px;font-size:11px;margin-left:4px;"></span>
+        </button>
+        <button class="btn btn-primary" onclick="showCreateProject()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            创建项目
+        </button>
+    </div>
+</div>
+
+<!-- 删除项目审批弹窗 -->
+<div class="modal-overlay" id="delApprModal" style="display:none;">
+    <div class="modal" style="max-width:600px;">
+        <div class="modal-header"><h3>删除项目审批</h3><button class="btn-icon" onclick="closeDelApprovals()">&times;</button></div>
+        <div class="modal-body" id="delApprBody">
+            <div style="color:#94a3b8;padding:20px;text-align:center;">加载中...</div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeDelApprovals()">关闭</button>
+        </div>
+    </div>
+</div>
+
+<div id="projectList" class="project-grid"></div>
+<div id="projectEmpty" class="empty-state" style="display:none;">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+    <h3>暂无项目</h3>
+    <p>点击上方按钮创建第一个项目</p>
+</div>
+<div class="pagination" id="pagination"></div>
+
+<!-- 创建/编辑项目弹窗 -->
+<div class="modal-overlay" id="projectModal" style="display:none">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="projectModalTitle">创建项目</h3>
+            <button class="btn-icon" onclick="closeProjectModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="editProjectId">
+            <div class="form-group">
+                <label class="form-label">项目编码 <span class="required">*</span></label>
+                <input type="text" class="form-input" id="projectCode" placeholder="英文编码，如 weibo、ecommerce（仅允许英文字母、数字和下划线）" maxlength="64" pattern="[a-zA-Z][a-zA-Z0-9_]*">
+                <div class="form-hint">用于网关路由标识，如 /v1/data/<strong>编码</strong>/api_path</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">项目名称 <span class="required">*</span></label>
+                <input type="text" class="form-input" id="projectName" placeholder="输入项目名称" maxlength="128">
+            </div>
+            <div class="form-group">
+                <label class="form-label">项目描述</label>
+                <textarea class="form-textarea" id="projectDesc" placeholder="输入项目描述"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">项目级 API Key</label>
+                <div class="form-inline">
+                    <input type="text" class="form-input" id="projectApiKey" placeholder="留空则不启用 API Key 认证">
+                    <button class="btn btn-secondary btn-sm" onclick="generateKey('projectApiKey')">生成</button>
+                </div>
+                <div class="form-hint">所有 API 默认使用此 Key 进行认证</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeProjectModal()">取消</button>
+            <button class="btn btn-primary" id="saveProjectBtn" onclick="saveProject()">保存</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+let searchTimer = null;
+
+function debounceSearch() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { currentPage = 1; loadProjects(); }, 300);
+}
+
+async function loadProjects(page) {
+    if (page) currentPage = page;
+    const keyword = document.getElementById('searchInput').value;
+    const data = await API.get(`/api/projects?page=${currentPage}&page_size=12&keyword=${encodeURIComponent(keyword)}`);
+    if (!data || !data.data) return;
+
+    const { items, total, page_size } = data.data;
+    const container = document.getElementById('projectList');
+    const empty = document.getElementById('projectEmpty');
+
+    if (items.length === 0) {
+        container.innerHTML = '';
+        empty.style.display = 'block';
+        document.getElementById('pagination').innerHTML = '';
+        return;
+    }
+
+    empty.style.display = 'none';
+    container.innerHTML = items.map(p => `
+        <div class="project-card">
+            <div class="card-title">${escapeHtml(p.name)}</div>
+            <div class="card-desc" style="margin-bottom:4px;"><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px;color:#475569;">${escapeHtml(p.code)}</code> ${escapeHtml(p.description || '')}</div>
+            <div class="card-meta">
+                <span>API: <strong>${p.api_count}</strong></span>
+                <span>调用: <strong>${p.total_calls.toLocaleString()}</strong></span>
+                <span>更新: ${formatDate(p.updated_at)}</span>
+            </div>
+            <div class="card-actions">
+                <a href="/admin/projects/${p.id}" class="btn btn-primary btn-sm">进入项目</a>
+                <button class="btn btn-secondary btn-sm" onclick="editProject(${p.id})">编辑</button>
+                <button class="btn btn-ghost btn-sm" onclick="exportProject(${p.id})">导出</button>
+                <button class="btn btn-ghost btn-sm" style="color: var(--color-danger);" onclick="deleteProject(${p.id}, '${escapeHtml(p.name)}')">删除</button>
+            </div>
+        </div>
+    `).join('');
+
+    const totalPages = Math.ceil(total / page_size);
+    renderPagination('pagination', currentPage, totalPages, 'loadProjects');
+}
+
+function showCreateProject() {
+    document.getElementById('projectModalTitle').textContent = '创建项目';
+    document.getElementById('editProjectId').value = '';
+    document.getElementById('projectCode').value = '';
+    document.getElementById('projectCode').disabled = false;
+    document.getElementById('projectName').value = '';
+    document.getElementById('projectDesc').value = '';
+    document.getElementById('projectApiKey').value = '';
+    document.getElementById('projectModal').style.display = 'flex';
+}
+
+function closeProjectModal() {
+    document.getElementById('projectModal').style.display = 'none';
+}
+
+async function editProject(id) {
+    const data = await API.get(`/api/projects/${id}`);
+    if (!data || !data.data) return;
+    const p = data.data;
+    document.getElementById('projectModalTitle').textContent = '编辑项目';
+    document.getElementById('editProjectId').value = id;
+    document.getElementById('projectCode').value = p.code || '';
+    document.getElementById('projectCode').disabled = false;
+    document.getElementById('projectName').value = p.name;
+    document.getElementById('projectDesc').value = p.description;
+    document.getElementById('projectApiKey').value = p.api_key;
+    document.getElementById('projectModal').style.display = 'flex';
+}
+
+async function saveProject() {
+    const id = document.getElementById('editProjectId').value;
+    const code = document.getElementById('projectCode').value.trim();
+    const name = document.getElementById('projectName').value.trim();
+    const description = document.getElementById('projectDesc').value.trim();
+    const api_key = document.getElementById('projectApiKey').value.trim();
+
+    if (!code) { Toast.error('请输入项目编码'); return; }
+    if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(code)) {
+        Toast.error('项目编码只允许英文字母、数字和下划线，且必须以英文字母开头');
+        return;
+    }
+    if (!name) { Toast.error('请输入项目名称'); return; }
+
+    const body = { code, name, description, api_key };
+    let result;
+    if (id) {
+        result = await API.put(`/api/projects/${id}`, body);
+    } else {
+        result = await API.post('/api/projects', body);
+    }
+
+    if (result && result.status === true) {
+        Toast.success(result.msg || '保存成功');
+        closeProjectModal();
+        loadProjects();
+    } else {
+        Toast.error(result?.msg || result?.detail || '保存失败');
+    }
+}
+
+function deleteProject(id, name) {
+    showConfirm('删除项目', `确定要删除项目 "${name}" 吗？\n\n· 超级管理员：立即删除（级联所有 API 和日志，不可恢复）\n· 项目管理员：发起删除申请，需超管或另一名项目管理员审批后才删除`, async () => {
+        const result = await API.del(`/api/projects/${id}`);
+        if (result && result.status === true) {
+            Toast.success(result.msg || '操作成功');
+            loadProjects();
+        } else {
+            Toast.error(result?.msg || '删除失败');
+        }
+    });
+}
+
+async function exportProject(id) {
+    const data = await API.get(`/api/projects/${id}/export`);
+    if (!data || !data.data) return;
+    const blob = new Blob([JSON.stringify(data.data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `project_${id}_export.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    Toast.success('导出成功');
+}
+
+function generateKey(inputId) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let key = 'pfk_';
+    for (let i = 0; i < 32; i++) key += chars.charAt(Math.floor(Math.random() * chars.length));
+    document.getElementById(inputId).value = key;
+}
+
+// ============ 删除项目审批 ============
+async function refreshDelApprovalCount() {
+    try {
+        const r = await API.get('/api/projects/deletion-requests/list?status=pending');
+        const n = (r.data && r.data.items || []).length;
+        const badge = document.getElementById('delApprovalCount');
+        if (n > 0) { badge.textContent = n; badge.style.display = ''; }
+        else { badge.style.display = 'none'; }
+    } catch (e) {}
+}
+
+async function openDelApprovals() {
+    document.getElementById('delApprModal').style.display = 'flex';
+    const body = document.getElementById('delApprBody');
+    body.innerHTML = '<div style="color:#94a3b8;padding:20px;text-align:center;">加载中...</div>';
+    const r = await API.get('/api/projects/deletion-requests/list?status=pending');
+    const items = (r.data && r.data.items) || [];
+    if (!items.length) {
+        body.innerHTML = '<div style="color:#94a3b8;padding:20px;text-align:center;">暂无待审批的删除申请</div>';
+        return;
+    }
+    body.innerHTML = items.map(it => `
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:10px;">
+            <div style="font-weight:600;margin-bottom:6px;">${escapeHtml(it.project_name)}</div>
+            <div class="text-sm text-muted" style="margin-bottom:10px;">
+                发起人：${escapeHtml(it.requester)}　|　申请时间：${it.created_at ? new Date(it.created_at).toLocaleString() : ''}
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-ghost btn-sm" style="color:#dc2626;" onclick="decideDel(${it.id}, 'approve', '${escapeHtml(it.project_name)}')">批准删除</button>
+                <button class="btn btn-secondary btn-sm" onclick="decideDel(${it.id}, 'reject')">驳回</button>
+            </div>
+        </div>`).join('');
+}
+function closeDelApprovals() { document.getElementById('delApprModal').style.display = 'none'; }
+
+function decideDel(reqId, decision, projectName) {
+    const doIt = async () => {
+        const r = await API.post(`/api/projects/deletion-requests/${reqId}/decide`, {decision});
+        if (r.status) {
+            Toast.success(r.msg || '已处理');
+            openDelApprovals(); refreshDelApprovalCount(); loadProjects();
+        } else { Toast.error(r.msg || '操作失败'); }
+    };
+    if (decision === 'approve') {
+        showConfirm('批准删除', `确定批准删除项目「${projectName}」吗？项目将被永久删除，不可恢复。`, doIt);
+    } else { doIt(); }
+}
+
+loadProjects();
+refreshDelApprovalCount();
+</script>
+{% endblock %}

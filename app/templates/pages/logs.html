@@ -1,0 +1,239 @@
+{% extends "layouts/app.html" %}
+
+{% block title %}调用日志 - OneData Portal{% endblock %}
+
+{% block breadcrumb %}
+<span class="current">调用日志</span>
+{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+    <div class="toolbar-left">
+        <select class="form-select" id="logStatus" onchange="loadLogs(1)" style="width: 120px;">
+            <option value="all">全部状态</option>
+            <option value="success">成功</option>
+            <option value="error">失败</option>
+        </select>
+        <select class="form-select" id="logSource" onchange="loadLogs(1)" style="width: 120px;">
+            <option value="all">全部来源</option>
+            <option value="gateway">网关调用</option>
+            <option value="test">测试调用</option>
+        </select>
+        <input type="date" class="form-input" id="logStartDate" onchange="loadLogs(1)" style="width: 150px;">
+        <input type="date" class="form-input" id="logEndDate" onchange="loadLogs(1)" style="width: 150px;">
+    </div>
+    <div class="toolbar-right">
+        <button class="btn btn-ghost btn-sm" onclick="showSlowQueries()">慢查询</button>
+        <button class="btn btn-ghost btn-sm" onclick="cleanupLogs()">清理日志</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>时间</th>
+                        <th>API 名称</th>
+                        <th>方法</th>
+                        <th>路径</th>
+                        <th>耗时</th>
+                        <th>状态</th>
+                        <th>IP</th>
+                        <th>来源</th>
+                        <th>Trace ID</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="logTable"></tbody>
+            </table>
+        </div>
+        <div id="logEmpty" class="empty-state" style="display:none; padding: 30px;">
+            <p>暂无日志记录</p>
+        </div>
+        <div class="pagination" id="logPagination"></div>
+    </div>
+</div>
+
+<!-- 日志详情弹窗 -->
+<div class="modal-overlay" id="logDetailModal" style="display:none">
+    <div class="modal modal-lg">
+        <div class="modal-header">
+            <h3>日志详情</h3>
+            <button class="btn-icon" onclick="document.getElementById('logDetailModal').style.display='none'">&times;</button>
+        </div>
+        <div class="modal-body" id="logDetailBody"></div>
+    </div>
+</div>
+
+<!-- 慢查询弹窗 -->
+<div class="modal-overlay" id="slowQueryModal" style="display:none">
+    <div class="modal modal-lg">
+        <div class="modal-header">
+            <h3>慢查询列表</h3>
+            <button class="btn-icon" onclick="document.getElementById('slowQueryModal').style.display='none'">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>时间</th><th>API</th><th>耗时</th><th>状态</th><th>错误信息</th></tr>
+                    </thead>
+                    <tbody id="slowQueryTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let logPage = 1;
+
+async function loadLogs(page) {
+    if (page) logPage = page;
+    const status = document.getElementById('logStatus').value;
+    const startDate = document.getElementById('logStartDate').value;
+    const endDate = document.getElementById('logEndDate').value;
+
+    const source = document.getElementById('logSource').value;
+    const params = new URLSearchParams({
+        page: logPage,
+        page_size: 20,
+        status: status,
+        start_date: startDate,
+        end_date: endDate,
+        call_source: source,
+    });
+
+    const data = await API.get(`/api/monitor/logs?${params}`);
+    if (!data || !data.data) return;
+
+    const { items, total, page_size } = data.data;
+    const tbody = document.getElementById('logTable');
+    const empty = document.getElementById('logEmpty');
+
+    if (items.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        document.getElementById('logPagination').innerHTML = '';
+        return;
+    }
+
+    empty.style.display = 'none';
+    tbody.innerHTML = items.map(log => `
+        <tr>
+            <td>${log.id}</td>
+            <td>${formatDate(log.created_at)}</td>
+            <td>${escapeHtml(log.api_name || '-')}</td>
+            <td>${methodBadge(log.method)}</td>
+            <td class="font-mono text-sm">${escapeHtml(log.url_path)}</td>
+            <td>${formatMs(log.response_time_ms)}${log.is_slow_query ? ' <span class="badge badge-warning">慢</span>' : ''}</td>
+            <td>${statusBadge(log.response_status)}</td>
+            <td class="font-mono text-sm">${escapeHtml(log.client_ip)}</td>
+            <td>${sourceBadge(log.call_source)}</td>
+            <td class="font-mono text-sm" title="${escapeHtml(log.trace_id || '')}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;" onclick="copyTrace('${escapeHtml(log.trace_id || '')}')">${log.trace_id ? escapeHtml(log.trace_id.slice(0, 12)) + '…' : '-'}</td>
+            <td><button class="btn btn-ghost btn-sm" onclick="showLogDetail(${log.id})">详情</button></td>
+        </tr>
+    `).join('');
+
+    const totalPages = Math.ceil(total / page_size);
+    renderPagination('logPagination', logPage, totalPages, 'loadLogs');
+}
+
+async function showLogDetail(logId) {
+    const data = await API.get(`/api/monitor/logs/${logId}`);
+    if (!data || !data.data) return;
+    const log = data.data;
+
+    document.getElementById('logDetailBody').innerHTML = `
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+            <div><span class="text-muted text-sm">API 名称</span><div>${escapeHtml(log.api_name || '-')}</div></div>
+            <div><span class="text-muted text-sm">请求方法</span><div>${methodBadge(log.method)}</div></div>
+            <div><span class="text-muted text-sm">URL 路径</span><div class="font-mono">${escapeHtml(log.url_path)}</div></div>
+            <div><span class="text-muted text-sm">客户端 IP</span><div class="font-mono">${escapeHtml(log.client_ip)}</div></div>
+            <div><span class="text-muted text-sm">响应时间</span><div>${formatMs(log.response_time_ms)}</div></div>
+            <div><span class="text-muted text-sm">状态</span><div>${statusBadge(log.response_status)}</div></div>
+            <div><span class="text-muted text-sm">创建时间</span><div>${formatDate(log.created_at)}</div></div>
+            <div><span class="text-muted text-sm">状态码</span><div>${log.status_code}</div></div>
+            <div><span class="text-muted text-sm">调用来源</span><div>${sourceBadge(log.call_source)}</div></div>
+            <div><span class="text-muted text-sm">返回行数</span><div class="font-mono">${log.row_count ?? 0}${log.cache_hit ? ' <span class="badge" style="background:#fef3c7;color:#b45309;padding:1px 7px;border-radius:4px;font-size:11px;">缓存命中</span>' : ''}</div></div>
+            <div><span class="text-muted text-sm">阶段耗时</span><div class="font-mono" style="font-size:12px;">渲染 ${formatMs(log.render_time_ms || 0)} · 查询 ${formatMs(log.query_time_ms || 0)} · 总 ${formatMs(log.response_time_ms)}</div></div>
+            <div style="grid-column: span 2;">
+                <span class="text-muted text-sm">Trace ID（点击复制，可用于在日志文件里 grep）</span>
+                <div class="font-mono" style="word-break:break-all;cursor:pointer;color:#2563eb;" onclick="copyTrace('${escapeHtml(log.trace_id || '')}')">${escapeHtml(log.trace_id || '-')}</div>
+            </div>
+        </div>
+        ${log.request_params ? `<div class="mb-16"><span class="text-muted text-sm">请求参数</span><div class="test-result" style="margin-top:6px;">${escapeHtml(jsonPretty(log.request_params))}</div></div>` : ''}
+        ${log.rendered_sql ? `<div class="mb-16"><span class="text-muted text-sm">渲染后 SQL（模板展开、条件求值后）</span><div class="test-result" style="margin-top:6px;">${escapeHtml(log.rendered_sql)}</div></div>` : ''}
+        ${log.executed_sql ? `<div class="mb-16"><span class="text-muted text-sm">执行 SQL（提交数据库的参数化语句 + 绑定值）</span><div class="test-result" style="margin-top:6px;">${escapeHtml(log.executed_sql)}</div></div>` : ''}
+        ${log.error_message ? `<div class="mb-16"><span class="text-muted text-sm">错误信息</span><div class="test-result" style="margin-top:6px; background: #7f1d1d;">${escapeHtml(log.error_message)}</div></div>` : ''}
+        ${log.error_stack ? `<div><span class="text-muted text-sm">错误堆栈</span><div class="test-result" style="margin-top:6px; background:#450a0a; font-size:11px; max-height:220px; overflow:auto;">${escapeHtml(log.error_stack)}</div></div>` : ''}
+    `;
+    document.getElementById('logDetailModal').style.display = 'flex';
+}
+
+// 点击 trace_id 复制到剪贴板
+function copyTrace(traceId) {
+    if (!traceId) return;
+    const text = String(traceId);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+            () => Toast.success('trace_id 已复制: ' + text),
+            () => Toast.warning('复制失败，请手动选择复制')
+        );
+    } else {
+        // 兜底
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); Toast.success('trace_id 已复制: ' + text); }
+        catch { Toast.warning('复制失败，请手动选择复制'); }
+        document.body.removeChild(ta);
+    }
+}
+
+async function showSlowQueries() {
+    const data = await API.get('/api/monitor/slow-queries?page_size=50');
+    if (!data || !data.data) return;
+
+    const items = data.data.items || [];
+    document.getElementById('slowQueryTable').innerHTML = items.length === 0
+        ? '<tr><td colspan="5" class="text-center text-muted">暂无慢查询</td></tr>'
+        : items.map(log => `
+            <tr>
+                <td>${formatDate(log.created_at)}</td>
+                <td>${escapeHtml(log.api_name || '-')}</td>
+                <td><strong>${formatMs(log.response_time_ms)}</strong></td>
+                <td>${statusBadge(log.response_status)}</td>
+                <td class="text-sm">${escapeHtml(log.error_message || '-')}</td>
+            </tr>
+        `).join('');
+
+    document.getElementById('slowQueryModal').style.display = 'flex';
+}
+
+function cleanupLogs() {
+    showConfirm('清理日志', '确定要清理 30 天前的日志吗？', async () => {
+        const result = await API.del('/api/monitor/logs/cleanup?days=30');
+        if (result && result.status === true) {
+            Toast.success(result.msg);
+            loadLogs(1);
+        } else {
+            Toast.error(result?.msg || '清理失败');
+        }
+    });
+}
+
+function sourceBadge(source) {
+    if (source === 'test') return '<span class="badge badge-info">测试</span>';
+    if (source === 'gateway') return '<span class="badge badge-primary">网关</span>';
+    return '<span class="badge">' + escapeHtml(source || 'unknown') + '</span>';
+}
+loadLogs();
+</script>
+{% endblock %}
