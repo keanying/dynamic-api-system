@@ -15,13 +15,15 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.config import settings, BASE_DIR
 from app.core.database import engine, Base
 from app.core.errors import ErrCode, R_fail
-from app.core.logging import setup_logging, get_logger, set_trace_id, get_trace_id
+from app.core.logging import setup_logging, get_logger, set_trace_id, get_trace_id, is_debug
+from starlette.datastructures import Headers, MutableHeaders
 
 # 初始化日志系统（必须在最早期调用）
 setup_logging(
     log_dir=settings.log.log_dir,
     level=settings.log.level,
     retention_days=settings.log.retention_days,
+    file_level=settings.log.file_level,
 )
 
 log = get_logger("main")
@@ -49,6 +51,11 @@ async def lifespan(app: FastAPI):
     log.info("正在初始化数据库...")
     await init_db()
     log.info("数据库初始化完成（含自动迁移）")
+
+    # 调用日志统计索引：后台补建，不阻塞启动（v2.19+）
+    import asyncio
+    from app.core.database import ensure_perf_indexes
+    _index_task = asyncio.create_task(ensure_perf_indexes())
 
     # 启动任务：备份正式核心数据 +（pre 环境）从正式表同步到空的 pre 表
     from app.core.backup import run_startup_tasks
@@ -83,6 +90,11 @@ async def lifespan(app: FastAPI):
             else:
                 log.debug(f"默认超级管理员已存在: {settings.auth.default_admin}")
 
+    # 调用日志批量写入（v2.19+）
+    from app.services import call_log_writer
+    call_log_writer.start(async_session)
+    call_log_writer.start_retention(settings.monitor.call_log_retention_days)
+
     # 启动缓存自动预热调度器（仅 Redis 模式下生效）
     from app.services import cache_prewarm
     from app.core.database import async_session as _async_session
@@ -93,6 +105,8 @@ async def lifespan(app: FastAPI):
     # 关闭
     log.info("========== OneData Portal 正在关闭 ==========")
     await cache_prewarm.stop()
+    await call_log_writer.stop_retention()
+    await call_log_writer.stop()
     # 释放业务数据源连接池（与系统库 engine 是两套，需分别关闭）
     try:
         from app.services.engine import close_all_mysql_pools
@@ -124,70 +138,81 @@ app.add_middleware(
 )
 
 
-# ========== 生产环境写保护 (v2.18+) ==========
-# 必须在请求日志中间件之前注册：后注册的在外层，这样被拦截的请求也有日志和 trace_id
-from app.core.env_guard import prod_write_guard
-app.middleware("http")(prod_write_guard)
+# ========== 管理后台写请求：生产写保护 + 配置缓存失效 ==========
+# 后注册的中间件在外层；请求日志中间件在它外面，被拦截的请求也有日志和 trace_id
+from app.core.env_guard import AdminWriteMiddleware
+app.add_middleware(AdminWriteMiddleware)
 
 
 # ========== 请求日志中间件 ==========
-@app.middleware("http")
-async def request_logging_middleware(request: Request, call_next):
-    """记录每个 HTTP 请求的详细日志，并在整个链路上传递 trace_id
+class RequestLoggingMiddleware:
+    """记录每个 HTTP 请求的日志，并在整个链路上传递 trace_id
 
     trace_id 来源优先级：
       1. 请求头 X-Trace-Id（前端/上游可主动透传，用于端到端追踪）
       2. 请求头 X-Request-Id（兼容常见网关）
       3. 服务端自动生成（uuid4 无连字符）
+
+    v2.19: 由 @app.middleware("http")(BaseHTTPMiddleware) 改为纯 ASGI 实现，
+    行为不变（响应头 X-Trace-Id、按状态码分级日志），每请求少一层任务调度和流包装。
     """
-    # 1) 解析或生成 trace_id
-    incoming_trace = (
-            request.headers.get("X-Trace-Id")
-            or request.headers.get("X-Request-Id")
-            or ""
-    ).strip()
-    trace_id = incoming_trace or uuid.uuid4().hex
-    # 2) 挂到 request.state，业务侧可直接读取
-    request.state.trace_id = trace_id
-    # 3) 写入 contextvar，loguru patcher 会把 trace_id 注入到本请求所有日志
-    set_trace_id(trace_id)
 
-    request_id = trace_id[:8]  # 控制台短显示（向后兼容）
-    start_time = time.time()
+    def __init__(self, app):
+        self.app = app
 
-    # 记录请求信息
-    client_ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or (
-        request.client.host if request.client else "unknown")
-    log.debug(
-        f"[{request_id}] --> {request.method} {request.url.path} | "
-        f"IP={client_ip} | Query={dict(request.query_params)} | "
-        f"UA={request.headers.get('user-agent', 'N/A')[:80]}"
-    )
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
 
-    try:
-        response = await call_next(request)
-        elapsed = (time.time() - start_time) * 1000
+        req_headers = Headers(scope=scope)
+        incoming_trace = (req_headers.get("x-trace-id") or req_headers.get("x-request-id") or "").strip()
+        trace_id = incoming_trace or uuid.uuid4().hex
+        # 挂到 request.state（Starlette 的 request.state 即 scope["state"]），业务侧可直接读取
+        scope.setdefault("state", {})["trace_id"] = trace_id
+        # 写入 contextvar，loguru patcher 会把 trace_id 注入到本请求所有日志
+        set_trace_id(trace_id)
 
-        # 4) 把 trace_id 写到响应头，前端/调用方可直接拿到
-        response.headers["X-Trace-Id"] = trace_id
-
-        # 根据状态码选择日志级别
-        if response.status_code >= 500:
-            log.error(
-                f"[{request_id}] <-- {response.status_code} | {elapsed:.1f}ms | {request.method} {request.url.path}")
-        elif response.status_code >= 400:
-            log.warning(
-                f"[{request_id}] <-- {response.status_code} | {elapsed:.1f}ms | {request.method} {request.url.path}")
-        else:
+        request_id = trace_id[:8]  # 控制台短显示（向后兼容）
+        method = scope.get("method", "")
+        path = scope.get("path", "")
+        start_time = time.time()
+        if is_debug():
+            client_ip = req_headers.get("x-forwarded-for", "").split(",")[0].strip() or (
+                scope["client"][0] if scope.get("client") else "unknown")
             log.debug(
-                f"[{request_id}] <-- {response.status_code} | {elapsed:.1f}ms | {request.method} {request.url.path}")
+                f"[{request_id}] --> {method} {path} | IP={client_ip} | "
+                f"Query={scope.get('query_string', b'').decode('latin-1')} | "
+                f"UA={req_headers.get('user-agent', 'N/A')[:80]}"
+            )
 
-        return response
-    except Exception as e:
+        status_code = 0
+
+        async def send_wrapper(message):
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+                # 把 trace_id 写到响应头，前端/调用方可直接拿到
+                MutableHeaders(scope=message)["X-Trace-Id"] = trace_id
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        except Exception as e:
+            elapsed = (time.time() - start_time) * 1000
+            log.exception(f"[{request_id}] <-- EXCEPTION | {elapsed:.1f}ms | {method} {path} | {str(e)}")
+            raise
+
         elapsed = (time.time() - start_time) * 1000
-        log.exception(
-            f"[{request_id}] <-- EXCEPTION | {elapsed:.1f}ms | {request.method} {request.url.path} | {str(e)}")
-        raise
+        # 根据状态码选择日志级别
+        if status_code >= 500:
+            log.error(f"[{request_id}] <-- {status_code} | {elapsed:.1f}ms | {method} {path}")
+        elif status_code >= 400:
+            log.warning(f"[{request_id}] <-- {status_code} | {elapsed:.1f}ms | {method} {path}")
+        else:
+            log.debug(f"[{request_id}] <-- {status_code} | {elapsed:.1f}ms | {method} {path}")
+
+
+app.add_middleware(RequestLoggingMiddleware)
 
 
 # ========== 全局异常处理：统一响应格式（带 code） ==========

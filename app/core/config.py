@@ -111,6 +111,7 @@ class LogConfig:
     log_dir: str = "./logs"  # 日志目录，可配置
     retention_days: int = 3  # 日志保留天数，默认 3 天
     level: str = "DEBUG"  # 日志级别
+    file_level: str = ""  # 全量/网关日志文件级别，留空同 level (v2.19+)
     queue_size: int = 10000
 
 
@@ -120,11 +121,15 @@ class MonitorConfig:
     avg_latency_threshold: int = 2000
     single_latency_threshold: int = 5000
     collect_interval: int = 60
+    # 调用日志保留天数 (v2.19+)，> 0 时每小时自动删除更早的日志；0 = 不自动清理
+    call_log_retention_days: int = 0
 
 
 @dataclass
 class GatewayConfig:
     prefix: str = "/v1/data"
+    # 网关接口配置进程内缓存秒数 (v2.19+)，0 = 关闭（每个请求都查系统库）
+    config_cache_ttl: float = 5
 
 
 @dataclass
@@ -261,6 +266,7 @@ def load_config() -> FullConfig:
             log_dir=_env("LOG_DIR", log_raw.get("log_dir", "./logs")),
             retention_days=log_raw.get("retention_days", 3),
             level=_env("LOG_LEVEL", log_raw.get("level", "DEBUG")),
+            file_level=_env("LOG_FILE_LEVEL", log_raw.get("file_level", "")),
             queue_size=log_raw.get("queue_size", 10000),
         ),
         monitor=MonitorConfig(
@@ -268,9 +274,11 @@ def load_config() -> FullConfig:
             avg_latency_threshold=monitor_raw.get("avg_latency_threshold", 2000),
             single_latency_threshold=monitor_raw.get("single_latency_threshold", 5000),
             collect_interval=monitor_raw.get("collect_interval", 60),
+            call_log_retention_days=int(monitor_raw.get("call_log_retention_days", 0) or 0),
         ),
         gateway=GatewayConfig(
             prefix=_env("GATEWAY_PREFIX", raw.get("gateway", {}).get("prefix", "/v1/data")),
+            config_cache_ttl=_env("GATEWAY_CONFIG_CACHE_TTL", raw.get("gateway", {}).get("config_cache_ttl", 5), float),
         ),
     )
 

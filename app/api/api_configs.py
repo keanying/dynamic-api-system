@@ -64,38 +64,54 @@ async def list_apis(
         ur = await db.execute(select(_U).where(_U.id.in_(owner_ids)))
         owner_name_map = {u.id: (u.nickname or u.username) for u in ur.scalars().all()}
 
+    # v2.19: 参数 / 数据源名 / 调用统计改为整页批量查询（原来每个 API 各查 4 次，
+    # 一页 20 个就是 80 次查询，其中 40 次是对 call_logs 的聚合）
+    api_ids = [a.id for a in apis]
+    params_map = {i: [] for i in api_ids}
+    ds_name_map = {}
+    stats_map = {}
+    if api_ids:
+        pr = await db.execute(
+            select(ApiParameter).where(ApiParameter.api_id.in_(api_ids))
+            .order_by(ApiParameter.api_id, ApiParameter.sort_order)
+        )
+        for p in pr.scalars().all():
+            params_map[p.api_id].append(p)
+
+        ds_ids = list({a.datasource_id for a in apis if a.datasource_id})
+        if ds_ids:
+            dr = await db.execute(select(DataSource.id, DataSource.name).where(DataSource.id.in_(ds_ids)))
+            ds_name_map = {r.id: r.name for r in dr.all()}
+
+        sr = await db.execute(
+            select(CallLog.api_id, func.count().label("cnt"), func.avg(CallLog.response_time_ms).label("avg_ms"))
+            .where(CallLog.api_id.in_(api_ids))
+            .group_by(CallLog.api_id)
+        )
+        stats_map = {r.api_id: (r.cnt, r.avg_ms) for r in sr.all()}
+
+    # 待上线状态：查出该 API 已通过审批单的提交者，供前端判断"上线"按钮
+    appr_map = {}
+    approved_ids = [a.id for a in apis if getattr(a, "status", "") == "approved"]
+    if approved_ids:
+        from app.models.models import ApiApproval
+        ar = await db.execute(
+            select(ApiApproval).where(
+                ApiApproval.api_id.in_(approved_ids),
+                ApiApproval.overall_status == "approved",
+            ).order_by(ApiApproval.created_at.desc())
+        )
+        for ap in ar.scalars().all():
+            appr_map.setdefault(ap.api_id, ap.submitter_id)   # 每个 API 取最新一张
+
     items = []
     for api in apis:
-        params_r = await db.execute(
-            select(ApiParameter).where(ApiParameter.api_id == api.id).order_by(ApiParameter.sort_order)
-        )
-        params = params_r.scalars().all()
-
-        ds_name = ""
-        if api.datasource_id:
-            ds_r = await db.execute(select(DataSource.name).where(DataSource.id == api.datasource_id))
-            ds_name = ds_r.scalar() or ""
-
-        total_calls = (await db.execute(
-            select(func.count()).where(CallLog.api_id == api.id)
-        )).scalar() or 0
-
-        avg_time = (await db.execute(
-            select(func.avg(CallLog.response_time_ms)).where(CallLog.api_id == api.id)
-        )).scalar() or 0
-
-        # 待上线状态：查出该 API 已通过审批单的提交者，供前端判断"上线"按钮
-        appr_submitter = None
-        if getattr(api, "status", "") == "approved":
-            from app.models.models import ApiApproval
-            ap = (await db.execute(
-                select(ApiApproval).where(
-                    ApiApproval.api_id == api.id,
-                    ApiApproval.overall_status == "approved",
-                ).order_by(ApiApproval.created_at.desc())
-            )).scalars().first()
-            if ap:
-                appr_submitter = ap.submitter_id
+        params = params_map.get(api.id, [])
+        ds_name = ds_name_map.get(api.datasource_id, "") if api.datasource_id else ""
+        total_calls, avg_time = stats_map.get(api.id, (0, 0))
+        total_calls = total_calls or 0
+        avg_time = avg_time or 0
+        appr_submitter = appr_map.get(api.id)
 
         items.append(ApiConfigOut(
             id=api.id, project_id=api.project_id, datasource_id=api.datasource_id,

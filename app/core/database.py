@@ -552,3 +552,45 @@ async def init_db():
                 await _run_migration(conn)
         except Exception as e:
             log.warning(f"自动迁移过程中出现异常（不影响首次建表） | error={str(e)}")
+
+
+# ---------------------------------------------------------------------------
+# 性能索引 (v2.19+)：调用日志统计用覆盖索引，启动后在后台补建
+# ---------------------------------------------------------------------------
+# 新建的表由 create_all 按模型建好索引；已有的表（尤其是数据量大的 call_logs）
+# 需要补建。放在后台任务里做，不阻塞启动；MySQL 用在线 DDL（LOCK=NONE），
+# 建索引期间照常读写。也可以提前在低峰期手动执行 migrations/v2.19_call_logs_indexes.sql，
+# 已存在的索引这里会自动跳过。
+_PERF_INDEXES = [
+    ("ix_call_logs_api_created_rt", "api_id, created_at, response_time_ms"),
+    ("ix_call_logs_project_created_rt", "project_id, created_at, response_time_ms"),
+    ("ix_call_logs_created_status_rt", "created_at, response_status, response_time_ms"),
+]
+
+
+async def ensure_perf_indexes():
+    from app.core.runtime_env import t as _t
+    table = _t("src_dop_call_logs")
+    is_mysql = "mysql" in settings.database.url
+    for base_name, cols in _PERF_INDEXES:
+        name = _t(base_name)
+        try:
+            async with engine.begin() as conn:
+                if is_mysql:
+                    exists = (await conn.execute(text(
+                        "SELECT 1 FROM information_schema.statistics "
+                        "WHERE table_schema = DATABASE() AND table_name = :t AND index_name = :i LIMIT 1"
+                    ), {"t": table, "i": name})).first()
+                    if exists:
+                        continue
+                    log.info(f"补建性能索引开始（在线 DDL，不阻塞读写）| {table}.{name}")
+                    await conn.execute(text(
+                        f"ALTER TABLE `{table}` ADD INDEX `{name}` ({cols}), ALGORITHM=INPLACE, LOCK=NONE"
+                    ))
+                else:
+                    await conn.execute(text(f'CREATE INDEX IF NOT EXISTS "{name}" ON "{table}" ({cols})'))
+                    continue
+            log.info(f"补建性能索引完成 | {table}.{name}")
+        except Exception as e:  # noqa: BLE001
+            # 多 worker 同时补建会有一个报「索引已存在」，忽略即可
+            log.warning(f"补建性能索引跳过 | {table}.{name} | {e}")

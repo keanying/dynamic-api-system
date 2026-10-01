@@ -25,7 +25,7 @@ from sqlalchemy import select, text as sa_text
 
 from app.core.config import settings
 from app.core.security import decrypt_value
-from app.core.logging import get_logger
+from app.core.logging import get_logger, is_debug as _is_debug
 from app.models.models import ApiConfig, ApiParameter, DataSource, CallLog, Project
 from app.services.sql_template import render_template, extract_placeholders, SqlTplError
 
@@ -83,13 +83,18 @@ def _get_redis():
     global _redis_client
     if _redis_client is None:
         import redis.asyncio as aioredis
-        _redis_client = aioredis.Redis(
+        # v2.19: 用阻塞式连接池。默认连接池在连接数达到 max_connections 时
+        # 直接抛 "Too many connections"，高并发下缓存读写大量失败、请求全部回落查库；
+        # 阻塞式连接池会排队等空闲连接（最多 5 秒）。
+        pool = aioredis.BlockingConnectionPool(
             host=settings.redis.host,
             port=settings.redis.port,
             password=settings.redis.password or None,
             db=settings.redis.db,
             max_connections=getattr(settings.redis, "max_connections", 20) or 20,
+            timeout=5,
         )
+        _redis_client = aioredis.Redis(connection_pool=pool)
     return _redis_client
 
 
@@ -172,7 +177,10 @@ async def _set_cache(key: str, value: Any, ttl: int):
     if settings.redis.enabled:
         try:
             r = _get_redis()
-            await r.setex(key, actual_ttl, json.dumps(value, default=str))
+            # 与网关响应相同的类型转换规则（Decimal -> 数字等），保证命中缓存与直查返回一致；
+            # 之前用 default=str，DECIMAL 列命中缓存时会从数字变成字符串
+            from app.core.fast_json import json_default
+            await r.setex(key, actual_ttl, json.dumps(value, default=json_default, ensure_ascii=False))
             log.debug(f"Redis 缓存已设置 | key={key} | ttl={actual_ttl}s")
         except Exception as e:
             log.error(f"Redis 缓存写入失败 | key={key} | error={str(e)}")
@@ -245,11 +253,14 @@ async def _record_prewarm_params(api_id: int, params: dict, max_entries: int):
             {"params": params, "last_seen": int(time.time())},
             default=str,
         )
-        await r.hset(hkey, field, payload)
+        # hset + hlen 合并为一次往返（v2.19）
+        pipe = r.pipeline(transaction=False)
+        pipe.hset(hkey, field, payload)
+        pipe.hlen(hkey)
+        _, total = await pipe.execute()
 
         # 上限保护：参数组合可能无限增长（每个不同参数都是一条），
         # 超过上限时按 last_seen 淘汰最旧的，避免 Redis 膨胀、预热任务过载。
-        total = await r.hlen(hkey)
         if total > max_entries:
             all_items = await r.hgetall(hkey)
             parsed = []
@@ -461,7 +472,8 @@ def _parse_sql_params(sql_template: str, params: dict, api_params: list) -> Tupl
         for n, v in zip(expanded_names, value):
             final_bound[n] = v
 
-    log.debug(f"SQL 参数绑定完成 | placeholders={placeholder_names} | bound_keys={list(final_bound.keys())}")
+    if _is_debug():
+        log.debug(f"SQL 参数绑定完成 | placeholders={placeholder_names} | bound_keys={list(final_bound.keys())}")
     return final_sql, final_bound
 
 
@@ -636,7 +648,8 @@ async def _execute_single_sql_mode(api_config, params, api_params, datasource):
     if tctx:
         tctx.mark_render_end()
         tctx.set_rendered_sql(sql)
-    log.debug(f"SQL 模板 | api_id={api_config.id} | sql={sql[:200]} | bound={bound_params}")
+    if _is_debug():
+        log.debug(f"SQL 模板 | api_id={api_config.id} | sql={sql[:200]} | bound={bound_params}")
 
     password = decrypt_value(datasource.password_encrypted) if datasource.password_encrypted else ""
 
@@ -767,7 +780,7 @@ async def _execute_pipeline_mode(api_config, params, api_params, db, primary_dat
     except PipelineError as e:
         raise Exception(f"管线配置错误: {e}")
 
-    log.info(f"开始执行管线 | api_id={api_config.id} | steps={len(steps)}")
+    log.debug(f"开始执行管线 | api_id={api_config.id} | steps={len(steps)}")
 
     # 默认参数兜底
     effective_params = dict(params or {})
@@ -809,7 +822,8 @@ async def _execute_pipeline_mode(api_config, params, api_params, db, primary_dat
         max_rows=api_config.max_rows,
         return_step=return_step,
     )
-    log.info(f"管线执行完成 | api_id={api_config.id} | steps_summary={step_results}")
+    if _is_debug():
+        log.debug(f"管线执行完成 | api_id={api_config.id} | steps_summary={step_results}")
     return data
 
 
@@ -820,10 +834,15 @@ async def execute_api(
     db: AsyncSession,
     call_source: str = "gateway",
     trace_id: str = "",
+    api_params=None,
+    datasource=None,
 ) -> dict:
     """
     执行动态 API 调用
     返回标准响应格式 {"status": True/False, "data": ..., "msg": ...}
+
+    api_params / datasource: 调用方已查好时直接传入（网关的接口配置缓存），
+    省掉每次请求各一次系统库查询；不传则照旧在这里查。
     """
     start_time = time.time()
 
@@ -832,8 +851,10 @@ async def execute_api(
     _is_prewarm = (call_source == "prewarm")
     _tag = "[预热] " if _is_prewarm else ""
 
-    log.info(f"{_tag}开始执行 API | api_id={api_config.id} | name={api_config.name} | url_path={api_config.url_path} | method={api_config.method} | client_ip={client_ip} | trace_id={trace_id}")
-    log.debug(f"{_tag}请求参数 | api_id={api_config.id} | params={json.dumps(params, default=str, ensure_ascii=False)[:1000]}")
+    # v2.19: 每请求的过程日志降为 DEBUG，INFO 只保留网关层一条汇总（网关响应）
+    if _is_debug():
+        log.debug(f"{_tag}开始执行 API | api_id={api_config.id} | name={api_config.name} | url_path={api_config.url_path} | method={api_config.method} | client_ip={client_ip} | trace_id={trace_id}")
+        log.debug(f"{_tag}请求参数 | api_id={api_config.id} | params={json.dumps(params, default=str, ensure_ascii=False)[:1000]}")
 
     # v2.4: 关键节点写入 trace 上下文（由网关层负责建档与落库）
     from app.services.trace_context import get_trace
@@ -862,6 +883,10 @@ async def execute_api(
             raise Exception("禁止执行 DDL 操作")
 
         # 3. 缓存检查
+        #    cache_key 只在这里按「原始入参」算一次，读缓存和写缓存共用。
+        #    之前写缓存时重新计算，而那时 params 已被 _coerce_param_types 原地转换过
+        #    （GET 查询参数 "7" -> 7），读写 key 对不上，GET 请求的缓存永远不命中。
+        cache_key = None
         if api_config.cache_enabled:
             cache_key = _build_cache_key(api_config.id, params)
             # 开了自动预热的 API：记下这次的参数组合，供后台调度器定期回填缓存。
@@ -885,7 +910,7 @@ async def execute_api(
                 cached = await _get_cache(cache_key)
             if cached is not None:
                 elapsed = (time.time() - start_time) * 1000
-                log.info(f"缓存命中，直接返回 | api_id={api_config.id} | elapsed={elapsed:.2f}ms")
+                log.debug(f"缓存命中，直接返回 | api_id={api_config.id} | elapsed={elapsed:.2f}ms")
                 if tctx:
                     tctx.set_cache_hit(True)
                     tctx.set_row_count(len(cached) if isinstance(cached, list) else 0)
@@ -897,8 +922,7 @@ async def execute_api(
         is_plugin = getattr(api_config, "api_type", "sql") == "plugin" and \
             (getattr(api_config, "plugin_code", "") or "").strip()
 
-        datasource = None
-        if api_config.datasource_id:
+        if datasource is None and api_config.datasource_id:
             ds_result = await db.execute(
                 select(DataSource).where(DataSource.id == api_config.datasource_id)
             )
@@ -911,7 +935,8 @@ async def execute_api(
                 raise Exception("数据源不存在")
 
         if datasource:
-            log.debug(f"数据源 | api_id={api_config.id} | ds_id={datasource.id} | ds_name={datasource.name} | type={datasource.type} | host={datasource.host}:{datasource.port}")
+            if _is_debug():
+                log.debug(f"数据源 | api_id={api_config.id} | ds_id={datasource.id} | ds_name={datasource.name} | type={datasource.type} | host={datasource.host}:{datasource.port}")
 
         # 4.5 数据同步模式 (v2.17+)：入参是固定的 tableName/pkId/data 三件套，
         #     不走 ApiParameter 那套参数定义与校验，直接交给同步执行器。
@@ -942,11 +967,13 @@ async def execute_api(
             return {"status": True, "data": sync_result, "msg": "同步完成"}
 
         # 5. 获取参数定义
-        params_result = await db.execute(
-            select(ApiParameter).where(ApiParameter.api_id == api_config.id)
-        )
-        api_params = params_result.scalars().all()
-        log.debug(f"参数定义 | api_id={api_config.id} | 参数数={len(api_params)} | 参数名={[p.name for p in api_params]}")
+        if api_params is None:
+            params_result = await db.execute(
+                select(ApiParameter).where(ApiParameter.api_id == api_config.id)
+            )
+            api_params = params_result.scalars().all()
+        if _is_debug():
+            log.debug(f"参数定义 | api_id={api_config.id} | 参数数={len(api_params)} | 参数名={[p.name for p in api_params]}")
 
         # 5.5 按声明类型做宽松转换（主要针对 Query/Header 里以字符串到达的参数）
         _coerce_param_types(params, api_params)
@@ -976,9 +1003,8 @@ async def execute_api(
                 api_config, params, api_params, datasource,
             )
 
-        # 9. 写入缓存
-        if api_config.cache_enabled:
-            cache_key = _build_cache_key(api_config.id, params)
+        # 9. 写入缓存（沿用第 3 步按原始入参算出的 key）
+        if cache_key:
             ttl = api_config.cache_ttl or settings.cache.default_ttl
             if data is None or (isinstance(data, list) and len(data) == 0):
                 await _set_cache(cache_key, data, settings.cache.null_ttl)
@@ -992,7 +1018,7 @@ async def execute_api(
         if elapsed > settings.query.slow_query_threshold:
             log.warning(f"{_tag}慢查询 | api_id={api_config.id} | name={api_config.name} | elapsed={elapsed:.2f}ms | threshold={settings.query.slow_query_threshold}ms")
 
-        log.info(f"{_tag}API 执行成功 | api_id={api_config.id} | name={api_config.name} | elapsed={elapsed:.2f}ms | 返回行数={len(data) if isinstance(data, list) else 'N/A'}")
+        log.debug(f"{_tag}API 执行成功 | api_id={api_config.id} | name={api_config.name} | elapsed={elapsed:.2f}ms | 返回行数={len(data) if isinstance(data, list) else 'N/A'}")
         return {"status": True, "data": data, "msg": ""}
 
     except Exception as e:
@@ -1084,10 +1110,20 @@ async def _execute_mysql(
     timeout: int = 30,
     max_rows: int = 10000,
 ) -> list:
-    """执行 MySQL 查询（走连接池，连接复用不再每次新建）"""
+    """执行 MySQL 查询（走连接池，连接复用不再每次新建）
+
+    v2.19:
+      - 改用流式游标(SSDictCursor)：只从网络读 max_rows 行。原来的缓冲游标会先把
+        整个结果集全部读进内存、逐行解码，再截取前 max_rows 行 —— SELECT 一张
+        几十万行的表只为返回 1 万行，绝大部分时间和内存都浪费在丢弃的行上。
+        结果超过 max_rows 时直接丢弃这条连接（服务端随之停止发送），不再读完剩余行。
+      - 执行出错/超时的连接不再还回池里：超时被取消时连接正处在协议中途，
+        还回去会让下一个请求拿到「半截结果」的坏连接。
+    """
     import aiomysql
 
-    log.debug(f"MySQL 查询 | host={datasource.host}:{datasource.port} | db={datasource.database_name} | timeout={timeout}s")
+    if _is_debug():
+        log.debug(f"MySQL 查询 | host={datasource.host}:{datasource.port} | db={datasource.database_name} | timeout={timeout}s")
 
     pool = await _get_mysql_pool(datasource, password)
 
@@ -1095,38 +1131,55 @@ async def _execute_mysql(
     # 避免并发打满后无限期挂住。
     conn = await asyncio.wait_for(pool.acquire(), timeout=timeout)
 
+    # 将 :param 风格转为 %(param)s 风格 (MySQL 参数化)
+    # v1.5: 字面量感知转换，见 _to_pyformat 说明
+    mysql_sql = _to_pyformat(sql)
+    if _is_debug():
+        log.debug(f"MySQL SQL | sql={mysql_sql} | params={params}")
+
+    async def _run():
+        cur = await conn.cursor(aiomysql.SSDictCursor)
+        await cur.execute(mysql_sql, params)
+        rows = await cur.fetchmany(max_rows)
+        # 再探一行判断是否还有剩余；有剩余说明被 max_rows 截断
+        truncated = (await cur.fetchone()) is not None if len(rows) >= max_rows else False
+        if not truncated:
+            await cur.close()
+        return rows, truncated
+
+    discard = True
     try:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            # 将 :param 风格转为 %(param)s 风格 (MySQL 参数化)
-            # v1.5: 字面量感知转换，见 _to_pyformat 说明
-            mysql_sql = _to_pyformat(sql)
-            log.debug(f"MySQL SQL | sql={mysql_sql} | params={params}")
-
-            await asyncio.wait_for(
-                cur.execute(mysql_sql, params),
-                timeout=timeout,
-            )
-
-            rows = await cur.fetchmany(max_rows)
-            # 将结果中的特殊类型转为可序列化格式
-            result = []
-            for row in rows:
-                clean_row = {}
-                for k, v in row.items():
-                    v = format_as_json(v)
-                    if isinstance(v, (datetime.datetime, datetime.date)):
-                        clean_row[k] = v.isoformat()
-                    elif isinstance(v, bytes):
-                        clean_row[k] = v.decode('utf-8', errors='replace')
-                    else:
-                        clean_row[k] = v
-                result.append(clean_row)
-
-            log.debug(f"MySQL 查询结果 | rows={len(result)} | max_rows={max_rows}")
-            return result
+        rows, truncated = await asyncio.wait_for(_run(), timeout=timeout)
+        # 截断时连接上还有没读完的行，直接丢弃这条连接，比把剩余行读完快得多
+        discard = truncated
     finally:
-        # 归还连接到池（不是关闭），供后续请求复用
+        if discard:
+            conn.close()
         pool.release(conn)
+        if discard:
+            # aiomysql 归还已关闭的连接时不会唤醒排队等连接的协程，这里补一次
+            asyncio.ensure_future(pool._wakeup())  # noqa: SLF001
+
+    # 将结果中的特殊类型转为可序列化格式
+    result = []
+    for row in rows:
+        clean_row = {}
+        for k, v in row.items():
+            v = format_as_json(v)
+            if isinstance(v, (datetime.datetime, datetime.date)):
+                clean_row[k] = v.isoformat()
+            elif isinstance(v, bytes):
+                clean_row[k] = v.decode('utf-8', errors='replace')
+            else:
+                clean_row[k] = v
+        result.append(clean_row)
+
+    if _is_debug():
+        log.debug(f"MySQL 查询结果 | rows={len(result)} | max_rows={max_rows} | truncated={truncated}")
+    return result
+
+_JSON_FIRST_CHARS = frozenset('{["-0123456789tfnNI')
+
 
 def format_as_json(data):
     """如果值是 JSON 文本则解析成结构，其余原样返回。
@@ -1138,7 +1191,19 @@ def format_as_json(data):
     """
     if isinstance(data, dict):
         return data  # 已经是字典，直接返回
-    if isinstance(data, (str, bytes, bytearray)):
+    if isinstance(data, str):
+        # 快速路径 (v2.19)：合法 JSON 文本去掉前导空白后，首字符只可能是下面这些
+        # （对象/数组/字符串/数字/true/false/null/NaN/Infinity）。
+        # 绝大多数普通文本（中文、字母开头）不可能解析成功，直接跳过，
+        # 省掉一次必然失败的 json.loads（抛异常的代价远高于一次判断）。
+        stripped = data.lstrip(" \t\n\r")
+        if not stripped or stripped[0] not in _JSON_FIRST_CHARS:
+            return data
+        try:
+            return json.loads(data)
+        except Exception:
+            return data
+    if isinstance(data, (bytes, bytearray)):
         try:
             return json.loads(data)
         except Exception:

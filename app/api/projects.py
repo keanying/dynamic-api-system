@@ -55,13 +55,25 @@ async def list_projects(
     result = await db.execute(query)
     projects = result.scalars().all()
 
+    # v2.19: API 数 / 调用数按整页批量分组统计（原来每个项目各查 2 次）
+    pids = [p.id for p in projects]
+    api_count_map, call_count_map = {}, {}
+    if pids:
+        r = await db.execute(
+            select(ApiConfig.project_id, func.count()).where(ApiConfig.project_id.in_(pids))
+            .group_by(ApiConfig.project_id)
+        )
+        api_count_map = dict(r.all())
+        r = await db.execute(
+            select(CallLog.project_id, func.count()).where(CallLog.project_id.in_(pids))
+            .group_by(CallLog.project_id)
+        )
+        call_count_map = dict(r.all())
+
     items = []
     for p in projects:
-        api_count_q = select(func.count()).where(ApiConfig.project_id == p.id)
-        api_count = (await db.execute(api_count_q)).scalar() or 0
-
-        call_count_q = select(func.count()).where(CallLog.project_id == p.id)
-        total_calls = (await db.execute(call_count_q)).scalar() or 0
+        api_count = api_count_map.get(p.id, 0)
+        total_calls = call_count_map.get(p.id, 0)
 
         items.append(ProjectOut(
             id=p.id, code=p.code, name=p.name, description=p.description,
@@ -103,13 +115,12 @@ async def get_project(
         select(func.count()).where(ApiConfig.project_id == project_id)
     )).scalar() or 0
 
-    total_calls = (await db.execute(
-        select(func.count()).where(CallLog.project_id == project_id)
-    )).scalar() or 0
-
-    avg_time = (await db.execute(
-        select(func.avg(CallLog.response_time_ms)).where(CallLog.project_id == project_id)
-    )).scalar() or 0
+    # v2.19: 调用数和平均耗时一次扫描算出（原来两次）
+    total_calls, avg_time = (await db.execute(
+        select(func.count(), func.avg(CallLog.response_time_ms)).where(CallLog.project_id == project_id)
+    )).one()
+    total_calls = total_calls or 0
+    avg_time = avg_time or 0
 
     log.debug(f"项目详情查询完成 | project_id={project_id} | code={project.code} | api_count={api_count}")
     return R_ok(data={

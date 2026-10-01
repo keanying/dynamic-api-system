@@ -5,7 +5,7 @@
 import datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, case, delete
+from sqlalchemy import select, func, case, delete, extract
 
 from app.core.database import get_db
 from app.core.errors import ErrCode, R_ok, R_fail
@@ -32,26 +32,21 @@ async def get_dashboard(
         select(func.count()).select_from(ApiConfig)
     )).scalar() or 0
 
-    total_calls = (await db.execute(
-        select(func.count()).select_from(CallLog)
-    )).scalar() or 0
-
-    avg_time = (await db.execute(
-        select(func.avg(CallLog.response_time_ms))
-    )).scalar() or 0
-
-    if total_calls > 0:
-        error_count = (await db.execute(
-            select(func.count()).where(CallLog.response_status == "error")
-        )).scalar() or 0
-        failure_rate = round(error_count / total_calls * 100, 2)
-    else:
-        failure_rate = 0
-
+    # v2.19: 总数 / 平均耗时 / 失败数 / 今日数 合并成一次扫描（原来对 call_logs 扫 4 遍）
     today_start = cst_today_start()
-    today_calls = (await db.execute(
-        select(func.count()).where(CallLog.created_at >= today_start)
-    )).scalar() or 0
+    total_calls, avg_time, error_count, today_calls = (await db.execute(
+        select(
+            func.count(),
+            func.avg(CallLog.response_time_ms),
+            func.sum(case((CallLog.response_status == "error", 1), else_=0)),
+            func.sum(case((CallLog.created_at >= today_start, 1), else_=0)),
+        ).select_from(CallLog)
+    )).one()
+    total_calls = total_calls or 0
+    avg_time = avg_time or 0
+    error_count = int(error_count or 0)
+    today_calls = int(today_calls or 0)
+    failure_rate = round(error_count / total_calls * 100, 2) if total_calls > 0 else 0
 
     stats = DashboardStats(
         total_apis=total_apis,
@@ -196,31 +191,34 @@ async def get_today_hourly(
     db: AsyncSession = Depends(get_db),
     _user=Depends(get_current_user),
 ):
-    """今日调用分布（按小时，0-23 点补齐）。
-
-    不依赖数据库方言的时间函数：拉今日全部日志的时间戳在 Python 侧按小时归桶，
-    MySQL / SQLite 表现一致，且天然补齐没有调用的整点为 0。
-    """
+    """今日调用分布（按小时，0-23 点补齐，没有调用的整点为 0）。"""
     now = cst_now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
+    # v2.19: 在数据库里按小时分组聚合（原来把今天的每一条日志都拉回 Python 再归桶，
+    # 日调用量百万级时要传输百万行）。extract('hour') 在 MySQL/SQLite 上都可用。
+    hour_col = extract("hour", CallLog.created_at)
     result = await db.execute(
-        select(CallLog.created_at, CallLog.response_status, CallLog.response_time_ms)
+        select(
+            hour_col.label("h"),
+            func.count().label("cnt"),
+            func.sum(case((CallLog.response_status == "error", 1), else_=0)).label("err"),
+            func.sum(func.coalesce(CallLog.response_time_ms, 0)).label("rt_sum"),
+        )
         .where(CallLog.created_at >= today_start)
+        .group_by(hour_col)
     )
-    rows = result.all()
 
     buckets = [{"hour": h, "call_count": 0, "error_count": 0, "_sum": 0.0} for h in range(24)]
-    for created_at, status, rt in rows:
-        if not created_at:
+    for h, cnt, err, rt_sum in result.all():
+        if h is None:
             continue
-        h = created_at.hour
+        h = int(h)
         if 0 <= h <= 23:
             b = buckets[h]
-            b["call_count"] += 1
-            if status == "error":
-                b["error_count"] += 1
-            b["_sum"] += rt or 0
+            b["call_count"] += int(cnt or 0)
+            b["error_count"] += int(err or 0)
+            b["_sum"] += float(rt_sum or 0)
 
     items = [{
         "hour": b["hour"],

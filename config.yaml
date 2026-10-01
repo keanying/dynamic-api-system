@@ -5,6 +5,8 @@ server:
   host: "0.0.0.0"
   port: 3000
   debug: false
+  # 进程数：Python 单进程只能用满一个 CPU 核，建议设为服务器 CPU 核数（需开启 Redis，
+  # 缓存才能在进程间共享）。注意：内存限流按进程计数，N 个进程时实际上限约为 N 倍。
   workers: 1
   secret_key: "pfk-O7OSzAYadCPEmOkjNFG1JMlpfnKcL3UH"
 
@@ -112,6 +114,9 @@ log:
   retention_days: 3
   # 日志级别
   level: "INFO"
+  # 全量日志文件 / 网关日志文件的级别，留空同 level (v2.19+)。
+  # 之前固定为 DEBUG，每个请求写二十来条，排查问题时可临时改成 "DEBUG"
+  file_level: ""
   # 异步日志队列大小
   queue_size: 10000
 
@@ -124,7 +129,13 @@ monitor:
   single_latency_threshold: 5000
   # 指标采集间隔 (秒)
   collect_interval: 60
+  # 调用日志保留天数 (v2.19+)：> 0 时每小时自动删除更早的日志（分批删除，不长时间锁表）；
+  # 0 = 不自动清理。call_logs 每次调用一行、单行可达十几 KB，不清理会无限增长
+  call_log_retention_days: 0
 gateway:
   # API 调用地址前缀 (默认 /v1/data)
   prefix: "/v1/data"
+  # 接口配置进程内缓存秒数 (v2.19+)：网关不必每个请求都查 项目/API/参数/数据源。
+  # 本进程内修改配置立即生效；多 worker 时其它进程最多延迟这么多秒。0 = 关闭
+  config_cache_ttl: 5
 
