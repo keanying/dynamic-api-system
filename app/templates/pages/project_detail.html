@@ -198,6 +198,10 @@ async function loadApis(page) {
             }
         } else if (st === 'online') {
             lifecycleBtns = `<button class="btn btn-ghost btn-sm" style="color:#9a3412;" data-action="offline">下线</button>`;
+            // 预发环境 (v2.18+)：已上线验证过的 API 可发布到生产，由生产管理员核对差异后审核
+            if (window.APP_ENV && window.APP_ENV.is_pre) {
+                lifecycleBtns += `<button class="btn btn-primary btn-sm" data-action="release" title="提交到生产环境，由生产管理员核对差异后审核上线">发布到生产</button>`;
+            }
         }
         // 锁/解锁按钮（独立于上下线）
         const lockBtn = isLocked
@@ -307,6 +311,8 @@ async function loadApis(page) {
             openTransferDialog(apiId, apiName);
         } else if (action === 'clear-cache') {
             clearApiCache(apiId, apiName);
+        } else if (action === 'release') {
+            releaseToProd(apiId, apiName);
         }
     });
     container.addEventListener('change', async (e) => {
@@ -592,6 +598,21 @@ function publishApi(apiId, apiName) {
         // 无论成败都刷新;延迟 350ms 确保后端事务已提交、避免读写延迟读到旧状态
         setTimeout(loadApis, 350);
     });
+}
+
+async function releaseToProd(apiId, apiName) {
+    const remark = window.prompt(`发布「${apiName}」到生产环境。\n请填写发布说明（会展示给生产审核人）：`, '');
+    if (remark === null) return;
+    const r = await API.post('/api/releases', { project_id: PROJECT_ID, api_id: apiId, remark });
+    if (r && r.status) {
+        Toast.success(r.msg || '发布单已提交');
+        const prodUrl = AppEnv.urlOf('prod');
+        if (prodUrl && await confirmAsync('发布单已提交', '需要到生产环境由管理员核对差异后审核。现在打开生产环境的发布审核页吗？', { okText: '打开', danger: false })) {
+            window.open(`${prodUrl}/admin/releases?id=${r.data.id}`, '_blank');
+        }
+    } else {
+        Toast.error((r && r.msg) || '提交失败');
+    }
 }
 
 function withdrawApi(apiId) {

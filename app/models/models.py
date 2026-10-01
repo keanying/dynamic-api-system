@@ -411,3 +411,50 @@ class DataSourceDeletionRequest(Base):
     approver_comment = Column(String(512), default="")
     created_at = Column(DateTime, default=_cst_now, index=True)
     updated_at = Column(DateTime, default=_cst_now, onupdate=_cst_now)
+
+
+class ReleaseRequest(Base):
+    """跨环境发布单 (v2.18+)：预发(pre) → 生产(prod)。
+
+    注意：表名**不加**环境后缀 —— 这张表是两套环境之间的「交接单」，
+    预发进程写入、生产进程读取审核，必须是同一张物理表。
+
+    流程：
+        预发：已上线(online)的 API 发起「发布到生产」，把 API 完整配置冻结为快照(snapshot)
+        生产：管理员查看「快照 vs 当前生产配置」的差异，通过则写入生产并直接上线；驳回则不动生产
+
+    跨环境不能用 id 关联（pre 新建的数据 id 可能和生产的不同行撞号），一律用自然键：
+        项目 → project_code；API → (project_code, method, url_path)；数据源 → 名称；用户 → 账户名
+
+    status: pending（待审核）/ approved（已发布）/ rejected（已驳回）/ cancelled（已撤回）
+    """
+    __tablename__ = "src_dop_release_requests"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source_env = Column(String(16), nullable=False, default="pre")
+    target_env = Column(String(16), nullable=False, default="prod")
+
+    project_code = Column(String(64), nullable=False, index=True)
+    project_name = Column(String(128), default="")
+    source_api_id = Column(Integer, nullable=True)                # 预发环境里的 API id（仅供追溯）
+    api_name = Column(String(128), default="")
+    method = Column(String(16), nullable=False, default="GET")
+    url_path = Column(String(256), nullable=False)
+
+    snapshot = Column(_BigText, nullable=False, default="")       # 发布内容（JSON）
+    remark = Column(String(512), default="")                      # 发布说明
+
+    status = Column(String(16), nullable=False, default="pending", index=True)
+    submitter_username = Column(String(64), nullable=False, index=True)
+    submitter_name = Column(String(64), default="")
+
+    reviewer_username = Column(String(64), default="")
+    reviewer_name = Column(String(64), default="")
+    review_comment = Column(String(512), default="")
+    reviewed_at = Column(DateTime, nullable=True)
+
+    target_api_id = Column(Integer, nullable=True)                # 发布后生产环境的 API id
+    prod_before = Column(_BigText, default="")                    # 发布前生产配置快照（JSON，空=生产原先没有该 API）
+
+    created_at = Column(DateTime, default=_cst_now, index=True)
+    updated_at = Column(DateTime, default=_cst_now, onupdate=_cst_now)

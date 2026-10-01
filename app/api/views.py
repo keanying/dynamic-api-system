@@ -45,9 +45,11 @@ STATIC_VER = _compute_static_ver()
 # 公共模板上下文
 def _ctx(extra: dict = None) -> dict:
     """构建公共模板上下文"""
+    from app.api.releases import env_info
     ctx = {
         "gateway_prefix": settings.gateway.prefix.rstrip("/"),
         "static_ver": STATIC_VER,
+        "app_env": env_info(),   # 当前环境（预发/生产），布局横幅与跨环境跳转用
     }
     if extra:
         ctx.update(extra)
@@ -74,6 +76,14 @@ async def approval_center_page(request: Request):
     log.debug("渲染审批中心页面")
     return templates.TemplateResponse(request=request, name="pages/approval_center.html", context=_ctx({
         "active_page": "approvals",
+    }))
+
+
+@router.get("/admin/releases", response_class=HTMLResponse)
+async def releases_page(request: Request):
+    log.debug("渲染发布到生产页面")
+    return templates.TemplateResponse(request=request, name="pages/releases.html", context=_ctx({
+        "active_page": "releases",
     }))
 
 

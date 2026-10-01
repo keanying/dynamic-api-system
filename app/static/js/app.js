@@ -306,3 +306,51 @@ function jsonPretty(obj) {
         return String(obj);
     }
 }
+
+// ========== 多环境 (v2.18+) ==========
+// window.APP_ENV 由布局模板注入：{env, label, is_prod, is_pre, prod_port, pre_port, prod_url, pre_url}
+const AppEnv = {
+    info() { return window.APP_ENV || {}; },
+    // 另一个环境的访问地址：优先用配置的 url，否则「当前主机名 + 对方端口」
+    urlOf(env) {
+        const e = this.info();
+        const conf = env === 'prod' ? e.prod_url : e.pre_url;
+        if (conf) return conf;
+        const port = env === 'prod' ? e.prod_port : e.pre_port;
+        return port ? `${location.protocol}//${location.hostname}:${port}` : '';
+    },
+    isAdminRole(role) { return role === 'super_admin' || role === 'admin'; },
+};
+
+let _mePromise = null;
+function getMe() {
+    if (!_mePromise) _mePromise = API.get('/api/auth/me').then(r => (r && r.data) || {}).catch(() => ({}));
+    return _mePromise;
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    const env = AppEnv.info();
+    if (!env.env) return;
+
+    // 顶栏：跳到另一个环境（预发 → 生产的发布审核页；生产 → 预发的项目页）
+    const link = document.getElementById('envSwitchLink');
+    const other = env.is_prod ? 'pre' : 'prod';
+    const otherUrl = AppEnv.urlOf(other);
+    if (link && otherUrl) {
+        link.href = otherUrl + (env.is_prod ? '/admin/projects' : '/admin/releases');
+        link.target = '_blank';
+        link.textContent = env.is_prod ? '前往预发 ↗' : '前往生产 ↗';
+        link.style.display = '';
+    }
+
+    // 生产环境 + 非管理员：只读提示（后端同样会拦截写操作）
+    const banner = document.getElementById('envReadonlyBanner');
+    if (env.is_prod && banner && API.token) {
+        const me = await getMe();
+        if (me.global_role && !AppEnv.isAdminRole(me.global_role)) {
+            banner.innerHTML = '当前为 <b>生产环境</b>，非管理员只能查看。如需修改，请在预发环境修改并验证后「发布到生产」，由生产管理员核对差异后审核上线。'
+                + (otherUrl ? ` <a href="${otherUrl}/admin/projects" target="_blank">前往预发 ↗</a>` : '');
+            banner.style.display = '';
+        }
+    }
+});

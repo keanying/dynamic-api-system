@@ -34,6 +34,10 @@
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
                 <span>审批中心</span>
             </a>
+            <a href="/admin/releases" class="nav-item {% if active_page == 'releases' %}active{% endif %}">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5"/><polyline points="5 12 12 5 19 12"/><line x1="5" y1="21" x2="19" y2="21"/></svg>
+                <span>{% if app_env and app_env.is_prod %}发布审核{% else %}发布到生产{% endif %}</span>
+            </a>
             <a href="/admin/plugin-libraries" class="nav-item {% if active_page == 'plugin_libraries' %}active{% endif %}">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
                 <span>插件中心</span>
@@ -67,11 +71,18 @@
                 {% block breadcrumb %}{% endblock %}
             </div>
             <div class="topbar-actions">
+                {% if app_env %}
+                <span class="env-badge env-{{ app_env.env }}" title="不同端口对应不同环境：生产 {{ app_env.prod_port or '-' }} / 预发 {{ app_env.pre_port or '-' }}">{{ app_env.label }}</span>
+                <a class="btn btn-ghost btn-sm" id="envSwitchLink" style="display:none;"></a>
+                {% endif %}
                 <button class="btn-icon" onclick="location.reload()" title="刷新">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
                 </button>
             </div>
         </header>
+
+        <!-- 生产环境只读提示（非管理员，由 app.js 按当前用户角色显示） -->
+        <div class="env-readonly-banner" id="envReadonlyBanner" style="display:none;"></div>
 
         <!-- 页面内容 -->
         <div class="page-content">
@@ -81,6 +92,8 @@
         </div>
     </main>
 </div>
+
+<script>window.APP_ENV = {{ (app_env or {}) | tojson }};</script>
 
 <!-- Toast 消息 -->
 <div id="toast-container"></div>
