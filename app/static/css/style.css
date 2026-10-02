@@ -1971,3 +1971,28 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
 .ui-date-foot button:hover:not(:disabled) { background: #f4f4f5; }
 .ui-date-foot [data-act="today"] { color: #5b44c9; font-weight: 600; }
 .ui-date-foot button:disabled { color: #c4c4c8; cursor: not-allowed; }
+
+/* ---------- API 卡片图标操作按钮 (v2.24) ---------- */
+.api-card .api-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--ui-line, #ececef); }
+.icon-act {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; padding: 0; border: 1px solid transparent; border-radius: 10px;
+    background: transparent; cursor: pointer; text-decoration: none; flex-shrink: 0;
+    transition: background .15s, border-color .15s, transform .15s;
+}
+.icon-act img { width: 20px; height: 20px; display: block; pointer-events: none; }
+.icon-act:hover { background: #f4f4f6; border-color: #e7e7ea; transform: translateY(-1px); }
+.icon-act:active { transform: translateY(0); }
+.icon-act:focus-visible { outline: 2px solid var(--ui-violet, #b7a7f5); outline-offset: 1px; }
+.icon-act-danger { margin-left: auto; }
+.icon-act-danger:hover { background: #fff1f2; border-color: #fecdd3; }
+.icon-act-text { width: auto; padding: 0 10px; font-size: 12px; color: var(--ui-ink, #1c1c1e); border-color: #e7e7ea; }
+.icon-act-note { font-size: 12px; color: var(--ui-muted, #8a8a8e); padding: 0 6px; }
+.icon-act[data-tip]::after {
+    content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 6px);
+    transform: translate(-50%, 4px); white-space: nowrap; pointer-events: none;
+    background: var(--ui-ink, #1c1c1e); color: #fff; font-size: 12px; line-height: 1; padding: 6px 8px;
+    border-radius: 7px; opacity: 0; transition: opacity .12s, transform .12s; z-index: 20;
+}
+.icon-act[data-tip]:hover::after, .icon-act[data-tip]:focus-visible::after { opacity: 1; transform: translate(-50%, 0); }
+.icon-act-text[data-tip]::after { display: none; }
