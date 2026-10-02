@@ -318,11 +318,11 @@
             <div class="idbar-field">
                 <label>类型</label>
                 <select class="form-select" id="apiType" onchange="onApiTypeChange()">
-                    <option value="sql">SQL 查询</option>
-                    <option value="federated" hidden>SQL 查询</option>
-                    <option value="html">静态页面 API</option>
-                    <option value="plugin">Python API</option>
-                    <option value="sync" id="apiTypeSyncOption">数据同步 API（仅超管）</option>
+                    <option value="sql">SQL</option>
+                    <option value="federated" hidden>SQL</option>
+                    <option value="html">HTML</option>
+                    <option value="plugin">插件</option>
+                    <option value="sync" id="apiTypeSyncOption">远端同步（仅超管）</option>
                 </select>
             </div>
             <div class="idbar-field">
@@ -504,7 +504,7 @@
             <div class="form-group">
                 <label class="form-label">API Key 校验</label>
                 <div class="form-inline">
-                    <label class="switch" title="关闭后该 API 无需 API Key 即可访问（HTML 静态页面 API 通常关闭）">
+                    <label class="switch" title="关闭后该 API 无需 API Key 即可访问（HTML 类型通常关闭）">
                         <input type="checkbox" id="requireApiKey" checked onchange="this.dataset.userTouched='1'">
                         <span class="slider"></span>
                     </label>
@@ -706,7 +706,7 @@
     <!-- 数据同步配置（仅 api_type == sync 显示） -->
     <div class="card mb-16" id="syncModeCard" data-mode="sync" style="display:none;">
         <div class="card-header">
-            <h3>数据同步配置</h3>
+            <h3>远端同步配置</h3>
             <span class="text-sm text-muted">把外部推送的数据写进数据源表（写入类接口，仅超管）</span>
         </div>
         <div class="card-body">
@@ -1251,7 +1251,7 @@ function validateSyncTables() {
     const hint = document.getElementById('syncTablesHint');
     const raw = (el?.value || '').trim();
     if (!raw) {
-        hint.textContent = '未配置：数据同步 API 必须登记允许写入的表';
+        hint.textContent = '未配置：远端同步必须登记允许写入的表';
         hint.style.color = '#b91c1c';
         return false;
     }
@@ -1301,7 +1301,7 @@ async function applySyncPermission() {
         const opt = document.getElementById('apiTypeSyncOption');
         if (opt && !isSuper) {
             opt.disabled = true;
-            opt.textContent = '数据同步 API（需超级管理员）';
+            opt.textContent = '远端同步（需超级管理员）';
         }
         // 已经是 sync 类型但当前不是超管：整个配置区只读
         const cur = (document.getElementById('apiType')?.value || 'sql').toLowerCase();
@@ -1310,7 +1310,7 @@ async function applySyncPermission() {
             if (st) st.readOnly = true;
             const hint = document.getElementById('syncTablesHint');
             if (hint) {
-                hint.textContent = '只读：数据同步 API 仅超级管理员可修改';
+                hint.textContent = '只读：远端同步仅超级管理员可修改';
                 hint.style.color = '#b45309';
             }
         }
@@ -1355,7 +1355,7 @@ function onApiTypeChange() {
     hint.textContent = (type === 'html')
       ? '直接编辑 HTML/CSS/JS，调用 API 即在浏览器渲染出静态页面'
       : (type === 'plugin')
-      ? 'Python 插件 API'
+      ? 'Python 插件：在脚本里查询、加工数据后返回'
       : (type === 'sync')
       ? '数据写入接口：按 tableName 把 data 写进数据源表（仅超管可建可调用）'
       : (type === 'federated')
@@ -3736,7 +3736,7 @@ async function saveApi(e) {
         }
         const dsId = document.getElementById('apiDatasource')?.value;
         if (!dsId) {
-            Toast.error('数据同步 API 必须选择数据源（数据要写到哪个库）');
+            Toast.error('远端同步必须选择数据源（数据要写到哪个库）');
             return;
         }
     }
