@@ -3,6 +3,7 @@
 {% block title %}用户管理 - OneData Portal{% endblock %}
 
 {% block content %}
+<div class="page-fill">
 <div class="page-head">
     <h1>用户 <span class="count" id="userCount">-</span></h1>
     <div class="actions">
@@ -14,8 +15,8 @@
     </div>
 </div>
 
-<div class="card">
-    <div class="table-responsive">
+<div class="card fill-card">
+    <div class="table-responsive fill-scroll">
         <table class="data-table" id="usersTable">
             <thead>
                 <tr>
@@ -40,6 +41,7 @@
         </table>
     </div>
     <div class="pagination-wrapper" id="pagination"></div>
+</div>
 </div>
 
 <!-- 创建/编辑用户弹窗 -->
