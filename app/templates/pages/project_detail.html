@@ -230,7 +230,8 @@ async function loadApis(page) {
             }
         }
         // 锁/解锁按钮（独立于上下线）
-        const lockBtn = PROD_RO ? '' : (isLocked ? ib('unlock', 'unlock', '解锁') : ib('lock', 'lock', '锁定'));
+        // 锁图标表示当前状态 (v2.24)：锁定中显示闭合的锁，点击解锁；未锁定显示打开的锁，点击锁定
+        const lockBtn = PROD_RO ? '' : (isLocked ? ib('unlock', 'lock', '锁定中 · 点击解锁') : ib('lock', 'unlock', '未锁定 · 点击锁定'));
         // 只读：编辑按钮在 审核中/待上线/已上线/锁定 时变"查看"
         const readonly = PROD_RO || (st === 'online' || st === 'pending' || st === 'approved' || isLocked);
         const editBtn = `<a href="/admin/projects/${PROJECT_ID}/apis/${api.id}" class="icon-act" data-tip="${readonly ? '查看' : '编辑'}" aria-label="${readonly ? '查看' : '编辑'}"><img src="/static/img/icons/${readonly ? 'view' : 'edit'}.png" alt=""></a>`;
