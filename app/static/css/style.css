@@ -2096,3 +2096,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
 .pc-foot .card-actions { margin-left: auto; gap: 4px; }
 .pc-foot .ihb.ihb-sm:not(.ihb-icon) { padding: 5px 10px 5px 21px; }
 .pc-foot .ihb-sm .ihb-dot { left: 9px; }
+/* 从生产同步全部 (v2.24) */
+.pa-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 16px; }
+.pa-stats > div { background: #f6f6f7; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.pa-stats b { font-size: 22px; font-weight: 600; color: var(--ui-ink); }
+.pa-stats span { font-size: 12px; color: var(--ui-muted); }
+.pa-proj { margin-bottom: 14px; }
+.pa-proj-h { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 14px; }
+.pa-proj td { padding-top: 8px; padding-bottom: 8px; }
+@media (max-width: 760px) { .pa-stats { grid-template-columns: repeat(3, 1fr); } }
