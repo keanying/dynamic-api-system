@@ -517,10 +517,10 @@
             <div class="form-group">
                 <label class="form-label">独立 API Key</label>
                 <div class="form-inline">
-                    <input type="text" class="form-input" id="apiKey" placeholder="留空则使用项目级 Key">
+                    <input type="text" class="form-input" id="apiKey" placeholder="留空则自动使用项目 API Key" oninput="renderKeyInfo()">
                     <button type="button" class="btn btn-secondary btn-sm" onclick="generateApiKey()">生成</button>
                 </div>
-                <div class="form-hint">设置后将覆盖项目级 API Key（仅当开启「API Key 校验」时生效）</div>
+                <div class="key-effective" id="keyEffective"></div>
             </div>
         </div>
     </div>
@@ -1614,14 +1614,59 @@ async function loadDatasources() {
     if (currentVal) sel.value = currentVal;
 }
 
-// ========== 加载项目编码（如果模板未传入） ==========
+// ========== 加载项目编码 + 项目 API Key ==========
+// 独立 API Key 留空时网关使用项目 API Key：这里把项目 Key 直接展示出来（v2.23）
+let PROJECT_API_KEY = '';
 async function loadProjectCode() {
-    if (PROJECT_CODE) return;
     const data = await API.get(`/api/projects/${PROJECT_ID}`);
-    if (data && data.data && data.data.code) {
+    if (!data || !data.data) return;
+    PROJECT_API_KEY = data.data.api_key || '';
+    if (!PROJECT_CODE && data.data.code) {
         PROJECT_CODE = data.data.code;
         updateCallUrlPreview();
     }
+    renderKeyInfo();
+}
+
+function _maskKey(k) { return k.length > 14 ? `${k.slice(0, 8)}…${k.slice(-4)}` : k; }
+
+function _randomKey() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const buf = new Uint32Array(32);
+    crypto.getRandomValues(buf);
+    return 'pfk_' + Array.from(buf, n => chars[n % chars.length]).join('');
+}
+
+function copyKey(k) {
+    (navigator.clipboard ? navigator.clipboard.writeText(k) : Promise.reject())
+        .then(() => Toast.success('已复制'))
+        .catch(() => { const t = document.createElement('textarea'); t.value = k; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); Toast.success('已复制'); });
+}
+
+// 当前生效的 Key：独立 Key 优先，留空则自动关联项目 Key
+function renderKeyInfo() {
+    const el = document.getElementById('keyEffective');
+    const input = document.getElementById('apiKey');
+    if (!el || !input) return;
+    const own = input.value.trim();
+    input.placeholder = PROJECT_API_KEY ? `留空则自动使用项目 Key（${_maskKey(PROJECT_API_KEY)}）` : '留空则自动使用项目 API Key';
+    if (own) {
+        el.innerHTML = '<span class="badge badge-violet">独立 Key</span><span>本 API 使用上面填写的独立 Key，覆盖项目 Key</span>';
+    } else if (PROJECT_API_KEY) {
+        el.innerHTML = `<span class="badge badge-lime">已关联项目 Key</span><code>${escapeHtml(_maskKey(PROJECT_API_KEY))}</code>
+            <button type="button" class="btn btn-ghost btn-xs" onclick="copyKey(PROJECT_API_KEY)">复制</button>`;
+    } else {
+        el.innerHTML = `<span class="badge badge-warning">项目未设置 Key</span><span>当前调用不校验 Key，任何人都能访问</span>
+            <button type="button" class="btn btn-secondary btn-xs" onclick="generateProjectKey()">为项目生成 Key</button>`;
+    }
+}
+
+async function generateProjectKey() {
+    if (!await confirmAsync('生成项目 API Key', '为项目生成 API Key 后，本项目下开启校验的 API 调用都必须携带该 Key。确认生成？', { okText: '生成', danger: false })) return;
+    const key = _randomKey();
+    const r = await API.put(`/api/projects/${PROJECT_ID}`, { api_key: key });
+    if (r && r.status) { PROJECT_API_KEY = key; renderKeyInfo(); Toast.success('项目 API Key 已生成'); }
+    else Toast.error((r && r.msg) || '生成失败（需项目管理员或超管）');
 }
 
 // ========== 加载 API 数据 ==========
@@ -1688,7 +1733,8 @@ async function loadApiData() {
     document.getElementById('maxRows').value = api.max_rows;
     document.getElementById('rateLimitEnabled').checked = api.rate_limit_enabled;
     document.getElementById('rateLimitQps').value = api.rate_limit_qps;
-    document.getElementById('apiKey').value = api.api_key;
+    document.getElementById('apiKey').value = api.api_key || '';
+    renderKeyInfo();
     // 回填 API Key 校验开关（旧数据若没有该字段，默认 true）
     const reqKeyEl = document.getElementById('requireApiKey');
     if (reqKeyEl) {
@@ -4050,7 +4096,7 @@ async function runTest() {
     const apiTypeNow = (document.getElementById('apiType')?.value || 'sql').toLowerCase();
     if (apiTypeNow === 'html') {
         // 拼接 query string（HTML API 仅支持 GET 风格预览）
-        const apiKeyVal = document.getElementById('apiKey').value.trim();
+        const apiKeyVal = document.getElementById('apiKey').value.trim() || PROJECT_API_KEY;
         const reqKey = document.getElementById('requireApiKey');
         const needKey = reqKey ? reqKey.checked : true;
         const qs = Object.entries(testParams)
@@ -4139,17 +4185,16 @@ async function generateApiKey() {
         if (result && result.status === true) {
             document.getElementById('apiKey').value = result.data.api_key;
             Toast.success(result.msg || '独立 API Key 已生成');
+            renderKeyInfo();
         } else {
             Toast.error(result?.msg || '生成失败');
         }
     } else {
-        // 新建 API，客户端生成全新的独立 Key
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        let key = 'pfk_';
-        for (let i = 0; i < 32; i++) key += chars.charAt(Math.floor(Math.random() * chars.length));
-        document.getElementById('apiKey').value = key;
+        // 新建 API，客户端生成全新的独立 Key（加密安全随机数）
+        document.getElementById('apiKey').value = _randomKey();
         Toast.success('独立 API Key 已生成');
     }
+    renderKeyInfo();
 }
 
 // ========== 初始化 ==========
