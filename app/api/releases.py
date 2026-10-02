@@ -93,7 +93,7 @@ async def list_releases(
     status: str = Query("all", description="all/pending/approved/rejected/cancelled"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user=Depends(get_current_user),
 ):
     """管理员看全部；其他人只看自己发起的。"""
@@ -115,7 +115,7 @@ async def list_releases(
 
 
 @router.post("")
-async def create_release(req: ReleaseCreate, db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def create_release(req: ReleaseCreate, db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     """预发环境：把一个已上线的 API 冻结快照，提交到生产待审核。"""
     from app.services.api_lifecycle import STATUS_ONLINE, STATUS_LABELS as API_STATUS_LABELS
 
@@ -177,7 +177,7 @@ async def _load(db, release_id: int, lock: bool = False) -> Optional[ReleaseRequ
 
 
 @router.get("/{release_id}")
-async def get_release(release_id: int, db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def get_release(release_id: int, db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     """发布单详情。生产环境实时对比「待发布快照 vs 生产当前配置」；
     预发环境读不到生产表，已处理的单子展示发布当时的差异，待审核的提示去生产查看。"""
     rr = await _load(db, release_id)
@@ -214,7 +214,7 @@ async def get_release(release_id: int, db: AsyncSession = Depends(get_db), user=
 
 @router.post("/{release_id}/approve")
 async def approve_release(release_id: int, body: ReviewBody,
-                          db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+                          db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     if not IS_PROD:
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="发布单只能在生产环境审核")
     if not is_admin_or_above(user):
@@ -256,7 +256,7 @@ async def approve_release(release_id: int, body: ReviewBody,
 
 @router.post("/{release_id}/reject")
 async def reject_release(release_id: int, body: ReviewBody,
-                         db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+                         db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     if not IS_PROD:
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="发布单只能在生产环境审核")
     if not is_admin_or_above(user):
@@ -276,7 +276,7 @@ async def reject_release(release_id: int, body: ReviewBody,
 
 
 @router.post("/{release_id}/cancel")
-async def cancel_release(release_id: int, db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def cancel_release(release_id: int, db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     if not IS_PRE:
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="请在预发环境撤回发布单")
     rr = await _load(db, release_id, lock=True)

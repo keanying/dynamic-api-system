@@ -28,7 +28,7 @@ async def test_api_execution(
     api_id: int,
     req: TestApiRequest,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """在线测试 API 执行"""
@@ -39,6 +39,14 @@ async def test_api_execution(
     if not api_config:
         log.warning(f"在线测试失败: API 不存在 | api_id={api_id}")
         return R_fail(ErrCode.API_NOT_FOUND)
+
+    # v2.20：原来没有任何权限校验——任何登录用户都能执行任意项目的 API，
+    # 包括数据同步（写库）类 API
+    from app.core.permissions import is_project_member, is_super_admin
+    if not await is_project_member(db, _user, api_config.project_id):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="你不是该项目成员，无权测试该 API")
+    if (api_config.api_type or "sql").lower() == "sync" and not is_super_admin(_user):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="数据同步类 API 只能由超级管理员测试")
 
     log.debug(f"在线测试 API 详情 | name={api_config.name} | url_path={api_config.url_path} | method={api_config.method}")
 

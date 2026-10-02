@@ -74,6 +74,13 @@ class SecurityConfig:
     ip_whitelist: List[str] = field(default_factory=list)
     max_request_body: int = 1048576
     max_array_length: int = 100
+    # 谁可以创建/修改插件类 API (v2.20+)：super_admin（默认）/ developer（项目研发即可，旧行为）
+    plugin_editor: str = "super_admin"
+    # 可信代理 (v2.21+)：只有对端在这些地址/网段内时才采信 X-Forwarded-For。None = 本机 + 内网网段
+    trusted_proxies: Optional[List[str]] = None
+    # 创建项目 / 数据源所需的最低全局角色 (v2.21+)：user / developer（默认）/ admin / super_admin
+    project_creator_role: str = "developer"
+    datasource_creator_role: str = "developer"
 
 
 @dataclass
@@ -82,6 +89,10 @@ class QueryConfig:
     default_timeout: int = 30
     slow_query_threshold: int = 500
     slow_query_alert_threshold: int = 1000
+    # 业务数据源 MySQL 驱动 (v2.20+)：asyncmy（默认，C 扩展，快 4~6 倍）/ aiomysql
+    mysql_driver: str = "asyncmy"
+    # 单 SQL 模式下参数默认值是否对 $if$/$for$ 条件可见 (v2.21+)，与流水线模式一致
+    defaults_visible_in_template: bool = False
     ddl_keywords: List[str] = field(default_factory=lambda: [
         "DROP", "CREATE", "ALTER", "TRUNCATE",
         "INSERT", "UPDATE", "DELETE", "GRANT", "REVOKE"
@@ -104,6 +115,11 @@ class CacheConfig:
     prewarm_threshold_ratio: float = 0.2
     # 预热策略：always=每轮全量刷新(默认)，near_expiry=只在缓存快过期时刷
     prewarm_strategy: str = "always"
+    # 进程内热点缓存 (v2.20+)：命中过的结果在本进程内存里再留几秒，热门 key 不必每次访问 Redis。
+    # 不会超过该 key 在 Redis 里的剩余寿命；手动「清除缓存」后其它进程最多延迟 local_ttl 秒。0 = 关闭
+    local_ttl: float = 5
+    # 热点缓存每个进程最多占用的内存（MB，按存储大小计，大结果以压缩后大小计）
+    local_max_mb: float = 256
 
 
 @dataclass
@@ -111,6 +127,12 @@ class LogConfig:
     log_dir: str = "./logs"  # 日志目录，可配置
     retention_days: int = 3  # 日志保留天数，默认 3 天
     level: str = "DEBUG"  # 日志级别
+    file_level: str = ""  # 全量/网关日志文件级别，留空同 level (v2.19+)
+    # uvicorn 自带的访问日志（每个请求一行到 stdout）(v2.20+)。网关日志和 call_logs 表已完整记录，默认关闭
+    access_log: bool = False
+    # 网关每个请求一条 INFO 日志（网关响应 | ...）(v2.20+)。call_logs 表里有同样的明细；
+    # 追求极限吞吐时可关闭，约省 15% CPU
+    gateway_info: bool = True
     queue_size: int = 10000
 
 
@@ -120,11 +142,24 @@ class MonitorConfig:
     avg_latency_threshold: int = 2000
     single_latency_threshold: int = 5000
     collect_interval: int = 60
+    # 调用日志保留天数 (v2.19+)，> 0 时每小时自动删除更早的日志；0 = 不自动清理
+    call_log_retention_days: int = 0
 
 
 @dataclass
 class GatewayConfig:
     prefix: str = "/v1/data"
+    # 网关接口配置进程内缓存秒数 (v2.19+)，0 = 关闭（每个请求都查系统库）
+    config_cache_ttl: float = 5
+    # 响应体超过这么多字节且客户端支持 gzip 时压缩返回 (v2.20+)，0 = 不压缩
+    gzip_min_bytes: int = 8192
+
+
+@dataclass
+class ApprovalConfig:
+    # 上线审批通过条件 (v2.21+)：any = 项目管理员或会审研发任一方通过（v2.10 起的行为，默认）；
+    # both = 两方都要通过（管理员提交且未指定会审人时，管理员通过即可）
+    online_mode: str = "any"
 
 
 @dataclass
@@ -159,6 +194,7 @@ class FullConfig:
     log: LogConfig = field(default_factory=LogConfig)
     monitor: MonitorConfig = field(default_factory=MonitorConfig)
     gateway: GatewayConfig = field(default_factory=GatewayConfig)
+    approval: ApprovalConfig = field(default_factory=ApprovalConfig)
 
 
 def load_config() -> FullConfig:
@@ -237,12 +273,18 @@ def load_config() -> FullConfig:
             ip_whitelist=sec_raw.get("ip_whitelist", []),
             max_request_body=sec_raw.get("max_request_body", 1048576),
             max_array_length=sec_raw.get("max_array_length", 100),
+            plugin_editor=sec_raw.get("plugin_editor", "super_admin"),
+            trusted_proxies=sec_raw.get("trusted_proxies"),
+            project_creator_role=sec_raw.get("project_creator_role", "developer"),
+            datasource_creator_role=sec_raw.get("datasource_creator_role", "developer"),
         ),
         query=QueryConfig(
             default_max_rows=query_raw.get("default_max_rows", 10000),
             default_timeout=query_raw.get("default_timeout", 30),
             slow_query_threshold=query_raw.get("slow_query_threshold", 500),
             slow_query_alert_threshold=query_raw.get("slow_query_alert_threshold", 1000),
+            mysql_driver=_env("MYSQL_DRIVER", query_raw.get("mysql_driver", "asyncmy")),
+            defaults_visible_in_template=bool(query_raw.get("defaults_visible_in_template", False)),
             ddl_keywords=query_raw.get("ddl_keywords", [
                 "DROP", "CREATE", "ALTER", "TRUNCATE",
                 "INSERT", "UPDATE", "DELETE", "GRANT", "REVOKE"
@@ -256,11 +298,16 @@ def load_config() -> FullConfig:
             prewarm_max_params=cache_raw.get("prewarm_max_params", 200),
             prewarm_threshold_ratio=cache_raw.get("prewarm_threshold_ratio", 0.2),
             prewarm_strategy=cache_raw.get("prewarm_strategy", "always"),
+            local_ttl=float(cache_raw.get("local_ttl", 5)),
+            local_max_mb=float(cache_raw.get("local_max_mb", 256)),
         ),
         log=LogConfig(
             log_dir=_env("LOG_DIR", log_raw.get("log_dir", "./logs")),
             retention_days=log_raw.get("retention_days", 3),
             level=_env("LOG_LEVEL", log_raw.get("level", "DEBUG")),
+            file_level=_env("LOG_FILE_LEVEL", log_raw.get("file_level", "")),
+            access_log=_env("LOG_ACCESS_LOG", log_raw.get("access_log", False), bool),
+            gateway_info=_env("LOG_GATEWAY_INFO", log_raw.get("gateway_info", True), bool),
             queue_size=log_raw.get("queue_size", 10000),
         ),
         monitor=MonitorConfig(
@@ -268,9 +315,15 @@ def load_config() -> FullConfig:
             avg_latency_threshold=monitor_raw.get("avg_latency_threshold", 2000),
             single_latency_threshold=monitor_raw.get("single_latency_threshold", 5000),
             collect_interval=monitor_raw.get("collect_interval", 60),
+            call_log_retention_days=int(monitor_raw.get("call_log_retention_days", 0) or 0),
+        ),
+        approval=ApprovalConfig(
+            online_mode=(raw.get("approval", {}) or {}).get("online_mode", "any"),
         ),
         gateway=GatewayConfig(
             prefix=_env("GATEWAY_PREFIX", raw.get("gateway", {}).get("prefix", "/v1/data")),
+            config_cache_ttl=_env("GATEWAY_CONFIG_CACHE_TTL", raw.get("gateway", {}).get("config_cache_ttl", 5), float),
+            gzip_min_bytes=_env("GATEWAY_GZIP_MIN_BYTES", raw.get("gateway", {}).get("gzip_min_bytes", 8192), int),
         ),
     )
 

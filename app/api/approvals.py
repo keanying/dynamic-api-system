@@ -6,11 +6,13 @@ API 上线审批流 (v2.2+)
   研发/管理员 提交上线 (submit)         -> API: draft/offline -> pending，建审批单
   指定研发 会审 (reviewer approve/reject)
   项目管理员 审批 (manager approve/reject)
-  两票均 approved -> API -> online，审批单 approved
+  满足通过条件   -> API -> approved（待上线），审批单 approved；再由提交人点「上线」-> online
   任一 reject     -> API -> draft，  审批单 rejected
   提交人 撤回 (withdraw) -> API -> draft，审批单 withdrawn
 
-规则：项目管理员必过 + 指定的一名研发必过（双人会签）。
+规则：由 config.yaml approval.online_mode 决定（v2.21）——
+  any（默认，v2.10 起的行为）：项目管理员或会审研发任一方通过即可；
+  both：两方都要通过（管理员提交且未指定会审人时，管理员通过即可）。
 提交人不能审批自己（既不能当管理员审，也不能当会审研发）。
 """
 
@@ -69,7 +71,7 @@ async def submit_for_approval(
     req: SubmitReq,
     project_id: int = Path(...),
     api_id: int = Path(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     """提交 API 上线审批。研发/管理员可提交。"""
@@ -94,7 +96,7 @@ async def submit_for_approval(
 
     # v2.10: 上线一律生成审批单（留痕）。
     #   - 管理员/超管：可不指定会审研发（reviewer 可空），且有权自己审批通过该单。
-    #   - 普通研发/非管理员责任人：必须指定一名会审研发，走双人会签。
+    #   - 普通研发/非管理员责任人：必须指定一名会审研发（通过条件见 online_rule）。
     is_mgr = is_super_admin(user) or await is_project_manager(db, user, project_id)
 
     if not is_mgr:
@@ -148,7 +150,7 @@ async def _get_user(db, uid):
 async def _finalize_if_done(db, appr: ApiApproval, api: ApiConfig):
     """结单逻辑。
 
-    会审研发 或 管理员 任一「通过」-> 审批单 approved，API 进入「待上线」(STATUS_APPROVED)，
+    通过条件见 online_rule()（默认任一方通过）-> 审批单 approved，API 进入「待上线」(STATUS_APPROVED)，
       由发起者再点「上线」确认才真正 online。
     任一「驳回」-> 审批单 rejected，API 回草稿。
     （管理员/超管提交的上线单，可由管理员自己审批通过，见 manager_decide 放行逻辑。）
@@ -158,11 +160,24 @@ async def _finalize_if_done(db, appr: ApiApproval, api: ApiConfig):
         appr.overall_status = "rejected"
         api.status = STATUS_DRAFT
         return "rejected"
-    if appr.reviewer_decision == "approved" or appr.manager_decision == "approved":
+    if online_rule() == "both":
+        # 双方都要通过；未指定会审人（管理员提交）时管理员通过即可
+        passed = appr.manager_decision == "approved" and (
+            appr.reviewer_id is None or appr.reviewer_decision == "approved")
+    else:
+        passed = appr.reviewer_decision == "approved" or appr.manager_decision == "approved"
+    if passed:
         appr.overall_status = "approved"
         api.status = STATUS_APPROVED
         return "approved"
     return "pending"
+
+
+def online_rule() -> str:
+    """上线审批通过条件：any（任一方通过）/ both（两方都通过），见 config.yaml approval.online_mode。"""
+    from app.core.config import settings
+    mode = (getattr(settings.approval, "online_mode", "any") or "any").lower()
+    return "both" if mode == "both" else "any"
 
 
 @router.post("/approvals/{approval_id}/manager")
@@ -170,7 +185,7 @@ async def manager_decide(
     req: DecisionReq,
     project_id: int = Path(...),
     approval_id: int = Path(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     """项目管理员审批。"""
@@ -206,7 +221,7 @@ async def reviewer_decide(
     req: DecisionReq,
     project_id: int = Path(...),
     approval_id: int = Path(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     """指定会审研发审核。"""
@@ -236,7 +251,7 @@ async def reviewer_decide(
 async def withdraw_approval(
     project_id: int = Path(...),
     approval_id: int = Path(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     """提交人撤回审批，API 回到草稿。"""
@@ -261,7 +276,7 @@ async def withdraw_approval(
 async def list_approvals(
     project_id: int = Path(...),
     status: str = "pending",
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     """列出项目的审批单（默认进行中）。项目成员可见。"""

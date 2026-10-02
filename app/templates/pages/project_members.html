@@ -112,8 +112,8 @@ async function loadMembers() {
                 <button class="btn btn-secondary btn-sm" style="margin-left:8px;padding:4px 10px;" onclick="removeMember(${m.user_id}, '${(m.nickname||'').replace(/'/g,'')}')">移除</button>`;
         }
         return `<tr style="border-bottom:1px solid #f1f5f9;">
-            <td style="padding:10px 8px;">${m.nickname || ''} ${m.is_active?'':'<span style="color:#dc2626;font-size:11px;">(已禁用)</span>'}</td>
-            <td style="padding:10px 8px;color:#64748b;">${m.username}</td>
+            <td style="padding:10px 8px;">${escapeHtml(m.nickname || '')} ${m.is_active?'':'<span style="color:#dc2626;font-size:11px;">(已禁用)</span>'}</td>
+            <td style="padding:10px 8px;color:#64748b;">${escapeHtml(m.username || '')}</td>
             <td style="padding:10px 8px;"><span style="font-size:11px;padding:3px 9px;border-radius:4px;background:#ede9fe;color:#6d28d9;">${ROLE_LABEL[m.project_role]||m.project_role}</span></td>
             <td style="padding:10px 8px;">${ops}</td>
         </tr>`;
@@ -131,7 +131,7 @@ async function openAddMember() {
     const memberIds = new Set((membersResp.data.items || []).map(m => m.user_id));
     const users = (usersResp.data.items || []).filter(u => !memberIds.has(u.id));
     if (!users.length) { sel.innerHTML = '<option value="">没有可添加的用户</option>'; return; }
-    sel.innerHTML = users.map(u => `<option value="${u.id}">${u.nickname||u.username}（${u.username}）</option>`).join('');
+    sel.innerHTML = users.map(u => `<option value="${u.id}">${escapeHtml(u.nickname||u.username)}（${escapeHtml(u.username)}）</option>`).join('');
 }
 function closeAddMember() { document.getElementById('addMemberModal').style.display = 'none'; }
 

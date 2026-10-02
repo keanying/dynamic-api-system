@@ -7,7 +7,7 @@
 import json
 import time
 from fastapi import APIRouter, Request, Depends
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, func
 
@@ -17,8 +17,13 @@ from app.core.errors import ErrCode, get_err_msg
 from app.core.logging import get_logger
 from app.models.models import ApiConfig, Project, CallLog, ApiParameter
 from app.services.engine import execute_api
+from app.services import call_log_writer, gateway_cache, result_cache
+from app.core.logging import is_debug
 
 log = get_logger("gateway")
+
+# 每请求一条的网关 INFO 日志开关（log.gateway_info）
+_GATEWAY_INFO = settings.log.gateway_info
 
 # 使用配置的网关前缀
 GATEWAY_PREFIX = settings.gateway.prefix.rstrip("/")
@@ -26,14 +31,10 @@ router = APIRouter(prefix=GATEWAY_PREFIX, tags=["动态调用网关"])
 
 
 def _get_client_ip(request: Request) -> str:
-    """获取客户端 IP"""
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        ip = forwarded.split(",")[0].strip()
-        log.debug(f"从 X-Forwarded-For 获取客户端 IP: {ip}")
-        return ip
-    ip = request.client.host if request.client else "unknown"
-    return ip
+    """获取客户端 IP（只在对端是可信代理时采信 X-Forwarded-For，见 app/core/client_ip.py）"""
+    from app.core.client_ip import resolve_client_ip
+    peer = request.client.host if request.client else ""
+    return resolve_client_ip(peer, request.headers.get("X-Forwarded-For", ""))
 
 
 def _check_ip_whitelist(client_ip: str) -> bool:
@@ -58,9 +59,13 @@ async def _verify_api_key(
       - True  -> 取 api_config.api_key 或 project.api_key 作为期望值进行比对；
                  如果两者都没配置，记一条告警并放行（保持向后兼容，避免误锁库）。
     """
+    # 数据同步（写库）类 API (v2.20)：不允许关闭 Key 校验，也不允许「未配置 Key 即放行」，
+    # 否则任何人都能调用它往业务库写数据
+    is_sync = (getattr(api_config, "api_type", "sql") or "sql").lower() == "sync"
+
     # 显式关闭则直接放行
     require_flag = getattr(api_config, "require_api_key", True)
-    if require_flag is False:
+    if require_flag is False and not is_sync:
         log.debug(f"API Key 校验已关闭（require_api_key=False） | api_id={api_config.id}")
         return True
 
@@ -73,6 +78,9 @@ async def _verify_api_key(
     expected_key = api_config.api_key or project.api_key
 
     if not expected_key:
+        if is_sync:
+            log.warning(f"数据同步 API 未配置 API Key，拒绝调用 | api_id={api_config.id}")
+            return False
         log.debug(f"API Key 未配置，跳过认证 | api_id={api_config.id}")
         return True
 
@@ -100,9 +108,12 @@ async def _record_error_log(
     status_code: int = 400,
     trace_id: str = "",
 ):
-    """记录失败调用日志到 call_logs 表（用于网关拦截的请求）"""
+    """记录失败调用日志到 call_logs 表（用于网关拦截的请求）。
+
+    v2.19: 交给后台批量写入（call_log_writer），不再占用请求事务。db 参数保留仅为兼容。
+    """
     try:
-        log_entry = CallLog(
+        call_log_writer.submit(dict(
             api_id=api_id,
             project_id=project_id,
             api_name=api_name,
@@ -118,9 +129,8 @@ async def _record_error_log(
             is_slow_query=False,
             call_source="gateway",
             trace_id=trace_id or "",
-        )
-        db.add(log_entry)
-        log.debug(f"网关拦截日志已记录 | url_path={url_path} | trace_id={trace_id} | error={error_message[:100]}")
+        ))
+        log.debug(f"网关拦截日志已登记 | url_path={url_path} | trace_id={trace_id} | error={error_message[:100]}")
     except Exception as e:
         log.error(f"记录网关拦截日志失败 | error={str(e)}")
 
@@ -195,7 +205,8 @@ async def _parse_request_params(request: Request, method: str, db: AsyncSession 
                 body = await request.json()
                 if isinstance(body, dict):
                     params.update(body)
-                log.debug(f"解析 JSON Body | body={json.dumps(body, default=str, ensure_ascii=False)[:500]}")
+                if is_debug():
+                    log.debug(f"解析 JSON Body | body={json.dumps(body, default=str, ensure_ascii=False)[:500]}")
             elif "application/x-www-form-urlencoded" in content_type or "multipart/form-data" in content_type:
                 form = await request.form()
                 params.update(dict(form))
@@ -217,7 +228,7 @@ async def gateway_handler(
     project_code: str,
     path: str,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """动态网关入口 - 所有请求（含失败）都记录日志"""
     start_time = time.time()
@@ -232,7 +243,7 @@ async def gateway_handler(
     params = await _parse_request_params(request, method, db=db)
     request_params_json = json.dumps(params, default=str, ensure_ascii=False)
 
-    log.info(f"网关请求 | {method} {full_url} | client_ip={client_ip} | params={request_params_json[:500]}")
+    log.debug(f"网关请求 | {method} {full_url} | client_ip={client_ip} | params={request_params_json[:500]}")
 
     # 1. IP 白名单检查
     if not _check_ip_whitelist(client_ip):
@@ -249,9 +260,8 @@ async def gateway_handler(
         )
         return result
 
-    # 2. 查找项目（通过英文编码匹配）
-    project_result = await db.execute(select(Project).where(Project.code == project_code))
-    project = project_result.scalar_one_or_none()
+    # 2~3. 查找项目与 API（v2.19: 命中配置缓存时不查库，见 gateway_cache）
+    project, api_config, api_params, datasource = await gateway_cache.resolve(db, project_code, method, url_path)
     if not project or not project.is_active:
         elapsed = (time.time() - start_time) * 1000
         error_msg = get_err_msg(ErrCode.GW_PROJECT_DISABLED)
@@ -269,39 +279,8 @@ async def gateway_handler(
     log.debug(f"项目匹配成功 | project_code={project_code} | project_id={project.id} | project_name={project.name}")
 
     # 3. 匹配 API
-    #    兼容性说明 (v2.0.2 修正):
-    #    历史/存量 API 的生命周期 status 可能是 draft/空/NULL（例如 status 列在更早版本
-    #    已存在、未被"存量置 online"的迁移覆盖到）。若强制 status=='online'，会导致这些
-    #    本来能用的 API 全部 404。这里改为：只要 is_enabled=True 且 status 不是明确的
-    #    'offline'（用户主动下线），即可对外调用，保证历史 API 不被误伤。
-    #    真正的"下线"用 is_enabled=False 或 status='offline' 表达。
-    #
-    #    url_path 容错：部分历史记录的 url_path 存了首尾空格/尾部斜杠，精确 == 匹配会失败
-    #    （表现为 5003 未找到匹配的 API，删除重建才好）。这里用 TRIM + 去尾斜杠做兼容匹配。
-    _clean_path = url_path.rstrip("/") or "/"
-    api_result = await db.execute(
-        select(ApiConfig).where(
-            ApiConfig.project_id == project.id,
-            func.trim(ApiConfig.url_path) == url_path,
-            ApiConfig.method == method,
-            ApiConfig.is_enabled == True,
-            or_(ApiConfig.status != "offline", ApiConfig.status.is_(None)),
-        )
-    )
-    api_config = api_result.scalars().first()
-    # 兼容尾部斜杠差异：精确匹配没命中时，再用去尾斜杠比较一次
-    if api_config is None and _clean_path != url_path:
-        api_result2 = await db.execute(
-            select(ApiConfig).where(
-                ApiConfig.project_id == project.id,
-                func.trim(ApiConfig.url_path) == _clean_path,
-                ApiConfig.method == method,
-                ApiConfig.is_enabled == True,
-                or_(ApiConfig.status != "offline", ApiConfig.status.is_(None)),
-            )
-        )
-        api_config = api_result2.scalars().first()
-
+    #    兼容性说明 (v2.0.2 修正): 只要 is_enabled=True 且 status 不是明确的 'offline'
+    #    即可对外调用；url_path 容忍首尾空格/尾部斜杠。具体规则见 gateway_cache.load_api。
     if not api_config:
         elapsed = (time.time() - start_time) * 1000
         error_msg = f"未找到匹配的 API: {method} /{project_code}{url_path}"
@@ -351,7 +330,7 @@ async def gateway_handler(
             )
         return result
 
-    log.info(f"网关执行 | api_id={api_config.id} | api_name={api_config.name} | {method} {full_url} | params={request_params_json[:500]}")
+    log.debug(f"网关执行 | api_id={api_config.id} | api_name={api_config.name} | {method} {full_url} | params={request_params_json[:500]}")
 
     # 5a. HTML 类型 API：直接渲染静态页面返回，不走 SQL 引擎
     if (api_config.api_type or "sql").lower() == "html":
@@ -364,7 +343,7 @@ async def gateway_handler(
             )
             # 写一条成功日志，便于在监控里看到调用
             try:
-                db.add(CallLog(
+                call_log_writer.submit(dict(
                     api_id=api_config.id,
                     project_id=project.id,
                     api_name=api_config.name,
@@ -410,20 +389,31 @@ async def gateway_handler(
     tctx = TraceContext(trace_id=trace_id)
     _tok = set_trace(tctx)
     try:
-        result = await execute_api(api_config, params, client_ip, db, trace_id=trace_id)
+        result = await execute_api(api_config, params, client_ip, db, trace_id=trace_id,
+                                   api_params=api_params, datasource=datasource, raw_result=True)
     finally:
         reset_trace(_tok)
 
-    # 6. 记录响应日志到文件
+    # 6. 记录响应日志（每请求只打这一条 INFO）
     elapsed = (time.time() - start_time) * 1000
-    status_text = "成功" if result.get("status") else "失败"
-    response_data_preview = json.dumps(result.get("data"), default=str, ensure_ascii=False)[:500] if result.get("data") else "null"
-    log.info(f"网关响应 | api_id={api_config.id} | api_name={api_config.name} | {method} {full_url} | 状态={status_text} | elapsed={elapsed:.1f}ms | msg={result.get('msg', '')} | data_preview={response_data_preview}")
+    ok = bool(result.get("status"))
+    data = result.get("data")
+    # v2.20: 结果统一成「序列化好的 JSON 字节」（开了缓存的 API 由引擎直接给出，
+    # 命中缓存时无需解析；未开缓存的在这里序列化一次），日志预览也从这份字节里截取
+    entry = data if isinstance(data, result_cache.CachedResult) else result_cache.CachedResult.from_data(data, compress=False)
+    response_data = entry.preview(5000) if ok else ""
+    if _GATEWAY_INFO:
+        log.info(
+            f"网关响应 | api_id={api_config.id} | api_name={api_config.name} | {method} {full_url} | "
+            f"状态={'成功' if ok else '失败'} | elapsed={elapsed:.1f}ms | rows={tctx.row_count} | "
+            f"cache={'hit' if tctx.cache_hit else 'miss'} | client_ip={client_ip} | "
+            f"params={request_params_json[:500]} | msg={result.get('msg', '')} | "
+            f"data_preview={(response_data[:500] if data else 'null')}"
+        )
 
-    # 6.5 建档 + 回填：写入一条完整的调用日志（含关键节点）
+    # 6.5 建档 + 回填：登记一条完整的调用日志（含关键节点），由后台批量落库
     try:
-        ok = bool(result.get("status"))
-        log_entry = CallLog(
+        fields = dict(
             api_id=api_config.id,
             project_id=api_config.project_id,
             api_name=api_config.name,
@@ -435,13 +425,13 @@ async def gateway_handler(
             status_code=200 if ok else 500,
             error_message="" if ok else str(result.get("msg", ""))[:2000],
             client_ip=client_ip,
-            response_data=json.dumps(result.get("data"), default=str, ensure_ascii=False)[:5000] if ok else "",
+            response_data=response_data,
             is_slow_query=elapsed >= settings.query.slow_query_threshold,
             call_source="gateway",
             trace_id=trace_id,
         )
-        tctx.apply_to_log(log_entry)   # 回填渲染SQL/执行SQL/分阶段耗时/行数/缓存命中/错误堆栈
-        db.add(log_entry)
+        fields.update(tctx.as_log_fields())   # 渲染SQL/执行SQL/分阶段耗时/行数/缓存命中/错误堆栈
+        call_log_writer.submit(fields)
     except Exception as log_err:
         log.warning(f"记录调用日志失败 | trace_id={trace_id} | error={str(log_err)}")
 
@@ -452,4 +442,15 @@ async def gateway_handler(
         result["code"] = ErrCode.GW_SQL_EXECUTE_FAILED.value
     result["trace_id"] = trace_id
 
-    return result
+    # 拼装响应：data 部分直接用序列化好的字节；客户端支持 gzip 且数据较大时，
+    # 用预压缩块拼出 gzip 流（大结果传输量通常降到 1/10 左右）
+    gzip_min = int(getattr(settings.gateway, "gzip_min_bytes", 0) or 0)
+    gzip_ok = (
+        gzip_min > 0 and entry.length >= gzip_min
+        and "gzip" in request.headers.get("accept-encoding", "").lower()
+    )
+    body, gz = result_cache.build_response_body(result, entry, gzip_ok)
+    headers = {"Vary": "Accept-Encoding"}
+    if gz:
+        headers["Content-Encoding"] = "gzip"
+    return Response(content=body, media_type="application/json", headers=headers)

@@ -54,7 +54,7 @@ def _to_out(v: ProjectVariable) -> dict:
 @router.get("")
 async def list_variables(
     project_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """列出项目的所有环境变量（带当前求值预览）。"""
@@ -74,13 +74,13 @@ async def list_variables(
 async def create_variable(
     project_id: int,
     req: VariableIn,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """新增环境变量。"""
-    from app.core.permissions import is_project_member
-    if not await is_project_member(db, _user, project_id):
-        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="你不是该项目成员")
+    from app.core.permissions import can_edit_project_resources
+    if not await can_edit_project_resources(db, _user, project_id):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="只有项目管理员/研发可修改项目变量")
 
     name = (req.name or "").strip()
     if not name:
@@ -119,13 +119,13 @@ async def update_variable(
     project_id: int,
     var_id: int,
     req: VariableIn,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """修改环境变量。"""
-    from app.core.permissions import is_project_member
-    if not await is_project_member(db, _user, project_id):
-        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="你不是该项目成员")
+    from app.core.permissions import can_edit_project_resources
+    if not await can_edit_project_resources(db, _user, project_id):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="只有项目管理员/研发可修改项目变量")
 
     r = await db.execute(
         select(ProjectVariable).where(
@@ -168,13 +168,13 @@ async def update_variable(
 async def delete_variable(
     project_id: int,
     var_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """删除环境变量。"""
-    from app.core.permissions import is_project_member
-    if not await is_project_member(db, _user, project_id):
-        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="你不是该项目成员")
+    from app.core.permissions import can_edit_project_resources
+    if not await can_edit_project_resources(db, _user, project_id):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="只有项目管理员/研发可修改项目变量")
 
     r = await db.execute(
         select(ProjectVariable).where(
@@ -200,7 +200,7 @@ class PreviewIn(BaseModel):
 async def preview_template(
     project_id: int,
     req: PreviewIn,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """预览预热参数模板的求值结果 —— 让用户保存前就能看到实际会用什么参数查询。"""

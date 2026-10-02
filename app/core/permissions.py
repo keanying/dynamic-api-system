@@ -42,6 +42,15 @@ def is_super_admin(user: User) -> bool:
     return getattr(user, "global_role", "user") == ROLE_SUPER_ADMIN
 
 
+_ROLE_RANK = {ROLE_USER: 0, ROLE_DEVELOPER: 1, ROLE_ADMIN: 2, ROLE_SUPER_ADMIN: 3}
+
+
+def role_at_least(user: User, role: str) -> bool:
+    """全局角色是否不低于 role（user < developer < admin < super_admin）。"""
+    mine = _ROLE_RANK.get(getattr(user, "global_role", ROLE_USER), 0)
+    return mine >= _ROLE_RANK.get(role or ROLE_USER, 0)
+
+
 def is_admin_or_above(user: User) -> bool:
     """管理员或超级管理员（拥有用户管理权限）。"""
     return getattr(user, "global_role", "user") in (ROLE_SUPER_ADMIN, ROLE_ADMIN)
@@ -101,7 +110,7 @@ def require_project_member():
     async def _dep(
         project_id: int = Path(...),
         user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db),
+        db: AsyncSession = Depends(get_db, scope="function"),
     ) -> User:
         if not await is_project_member(db, user, project_id):
             _forbid("你不是该项目成员，无权访问")
@@ -116,7 +125,7 @@ def require_project_editor():
     async def _dep(
         project_id: int = Path(...),
         user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db),
+        db: AsyncSession = Depends(get_db, scope="function"),
     ) -> User:
         if not await can_edit_project_resources(db, user, project_id):
             _forbid("无权编辑该项目资源")
@@ -131,7 +140,7 @@ def require_project_manager():
     async def _dep(
         project_id: int = Path(...),
         user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db),
+        db: AsyncSession = Depends(get_db, scope="function"),
     ) -> User:
         if not await is_project_manager(db, user, project_id):
             _forbid("需要项目管理员权限")

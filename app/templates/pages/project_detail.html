@@ -31,7 +31,7 @@
         <div class="modal-header"><h3>提交上线审批</h3><button class="btn-icon" onclick="closeSubmitModal()">&times;</button></div>
         <div class="modal-body">
             <p class="text-sm text-muted" style="margin-bottom:12px;">
-                上线需 <b>项目管理员</b> 和 <b>一名会审研发</b> 双双通过。请选择会审研发（不能是你自己）。
+                {% if approval_rule == 'both' %}上线需 <b>项目管理员</b> 和 <b>会审研发</b> 双方都审核通过{% else %}上线需 <b>项目管理员</b> 或 <b>会审研发</b> 任一方审核通过{% endif %}，之后由你点「上线」正式生效。请选择会审研发（不能是你自己）。
             </p>
             <input type="hidden" id="submitApiId">
             <div class="form-group">
@@ -485,7 +485,7 @@ async function openTransferDialog(apiId, apiName) {
         const r = await API.get('/api/users');
         users = (r && r.data && (r.data.items || r.data.list)) || (Array.isArray(r && r.data) ? r.data : []);
     } catch (e) {}
-    const opts = users.map(u => `<option value="${u.id}">${u.nickname || u.username} (${u.username})</option>`).join('');
+    const opts = users.map(u => `<option value="${u.id}">${escapeHtml(u.nickname || u.username)} (${escapeHtml(u.username)})</option>`).join('');
     const html = `
       <div id="__transferModal" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:9999;">
         <div style="background:#fff;border-radius:8px;padding:20px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
@@ -562,7 +562,7 @@ async function openSubmitModal(apiId, apiName) {
         return;
     }
     sel.innerHTML = candidates.map(m =>
-        `<option value="${m.user_id}">${m.nickname}（${m.project_role_label}）</option>`).join('');
+        `<option value="${m.user_id}">${escapeHtml(m.nickname || '')}（${escapeHtml(m.project_role_label || '')}）</option>`).join('');
 }
 function closeSubmitModal() { document.getElementById('submitModal').style.display = 'none'; }
 

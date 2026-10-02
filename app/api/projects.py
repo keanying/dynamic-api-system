@@ -24,7 +24,7 @@ async def list_projects(
     keyword: str = Query("", description="搜索关键字"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """获取项目列表（非超管仅返回自己所属的项目）"""
@@ -55,13 +55,25 @@ async def list_projects(
     result = await db.execute(query)
     projects = result.scalars().all()
 
+    # v2.19: API 数 / 调用数按整页批量分组统计（原来每个项目各查 2 次）
+    pids = [p.id for p in projects]
+    api_count_map, call_count_map = {}, {}
+    if pids:
+        r = await db.execute(
+            select(ApiConfig.project_id, func.count()).where(ApiConfig.project_id.in_(pids))
+            .group_by(ApiConfig.project_id)
+        )
+        api_count_map = dict(r.all())
+        r = await db.execute(
+            select(CallLog.project_id, func.count()).where(CallLog.project_id.in_(pids))
+            .group_by(CallLog.project_id)
+        )
+        call_count_map = dict(r.all())
+
     items = []
     for p in projects:
-        api_count_q = select(func.count()).where(ApiConfig.project_id == p.id)
-        api_count = (await db.execute(api_count_q)).scalar() or 0
-
-        call_count_q = select(func.count()).where(CallLog.project_id == p.id)
-        total_calls = (await db.execute(call_count_q)).scalar() or 0
+        api_count = api_count_map.get(p.id, 0)
+        total_calls = call_count_map.get(p.id, 0)
 
         items.append(ProjectOut(
             id=p.id, code=p.code, name=p.name, description=p.description,
@@ -82,7 +94,7 @@ async def list_projects(
 @router.get("/{project_id}")
 async def get_project(
     project_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """获取项目详情（非成员无权访问）"""
@@ -103,13 +115,12 @@ async def get_project(
         select(func.count()).where(ApiConfig.project_id == project_id)
     )).scalar() or 0
 
-    total_calls = (await db.execute(
-        select(func.count()).where(CallLog.project_id == project_id)
-    )).scalar() or 0
-
-    avg_time = (await db.execute(
-        select(func.avg(CallLog.response_time_ms)).where(CallLog.project_id == project_id)
-    )).scalar() or 0
+    # v2.19: 调用数和平均耗时一次扫描算出（原来两次）
+    total_calls, avg_time = (await db.execute(
+        select(func.count(), func.avg(CallLog.response_time_ms)).where(CallLog.project_id == project_id)
+    )).one()
+    total_calls = total_calls or 0
+    avg_time = avg_time or 0
 
     log.debug(f"项目详情查询完成 | project_id={project_id} | code={project.code} | api_count={api_count}")
     return R_ok(data={
@@ -126,11 +137,19 @@ async def get_project(
 @router.post("")
 async def create_project(
     req: ProjectCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """创建项目"""
     log.info(f"创建项目请求 | code={req.code} | name={req.name}")
+
+    # v2.21：原来任何登录用户都能创建项目（创建项目即自动成为项目管理员）
+    from app.core.config import settings as _settings
+    from app.core.permissions import role_at_least
+    _need = getattr(_settings.security, "project_creator_role", "developer") or "developer"
+    if not role_at_least(_user, _need):
+        _label = {"user": "普通用户", "developer": "研发", "admin": "管理员", "super_admin": "超级管理员"}.get(_need, _need)
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=f"创建项目需要「{_label}」及以上角色")
 
     # 检查编码唯一性
     existing = await db.execute(select(Project).where(Project.code == req.code))
@@ -156,7 +175,7 @@ async def create_project(
 async def update_project(
     project_id: int,
     req: ProjectUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """更新项目（超管或本项目管理员可改）"""
@@ -192,7 +211,7 @@ async def update_project(
 @router.delete("/{project_id}")
 async def delete_project(
     project_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """删除项目。
@@ -247,7 +266,7 @@ async def delete_project(
 @router.get("/{project_id}/export")
 async def export_project(
     project_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """导出项目配置为 JSON（非成员无权）"""
@@ -268,6 +287,12 @@ async def export_project(
     )
     apis = apis_result.scalars().all()
 
+    from app.models.models import DataSource
+    ds_ids = list({x.datasource_id for x in apis if x.datasource_id})
+    ds_names = {}
+    if ds_ids:
+        dr = await db.execute(select(DataSource.id, DataSource.name).where(DataSource.id.in_(ds_ids)))
+        ds_names = dict(dr.all())
     export_data = {
         "project": {
             "code": project.code,
@@ -297,6 +322,20 @@ async def export_project(
             "rate_limit_enabled": api.rate_limit_enabled,
             "rate_limit_qps": api.rate_limit_qps,
             "max_rows": api.max_rows,
+            # v2.20：补齐原来漏掉的字段——流水线 / HTML 页面 / 插件类 API 原来导出后内容全丢
+            "api_type": api.api_type or "sql",
+            "datasource_name": ds_names.get(api.datasource_id, ""),
+            "pipeline_steps": api.pipeline_steps or "",
+            "html_content": api.html_content or "",
+            "css_content": api.css_content or "",
+            "js_content": api.js_content or "",
+            "plugin_code": getattr(api, "plugin_code", "") or "",
+            "require_api_key": bool(api.require_api_key) if api.require_api_key is not None else True,
+            "cache_prewarm": bool(getattr(api, "cache_prewarm", False)),
+            "prewarm_param_overrides": getattr(api, "prewarm_param_overrides", "") or "",
+            "prewarm_stop_daily": bool(getattr(api, "prewarm_stop_daily", False)),
+            "sync_tables": getattr(api, "sync_tables", "") or "",
+            "status": getattr(api, "status", "draft") or "draft",
             "parameters": [
                 {
                     "name": p.name,
@@ -305,6 +344,7 @@ async def export_project(
                     "default_value": p.default_value,
                     "description": p.description,
                     "sort_order": p.sort_order,
+                    "item_schema": getattr(p, "item_schema", "") or "",
                 }
                 for p in params
             ],
@@ -326,7 +366,7 @@ class _DeletionDecisionReq(_BaseModel):
 @router.get("/deletion-requests/list")
 async def list_deletion_requests(
     status: str = "pending",
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """列出删除项目申请。
@@ -366,7 +406,7 @@ async def list_deletion_requests(
 async def decide_deletion_request(
     request_id: int,
     req: _DeletionDecisionReq,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """审批删除项目申请。审批人：超管 或 该项目的另一名管理员（不能是发起人）。"""
@@ -414,7 +454,7 @@ async def decide_deletion_request(
 @router.post("/deletion-requests/{request_id}/cancel")
 async def cancel_deletion_request(
     request_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """发起人撤销自己的删除申请。"""

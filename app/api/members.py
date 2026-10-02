@@ -43,7 +43,7 @@ class UpdateRoleReq(BaseModel):
 @router.get("")
 async def list_members(
     project_id: int = Path(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     """列出项目成员。项目成员均可查看。"""
@@ -79,7 +79,7 @@ async def list_members(
 async def add_member(
     req: AddMemberReq,
     project_id: int = Path(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     """添加成员到项目。仅项目管理员/超管。"""
@@ -118,7 +118,7 @@ async def update_member_role(
     member_user_id: int,
     req: UpdateRoleReq,
     project_id: int = Path(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     """调整成员的项目角色。仅项目管理员/超管。"""
@@ -157,7 +157,7 @@ async def update_member_role(
 async def remove_member(
     member_user_id: int,
     project_id: int = Path(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     """移除项目成员。仅项目管理员/超管。"""

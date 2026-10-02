@@ -103,7 +103,11 @@ def generate_api_key() -> str:
 def encrypt_value(value: str) -> str:
     """简单加密（用于数据源密码等敏感信息存储）"""
     key = settings.security.encryption_key.encode()[:32].ljust(32, b'\0')
-    encrypted = bytes(a ^ b for a, b in zip(value.encode(), (key * ((len(value) // 32) + 1))[:len(value)]))
+    # v2.20: 密钥流长度按「字节数」而不是「字符数」算。原来含中文等多字节字符的密码
+    # 字节数 > 字符数，zip 按短的截断，密文被截掉一截，保存后再也解不出正确密码。
+    # 纯 ASCII 密码两者相等，加密结果与原来完全一致，已存数据不受影响。
+    raw = value.encode()
+    encrypted = bytes(a ^ b for a, b in zip(raw, (key * ((len(raw) // 32) + 1))[:len(raw)]))
     log.debug("敏感值加密完成")
     return base64.urlsafe_b64encode(encrypted).decode()
 

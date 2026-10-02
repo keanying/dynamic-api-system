@@ -5,6 +5,8 @@ server:
   host: "0.0.0.0"
   port: 3000
   debug: false
+  # 进程数：Python 单进程只能用满一个 CPU 核，建议设为服务器 CPU 核数（需开启 Redis，
+  # 缓存才能在进程间共享）。注意：内存限流按进程计数，N 个进程时实际上限约为 N 倍。
   workers: 1
   secret_key: "pfk-O7OSzAYadCPEmOkjNFG1JMlpfnKcL3UH"
 
@@ -60,12 +62,28 @@ security:
   max_request_body: 1048576  # 1MB
   # 参数数组最大长度
   max_array_length: 100
+  # 谁可以创建/修改插件类 API (v2.20+)。插件代码在服务进程内直接执行（可读本配置文件、执行系统命令），
+  # 默认仅超级管理员；设为 developer 恢复旧行为（项目研发即可编辑）
+  plugin_editor: "super_admin"
+  # 只有对端在这些地址/网段内时才采信 X-Forwarded-For 请求头 (v2.21+)。
+  # 不配置 = 本机 + 内网网段；服务前面的代理/负载均衡若在公网，需把它的地址加进来
+  # trusted_proxies: ["127.0.0.1/32", "10.0.0.0/8"]
+  # 创建项目 / 数据源所需的最低全局角色 (v2.21+)：user / developer / admin / super_admin
+  # 原来任何登录用户都能创建；设为 user 恢复旧行为
+  project_creator_role: "developer"
+  datasource_creator_role: "developer"
 
 query:
   # 默认最大返回行数
   default_max_rows: 10000
   # 默认超时时间 (秒)
   default_timeout: 30
+  # 业务数据源 MySQL 驱动 (v2.20+)：asyncmy（默认，C 扩展，解析结果集快 4~6 倍）/ aiomysql
+  mysql_driver: "asyncmy"
+  # 单 SQL 模式下参数默认值是否对 $if$/$for$ 条件可见 (v2.21+)，开启后与流水线模式一致。
+  # 开启会改变「配置了默认值、且在条件里判断该参数」的 API 的结果，
+  # 先运行 python scripts/check_param_defaults.py 查看受影响的 API
+  defaults_visible_in_template: false
   # 慢查询阈值 (毫秒)
   slow_query_threshold: 500
   # 慢查询告警阈值 (毫秒)
@@ -104,6 +122,11 @@ cache:
   #               自身 TTL 影响。
   #   near_expiry 只在缓存快过期时才刷，省数据库资源，但两次刷新之间缓存是旧的。
   prewarm_strategy: "always"
+  # 进程内热点缓存 (v2.20+)：命中过的结果在本进程内存里再留几秒，热门 key 不必每次访问 Redis。
+  # 不超过该 key 在 Redis 里的剩余寿命；手动「清除缓存」后其它进程最多延迟这么多秒。0 = 关闭
+  local_ttl: 5
+  # 热点缓存每个进程最多占用的内存（MB，大结果按压缩后大小计）
+  local_max_mb: 256
 
 log:
   # 日志目录
@@ -112,6 +135,14 @@ log:
   retention_days: 3
   # 日志级别
   level: "INFO"
+  # 全量日志文件 / 网关日志文件的级别，留空同 level (v2.19+)。
+  # 之前固定为 DEBUG，每个请求写二十来条，排查问题时可临时改成 "DEBUG"
+  file_level: ""
+  # uvicorn 访问日志（每请求一行，与网关日志、call_logs 重复）(v2.20+)，默认关闭
+  access_log: false
+  # 网关每请求一条 INFO 日志 (v2.20+)。call_logs 表里有同样明细；
+  # 高并发追求极限吞吐时可设为 false（实测单行查询吞吐 +45%）
+  gateway_info: true
   # 异步日志队列大小
   queue_size: 10000
 
@@ -124,7 +155,20 @@ monitor:
   single_latency_threshold: 5000
   # 指标采集间隔 (秒)
   collect_interval: 60
+  # 调用日志保留天数 (v2.19+)：> 0 时每小时自动删除更早的日志（分批删除，不长时间锁表）；
+  # 0 = 不自动清理。call_logs 每次调用一行、单行可达十几 KB，不清理会无限增长
+  call_log_retention_days: 0
+approval:
+  # 上线审批通过条件 (v2.21+)：any = 项目管理员或会审研发任一方通过（当前行为）；both = 双方都要通过
+  online_mode: "any"
+
 gateway:
   # API 调用地址前缀 (默认 /v1/data)
   prefix: "/v1/data"
+  # 接口配置进程内缓存秒数 (v2.19+)：网关不必每个请求都查 项目/API/参数/数据源。
+  # 本进程内修改配置立即生效；多 worker 时其它进程最多延迟这么多秒。0 = 关闭
+  config_cache_ttl: 5
+  # 响应体超过这么多字节、且客户端请求头带 Accept-Encoding: gzip 时压缩返回 (v2.20+)。
+  # 缓存的结果是预压缩好的，命中时几乎没有额外开销；JSON 通常压到 1/10 左右。0 = 不压缩
+  gzip_min_bytes: 8192
 

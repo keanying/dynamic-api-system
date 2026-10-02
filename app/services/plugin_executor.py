@@ -132,6 +132,19 @@ def _exec_plugin_sync(code: str, params: dict, ctx: PluginContext, lib_code: str
     return result
 
 
+_POOL_MAX_WORKERS = 32
+_pool: Optional[concurrent.futures.ThreadPoolExecutor] = None
+
+
+def _get_pool() -> concurrent.futures.ThreadPoolExecutor:
+    """插件共享线程池：最多同时运行 _POOL_MAX_WORKERS 个插件，超出的排队。"""
+    global _pool
+    if _pool is None:
+        _pool = concurrent.futures.ThreadPoolExecutor(
+            max_workers=_POOL_MAX_WORKERS, thread_name_prefix="plugin")
+    return _pool
+
+
 async def execute_plugin(
     code: str,
     params: dict,
@@ -155,17 +168,21 @@ async def execute_plugin(
     ctx = PluginContext(params, query_sync, api_id=api_id)
 
     loop = asyncio.get_event_loop()
-    log.info(f"开始执行插件 | api_id={api_id} | timeout={timeout}s | 引用库={'有' if lib_code else '无'}")
+    log.debug(f"开始执行插件 | api_id={api_id} | timeout={timeout}s | 引用库={'有' if lib_code else '无'}")
 
     def _run():
         return _exec_plugin_sync(code, params, ctx, lib_code=lib_code)
 
+    # v2.19: 用进程级共享线程池。原来每次调用 `with ThreadPoolExecutor(...)`，
+    # 超时后退出 with 块会同步 shutdown(wait=True) —— 在事件循环线程里一直等到
+    # 插件线程跑完，期间整个服务的所有请求都卡住；若插件正好在 ctx.query 里等
+    # 事件循环执行查询，两边互等，要到查询自身超时才能解开。
+    # 现在超时直接返回错误，超时的插件线程在后台自然结束（Python 线程无法强杀）。
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            future = loop.run_in_executor(pool, _run)
-            result = await asyncio.wait_for(future, timeout=timeout)
+        future = loop.run_in_executor(_get_pool(), _run)
+        result = await asyncio.wait_for(future, timeout=timeout)
     except asyncio.TimeoutError:
         raise PluginError(f"插件执行超时（超过 {timeout}s）")
 
-    log.info(f"插件执行完成 | api_id={api_id}")
+    log.debug(f"插件执行完成 | api_id={api_id}")
     return result

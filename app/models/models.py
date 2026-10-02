@@ -29,6 +29,8 @@ class User(Base):
     # 全局角色 (v2.0+): super_admin（超级管理员，全平台最高权限）/ user（普通用户，默认）
     # 普通用户注册后无任何项目权限，需被项目管理员加入项目并赋予项目角色后才能操作。
     global_role = Column(String(16), nullable=False, default="user", index=True)
+    # 早于该时间（unix 秒）签发的登录凭证一律作废 (v2.21+)：修改密码时更新，旧 token 立即失效
+    token_epoch = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=_cst_now)
     updated_at = Column(DateTime, default=_cst_now, onupdate=_cst_now)
 
@@ -87,6 +89,8 @@ class DataSource(Base):
     status = Column(String(32), default="unknown")  # unknown / connected / error
     last_test_at = Column(DateTime, nullable=True)
     created_by = Column(Integer, nullable=True, index=True)   # 创建人 user_id (v2.7+)
+    # 可用项目范围 (v2.21+)：逗号分隔的项目编码，空 = 所有项目可用（兼容旧数据）
+    project_scope = Column(Text, default="")
     created_at = Column(DateTime, default=_cst_now)
     updated_at = Column(DateTime, default=_cst_now, onupdate=_cst_now)
 
@@ -171,7 +175,9 @@ class ApiConfig(Base):
     project = relationship("Project", back_populates="apis")
     datasource = relationship("DataSource", back_populates="apis")
     parameters = relationship("ApiParameter", back_populates="api_config", cascade="all, delete-orphan")
-    logs = relationship("CallLog", back_populates="api_config")  # 不级联删除，保留历史日志
+    # 不级联删除，保留历史日志。passive_deletes (v2.19)：删除 API 时交给数据库外键
+    # ON DELETE SET NULL 处理；否则 ORM 会先把该 API 的全部调用日志加载进内存再逐条置空
+    logs = relationship("CallLog", back_populates="api_config", passive_deletes=True)
 
 
 class ProjectVariable(Base):
@@ -268,6 +274,15 @@ class CallLog(Base):
 
     # 关联
     api_config = relationship("ApiConfig", back_populates="logs")
+
+    # 统计用覆盖索引 (v2.19)：API 列表/项目详情的调用数与平均耗时、仪表盘与今日分布、
+    # 按 API 筛选的日志列表，都只需读索引，不用回表读整行（每行带几 KB 的 SQL/响应文本）。
+    # 注意：create_all 只对新建的表生效，已有的表请执行 migrations/v2.19_call_logs_indexes.sql
+    __table_args__ = (
+        Index(_t("ix_call_logs_api_created_rt"), "api_id", "created_at", "response_time_ms"),
+        Index(_t("ix_call_logs_project_created_rt"), "project_id", "created_at", "response_time_ms"),
+        Index(_t("ix_call_logs_created_status_rt"), "created_at", "response_status", "response_time_ms"),
+    )
 
 
 class ApiApproval(Base):

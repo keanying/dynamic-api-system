@@ -47,14 +47,14 @@ def _dict(l: PluginLibrary):
 
 
 @router.get("")
-async def list_libraries(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
+async def list_libraries(db: AsyncSession = Depends(get_db, scope="function"), _user: User = Depends(get_current_user)):
     r = await db.execute(select(PluginLibrary).order_by(PluginLibrary.name))
     items = [_dict(l) for l in r.scalars().all()]
     return R_ok(data={"items": items, "total": len(items)})
 
 
 @router.get("/{lib_id}")
-async def get_library(lib_id: int, db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
+async def get_library(lib_id: int, db: AsyncSession = Depends(get_db, scope="function"), _user: User = Depends(get_current_user)):
     l = (await db.execute(select(PluginLibrary).where(PluginLibrary.id == lib_id))).scalar_one_or_none()
     if not l:
         return R_fail(ErrCode.SYSTEM_PARAM_INVALID, msg="插件库不存在")
@@ -62,7 +62,7 @@ async def get_library(lib_id: int, db: AsyncSession = Depends(get_db), _user: Us
 
 
 @router.post("")
-async def create_library(req: LibCreate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+async def create_library(req: LibCreate, db: AsyncSession = Depends(get_db, scope="function"), user: User = Depends(get_current_user)):
     if not is_super_admin(user):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="仅超级管理员可管理插件库")
     if not _NAME_RE.match(req.name or ""):
@@ -88,7 +88,7 @@ async def create_library(req: LibCreate, db: AsyncSession = Depends(get_db), use
 
 
 @router.put("/{lib_id}")
-async def update_library(lib_id: int, req: LibUpdate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+async def update_library(lib_id: int, req: LibUpdate, db: AsyncSession = Depends(get_db, scope="function"), user: User = Depends(get_current_user)):
     if not is_super_admin(user):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="仅超级管理员可管理插件库")
     l = (await db.execute(select(PluginLibrary).where(PluginLibrary.id == lib_id))).scalar_one_or_none()
@@ -109,7 +109,7 @@ async def update_library(lib_id: int, req: LibUpdate, db: AsyncSession = Depends
 
 
 @router.delete("/{lib_id}")
-async def delete_library(lib_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+async def delete_library(lib_id: int, db: AsyncSession = Depends(get_db, scope="function"), user: User = Depends(get_current_user)):
     if not is_super_admin(user):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="仅超级管理员可管理插件库")
     l = (await db.execute(select(PluginLibrary).where(PluginLibrary.id == lib_id))).scalar_one_or_none()

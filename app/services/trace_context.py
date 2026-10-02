@@ -86,6 +86,18 @@ class TraceContext:
         if stack:
             self.error_stack = str(stack)[:4000]
 
+    def as_log_fields(self) -> dict:
+        """收集到的节点，按 CallLog 列名返回（供批量写入用）。"""
+        return {
+            "rendered_sql": self.rendered_sql,
+            "executed_sql": self.executed_sql,
+            "render_time_ms": self.render_time_ms,
+            "query_time_ms": self.query_time_ms,
+            "row_count": self.row_count,
+            "cache_hit": self.cache_hit,
+            "error_stack": self.error_stack,
+        }
+
     def apply_to_log(self, log_entry) -> None:
         """把收集到的节点写入 CallLog 实例（字段不存在则跳过，兼容旧库）。"""
         for field in ("rendered_sql", "executed_sql", "render_time_ms",

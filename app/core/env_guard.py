@@ -14,8 +14,8 @@
   - 下面白名单里的「只读性质」的 POST（登录、在线测试、SQL 预览、连接测试等）
 """
 import re
+from typing import Optional
 
-from fastapi import Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
@@ -55,15 +55,16 @@ def _needs_guard(method: str, path: str) -> bool:
     return not any(p.match(path) for p in _ALLOW_PATTERNS)
 
 
-async def prod_write_guard(request: Request, call_next):
-    if not _needs_guard(request.method.upper(), request.url.path):
-        return await call_next(request)
+async def _check_admin(scope) -> Optional[JSONResponse]:
+    """生产环境写请求的身份检查；放行返回 None，否则返回拒绝响应。"""
+    from starlette.requests import Request
 
     from app.core.database import async_session
     from app.core.permissions import is_admin_or_above
     from app.core.security import decode_jwt_token
     from app.models.models import User
 
+    request = Request(scope)
     token = request.cookies.get("token") or request.headers.get("Authorization", "").replace("Bearer ", "")
     payload = decode_jwt_token(token) if token else None
     if not payload:
@@ -73,9 +74,40 @@ async def prod_write_guard(request: Request, call_next):
     async with async_session() as db:
         user = (await db.execute(select(User).where(User.id == payload.get("user_id")))).scalar_one_or_none()
 
-    if not user or not user.is_active:
+    from app.api.auth import token_revoked
+    if not user or not user.is_active or token_revoked(payload, user):
         return _deny(401, ErrCode.AUTH_TOKEN_INVALID, "未登录或登录已过期")
     if not is_admin_or_above(user):
         log.warning(f"生产写保护拦截 | user={user.username} | {request.method} {request.url.path}")
         return _deny(403, ErrCode.AUTH_PERMISSION_DENIED, READONLY_MSG)
-    return await call_next(request)
+    return None
+
+
+class AdminWriteMiddleware:
+    """管理后台写请求的统一入口（纯 ASGI 中间件，比 @app.middleware 开销小）：
+      1. 生产环境写保护（见模块说明）
+      2. 写请求处理完后清空网关接口配置缓存，改完配置立即生效
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        method = scope["method"].upper()
+        path = scope["path"]
+        if method not in _WRITE_METHODS or not path.startswith("/api/"):
+            return await self.app(scope, receive, send)
+
+        if _needs_guard(method, path):
+            denied = await _check_admin(scope)
+            if denied is not None:
+                return await denied(scope, receive, send)
+        from app.services import gateway_cache
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            # 写操作提交后清一次；处理期间并发的网关请求可能按旧配置回填缓存，
+            # 那种情况最多持续 config_cache_ttl 秒
+            gateway_cache.invalidate()

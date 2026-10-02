@@ -142,6 +142,7 @@ class DataSourceCreate(BaseModel):
     database_name: str = ""
     pool_size: int = 10
     extra_config: str = "{}"
+    project_scope: str = ""   # 可用项目编码，逗号分隔，空 = 全部项目
 
 
 class DataSourceUpdate(BaseModel):
@@ -154,6 +155,7 @@ class DataSourceUpdate(BaseModel):
     database_name: Optional[str] = None
     pool_size: Optional[int] = None
     extra_config: Optional[str] = None
+    project_scope: Optional[str] = None
 
 
 class DataSourceOut(NullSafeModel):
@@ -171,6 +173,7 @@ class DataSourceOut(NullSafeModel):
     api_count: int = 0
     created_by: Optional[int] = None
     created_by_name: str = ""
+    project_scope: str = ""
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

@@ -33,7 +33,14 @@ class Base(DeclarativeBase):
 
 
 async def get_db():
-    """FastAPI 依赖注入：获取数据库会话"""
+    """FastAPI 依赖注入：获取数据库会话
+
+    v2.20: 所有地方都以 Depends(get_db, scope="function") 使用。FastAPI 默认（request 作用域）
+    会在「响应发送完之后」才执行这里 yield 之后的 commit：客户端先收到成功，事务才提交——
+    紧接着的查询可能读不到刚写的数据（前端多处用 setTimeout 延迟刷新来绕开），
+    更严重的是 commit 失败时客户端已经收到了「成功」。function 作用域在响应发出前提交，
+    提交失败会正常返回错误。
+    """
     async with async_session() as session:
         try:
             yield session
@@ -478,6 +485,28 @@ async def _run_migration(conn, table_suffix: str = ""):
     except Exception as e:
         log.warning(f"迁移 src_dop_datasources.created_by 失败 | error={str(e)}")
 
+    # ---- src_dop_datasources: 补 project_scope (v2.21+，可用项目范围，空 = 全部项目) ----
+    try:
+        cols = await _get_existing_columns(conn, "src_dop_datasources" + table_suffix, is_mysql)
+        if cols and "project_scope" not in cols:
+            await conn.execute(text(
+                f"ALTER TABLE `src_dop_datasources{table_suffix}` ADD COLUMN `project_scope` TEXT NULL"
+            ))
+            log.info("迁移: src_dop_datasources 添加 project_scope 列")
+    except Exception as e:
+        log.warning(f"迁移 src_dop_datasources.project_scope 失败 | error={str(e)}")
+
+    # ---- src_dop_users: 补 token_epoch (v2.21+，早于该时间签发的登录凭证作废) ----
+    try:
+        cols = await _get_existing_columns(conn, "src_dop_users" + table_suffix, is_mysql)
+        if cols and "token_epoch" not in cols:
+            await conn.execute(text(
+                f"ALTER TABLE `src_dop_users{table_suffix}` ADD COLUMN `token_epoch` INTEGER NOT NULL DEFAULT 0"
+            ))
+            log.info("迁移: src_dop_users 添加 token_epoch 列")
+    except Exception as e:
+        log.warning(f"迁移 src_dop_users.token_epoch 失败 | error={str(e)}")
+
     # ---- src_dop_api_configs: 补 is_locked (v2.9+) ----
     try:
         cols = await _get_existing_columns(conn, "src_dop_api_configs" + table_suffix, is_mysql)
@@ -552,3 +581,70 @@ async def init_db():
                 await _run_migration(conn)
         except Exception as e:
             log.warning(f"自动迁移过程中出现异常（不影响首次建表） | error={str(e)}")
+
+
+# ---------------------------------------------------------------------------
+# 性能索引 (v2.19+)：调用日志统计用覆盖索引，启动后在后台补建
+# ---------------------------------------------------------------------------
+# 新建的表由 create_all 按模型建好索引；已有的表（尤其是数据量大的 call_logs）
+# 需要补建。放在后台任务里做，不阻塞启动；MySQL 用在线 DDL（LOCK=NONE），
+# 建索引期间照常读写。也可以提前在低峰期手动执行 migrations/v2.19_call_logs_indexes.sql，
+# 已存在的索引这里会自动跳过。
+_PERF_INDEXES = [
+    ("ix_call_logs_api_created_rt", "api_id, created_at, response_time_ms"),
+    ("ix_call_logs_project_created_rt", "project_id, created_at, response_time_ms"),
+    ("ix_call_logs_created_status_rt", "created_at, response_status, response_time_ms"),
+]
+
+
+async def ensure_perf_indexes():
+    from app.core.runtime_env import t as _t
+    table = _t("src_dop_call_logs")
+    is_mysql = "mysql" in settings.database.url
+    for base_name, cols in _PERF_INDEXES:
+        name = _t(base_name)
+        try:
+            async with engine.begin() as conn:
+                if is_mysql:
+                    exists = (await conn.execute(text(
+                        "SELECT 1 FROM information_schema.statistics "
+                        "WHERE table_schema = DATABASE() AND table_name = :t AND index_name = :i LIMIT 1"
+                    ), {"t": table, "i": name})).first()
+                    if exists:
+                        continue
+                    log.info(f"补建性能索引开始（在线 DDL，不阻塞读写）| {table}.{name}")
+                    await conn.execute(text(
+                        f"ALTER TABLE `{table}` ADD INDEX `{name}` ({cols}), ALGORITHM=INPLACE, LOCK=NONE"
+                    ))
+                else:
+                    await conn.execute(text(f'CREATE INDEX IF NOT EXISTS "{name}" ON "{table}" ({cols})'))
+                    continue
+            log.info(f"补建性能索引完成 | {table}.{name}")
+        except Exception as e:  # noqa: BLE001
+            # 多 worker 同时补建会有一个报「索引已存在」，忽略即可
+            log.warning(f"补建性能索引跳过 | {table}.{name} | {e}")
+
+
+async def check_connection_budget(workers: int):
+    """启动自检 (v2.20)：多进程时系统库连接池总上限是否会超过 MySQL max_connections。
+
+    每个进程各有一套连接池：上限 = pool_size + max_overflow。高并发下连接池被打满后
+    MySQL 返回 1040 Too many connections，请求直接失败（压测中实际出现过）。
+    """
+    if "mysql" not in settings.database.url:
+        return
+    try:
+        async with engine.connect() as conn:
+            row = (await conn.execute(text("SHOW VARIABLES LIKE 'max_connections'"))).first()
+        max_conn = int(row[1]) if row else 0
+        per_worker = settings.database.pool_size + settings.database.max_overflow
+        total = per_worker * max(1, workers)
+        if max_conn and total > max_conn * 0.7:
+            log.warning(
+                f"连接数预算偏高 | 系统库连接池上限 {per_worker}/进程 × {workers} 进程 = {total}，"
+                f"MySQL max_connections={max_conn}（业务数据源若在同一实例上还要另算）。"
+                f"高并发时可能出现 Too many connections，建议调小 database.pool_size/max_overflow "
+                f"或调大 MySQL max_connections"
+            )
+    except Exception as e:  # noqa: BLE001
+        log.debug(f"连接数预算检查跳过 | {e}")

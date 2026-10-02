@@ -73,7 +73,7 @@ async function reload() {
         return;
     }
     body.innerHTML = items.map(it => {
-        const people = currentTab === 'pending' ? (it.requester_name || '') : statusBadge(it.status);
+        const people = currentTab === 'pending' ? escapeHtml(it.requester_name || '') : statusBadge(it.status);
         let actions = '';
         if (currentTab === 'pending') {
             if (it.kind === 'online') {
@@ -93,11 +93,11 @@ async function reload() {
         }
         return `<tr>
             <td>${actionBadge(it.action_label)}</td>
-            <td>${it.api_name || ''}</td>
-            <td>${it.project_name || ''}</td>
+            <td>${escapeHtml(it.api_name || '')}</td>
+            <td>${escapeHtml(it.project_name || '')}</td>
             <td>${people}</td>
-            <td style="max-width:220px;color:#64748b;font-size:12px;">${(it.reason||it.decide_comment||'').slice(0,60)}</td>
-            <td style="color:#94a3b8;font-size:12px;">${it.created_at || ''}</td>
+            <td style="max-width:220px;color:#64748b;font-size:12px;">${escapeHtml((it.reason||it.decide_comment||'').slice(0,60))}</td>
+            <td style="color:#94a3b8;font-size:12px;">${escapeHtml(it.created_at || '')}</td>
             <td style="text-align:right;">${actions}</td>
         </tr>`;
     }).join('');

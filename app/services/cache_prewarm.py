@@ -90,7 +90,7 @@ async def _prewarm_one_api(api_config, params_list, db_session_factory):
         if _stopping:
             break
         try:
-            cache_key = _build_cache_key(api_config.id, params)
+            cache_key = _build_cache_key(api_config.id, params, getattr(api_config, "version", None))
             if strategy == "near_expiry":
                 remain = await r.ttl(cache_key)
                 # remain: -2=key不存在(已过期), -1=永不过期, >0=剩余秒数

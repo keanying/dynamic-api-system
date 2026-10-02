@@ -1421,7 +1421,7 @@ async function openTransferDialog() {
         const r = await API.get('/api/users');
         users = (r && r.data && (r.data.items || r.data.list)) || (Array.isArray(r && r.data) ? r.data : []);
     } catch (e) {}
-    const opts = users.map(u => `<option value="${u.id}">${u.nickname || u.username} (${u.username})</option>`).join('');
+    const opts = users.map(u => `<option value="${u.id}">${escapeHtml(u.nickname || u.username)} (${escapeHtml(u.username)})</option>`).join('');
     const html = `
       <div id="__transferModal" class="modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:9999;">
         <div style="background:#fff;border-radius:8px;padding:20px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
@@ -1506,7 +1506,7 @@ async function clearApiCache() {
 }
 
 async function loadDatasources() {
-    const data = await API.get('/api/datasources?page_size=100');
+    const data = await API.get(`/api/datasources?page_size=100&project_id=${PROJECT_ID}`);
     if (!data || !data.data) return;
     const sel = document.getElementById('apiDatasource');
     const currentVal = sel.value;

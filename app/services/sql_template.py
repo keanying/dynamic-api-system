@@ -338,6 +338,16 @@ def _expr_tokenize(s: str) -> list:
 class _ExprParser:
     def __init__(self, tokens, params):
         self.tokens = tokens; self.pos = 0; self.params = params
+        # >0 时处于「短路跳过」状态：照常解析语法（推进 token），但不做可能出错的求值
+        self.skip = 0
+
+    def _skipped(self, parse_fn):
+        """解析一个子表达式但不求值（and/or 短路时使用）。"""
+        self.skip += 1
+        try:
+            parse_fn()
+        finally:
+            self.skip -= 1
 
     def peek(self):
         return self.tokens[self.pos] if self.pos < len(self.tokens) else None
@@ -365,7 +375,13 @@ class _ExprParser:
             t = self.peek()
             if t and (t[0] == "or" or (t[0] == "op" and t[1] == "||")):
                 self.pos += 1
-                v = bool(v) or bool(self.and_expr())
+                # 原写法 `bool(v) or bool(self.and_expr())` 会被 Python 短路：左边为真时右边
+                # 根本没被解析，剩余 token 被当成「表达式末尾多余 token」报错
+                if v:
+                    self._skipped(self.and_expr)
+                    v = True
+                else:
+                    v = bool(self.and_expr())
             else:
                 return v
 
@@ -375,7 +391,11 @@ class _ExprParser:
             t = self.peek()
             if t and (t[0] == "and" or (t[0] == "op" and t[1] == "&&")):
                 self.pos += 1
-                v = bool(v) and bool(self.not_expr())
+                if not v:
+                    self._skipped(self.not_expr)   # 同上：左边为假时右边仍要解析
+                    v = False
+                else:
+                    v = bool(self.not_expr())
             else:
                 return v
 
@@ -396,12 +416,16 @@ class _ExprParser:
             if t2 and t2[0] == "in":
                 self.pos += 1
                 container = self.cmp_expr()
+                if self.skip:
+                    return False
                 return v not in (container or [])
             self.pos = savepos
             return v
         if t and t[0] == "in":
             self.pos += 1
             container = self.cmp_expr()
+            if self.skip:
+                return False
             return v in (container or [])
         return v
 
@@ -478,6 +502,8 @@ class _ExprParser:
                     return _walk_value(self.params[root], path) is not None
                 arg = self.or_expr()
                 self.eat("paren", ")")
+                if self.skip and name in ("len", "empty"):
+                    return None
                 if name == "len":
                     if arg is None: return 0
                     if isinstance(arg, (str, list, tuple, dict, set)):
@@ -601,6 +627,17 @@ _INTERP_RE = re.compile(r"#\{\s*([a-zA-Z_]\w*(?:\.\w+)*)\s*\}")
 # 默认允许：字母/数字/下划线/英文逗号/空格/星号，覆盖了表名/字段/列名列表/简单 SQL 关键字
 # 危险字符: ' " ; \ -- /* */ 等一律拒绝
 _SAFE_INTERP_RE = re.compile(r"^[A-Za-z0-9_\,\.\s\*]+$")
+# v2.20: 字符白名单仍允许字母+空格，拼得出 "id UNION SELECT pwd FROM users" 这类注入。
+# 再拦一道 SQL 关键字（都是 MySQL 保留字，不可能是合法的未加引号列名/排序方向）
+_INTERP_KEYWORD_RE = re.compile(
+    r"\b(UNION|SELECT|FROM|WHERE|INTO|HAVING|SLEEP|BENCHMARK|INSERT|UPDATE|DELETE|REPLACE|"
+    r"DROP|ALTER|CREATE|TRUNCATE|RENAME|GRANT|REVOKE|OUTFILE|DUMPFILE|PROCEDURE)\b",
+    re.IGNORECASE,
+)
+
+
+def _unsafe_interp_value(s: str) -> bool:
+    return not _SAFE_INTERP_RE.match(s) or _INTERP_KEYWORD_RE.search(s) is not None
 
 # v1.5: :{表达式} 安全绑定插值（渲染成自动生成的 :__tpl_bN 占位符，值走参数化绑定）
 _BIND_INTERP_RE = re.compile(r":\{([^{}]+)\}")
@@ -614,7 +651,8 @@ _SQL_LITERAL_RE = re.compile(
     r'|"(?:[^"\\]|\\.)*"'          # 双引号字符串
     r"|`[^`]*`"                    # 反引号标识符
     r"|--[^\n]*"                   # -- 行注释
-    r"|#[^\n]*"                    # # 行注释 (MySQL)
+    r"|#(?!\{)[^\n]*"              # # 行注释 (MySQL)；#{var} 是文本插值不是注释（v2.20 修正：
+                                    #   原来同一行 #{} 之后的 :{expr} 会被当成注释内容而不替换）
     r"|/\*.*?\*/)",                # /* 块注释 */
     re.DOTALL,
 )
@@ -702,7 +740,7 @@ def _interpolate(text: str, params: dict, source: str, pos: int,
             pieces = []
             for item in val:
                 s_item = str(item)
-                if not _SAFE_INTERP_RE.match(s_item):
+                if _unsafe_interp_value(s_item):
                     line, col, snip = _locate(source, pos)
                     raise SqlTplError(
                         f"#{{{name}}} 列表元素含非法字符: {s_item!r}，"
@@ -712,11 +750,11 @@ def _interpolate(text: str, params: dict, source: str, pos: int,
                 pieces.append(s_item)
             return ", ".join(pieces)
         s = str(val)
-        if not _SAFE_INTERP_RE.match(s):
+        if _unsafe_interp_value(s):
             line, col, snip = _locate(source, pos)
             raise SqlTplError(
-                f"#{{{name}}} 值含非法字符: {s!r}，"
-                "#{} 只允许字母/数字/下划线/逗号/点/空格/*，"
+                f"#{{{name}}} 值含非法字符或 SQL 关键字: {s!r}，"
+                "#{} 只允许字母/数字/下划线/逗号/点/空格/*（且不能含 SELECT/UNION 等关键字），"
                 "值类数据请改用 :{" + name + "} 参数化绑定",
                 line, col, snip,
             )

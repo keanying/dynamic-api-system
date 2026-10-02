@@ -20,6 +20,28 @@ log = get_logger("api_configs")
 router = APIRouter(prefix="/api/projects/{project_id}/apis", tags=["API配置"])
 
 
+async def datasource_scope_error(db, project_id: int, datasource_id):
+    """所选数据源未对本项目开放时返回错误信息（v2.21，保存时提前提示，执行时还会再校验）。"""
+    if not datasource_id:
+        return None
+    from app.services import ds_scope
+    ds = (await db.execute(select(DataSource).where(DataSource.id == datasource_id))).scalar_one_or_none()
+    if ds is not None and not ds_scope.is_allowed(ds, await ds_scope.project_code(db, project_id)):
+        return f"数据源「{ds.name}」未对本项目开放"
+    return None
+
+
+def plugin_edit_denied(user) -> bool:
+    """插件代码是在服务进程里直接执行的 Python（可读配置里的数据库密码、执行系统命令），
+    v2.20 起默认仅超级管理员可创建/修改插件类 API（与插件库、数据同步类 API 的权限一致）。
+    config: security.plugin_editor = super_admin（默认）/ developer（恢复旧行为：项目研发即可）。"""
+    from app.core.config import settings
+    from app.core.permissions import is_super_admin
+    if (getattr(settings.security, "plugin_editor", "super_admin") or "super_admin") == "developer":
+        return False
+    return not is_super_admin(user)
+
+
 @router.get("")
 async def list_apis(
     project_id: int,
@@ -27,7 +49,7 @@ async def list_apis(
     status: str = Query("all", description="状态筛选: all/enabled/disabled"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """获取项目下的 API 列表（非成员无权）"""
@@ -64,38 +86,54 @@ async def list_apis(
         ur = await db.execute(select(_U).where(_U.id.in_(owner_ids)))
         owner_name_map = {u.id: (u.nickname or u.username) for u in ur.scalars().all()}
 
+    # v2.19: 参数 / 数据源名 / 调用统计改为整页批量查询（原来每个 API 各查 4 次，
+    # 一页 20 个就是 80 次查询，其中 40 次是对 call_logs 的聚合）
+    api_ids = [a.id for a in apis]
+    params_map = {i: [] for i in api_ids}
+    ds_name_map = {}
+    stats_map = {}
+    if api_ids:
+        pr = await db.execute(
+            select(ApiParameter).where(ApiParameter.api_id.in_(api_ids))
+            .order_by(ApiParameter.api_id, ApiParameter.sort_order)
+        )
+        for p in pr.scalars().all():
+            params_map[p.api_id].append(p)
+
+        ds_ids = list({a.datasource_id for a in apis if a.datasource_id})
+        if ds_ids:
+            dr = await db.execute(select(DataSource.id, DataSource.name).where(DataSource.id.in_(ds_ids)))
+            ds_name_map = {r.id: r.name for r in dr.all()}
+
+        sr = await db.execute(
+            select(CallLog.api_id, func.count().label("cnt"), func.avg(CallLog.response_time_ms).label("avg_ms"))
+            .where(CallLog.api_id.in_(api_ids))
+            .group_by(CallLog.api_id)
+        )
+        stats_map = {r.api_id: (r.cnt, r.avg_ms) for r in sr.all()}
+
+    # 待上线状态：查出该 API 已通过审批单的提交者，供前端判断"上线"按钮
+    appr_map = {}
+    approved_ids = [a.id for a in apis if getattr(a, "status", "") == "approved"]
+    if approved_ids:
+        from app.models.models import ApiApproval
+        ar = await db.execute(
+            select(ApiApproval).where(
+                ApiApproval.api_id.in_(approved_ids),
+                ApiApproval.overall_status == "approved",
+            ).order_by(ApiApproval.created_at.desc())
+        )
+        for ap in ar.scalars().all():
+            appr_map.setdefault(ap.api_id, ap.submitter_id)   # 每个 API 取最新一张
+
     items = []
     for api in apis:
-        params_r = await db.execute(
-            select(ApiParameter).where(ApiParameter.api_id == api.id).order_by(ApiParameter.sort_order)
-        )
-        params = params_r.scalars().all()
-
-        ds_name = ""
-        if api.datasource_id:
-            ds_r = await db.execute(select(DataSource.name).where(DataSource.id == api.datasource_id))
-            ds_name = ds_r.scalar() or ""
-
-        total_calls = (await db.execute(
-            select(func.count()).where(CallLog.api_id == api.id)
-        )).scalar() or 0
-
-        avg_time = (await db.execute(
-            select(func.avg(CallLog.response_time_ms)).where(CallLog.api_id == api.id)
-        )).scalar() or 0
-
-        # 待上线状态：查出该 API 已通过审批单的提交者，供前端判断"上线"按钮
-        appr_submitter = None
-        if getattr(api, "status", "") == "approved":
-            from app.models.models import ApiApproval
-            ap = (await db.execute(
-                select(ApiApproval).where(
-                    ApiApproval.api_id == api.id,
-                    ApiApproval.overall_status == "approved",
-                ).order_by(ApiApproval.created_at.desc())
-            )).scalars().first()
-            if ap:
-                appr_submitter = ap.submitter_id
+        params = params_map.get(api.id, [])
+        ds_name = ds_name_map.get(api.datasource_id, "") if api.datasource_id else ""
+        total_calls, avg_time = stats_map.get(api.id, (0, 0))
+        total_calls = total_calls or 0
+        avg_time = avg_time or 0
+        appr_submitter = appr_map.get(api.id)
 
         items.append(ApiConfigOut(
             id=api.id, project_id=api.project_id, datasource_id=api.datasource_id,
@@ -145,11 +183,14 @@ async def list_apis(
 async def get_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
-    """获取 API 详情"""
+    """获取 API 详情（非项目成员无权查看：含 SQL 与 API Key）"""
+    from app.core.permissions import is_project_member
     log.debug(f"查询 API 详情 | project_id={project_id} | api_id={api_id}")
+    if not await is_project_member(db, _user, project_id):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="你不是该项目成员，无权访问")
 
     result = await db.execute(
         select(ApiConfig).where(ApiConfig.id == api_id, ApiConfig.project_id == project_id)
@@ -226,11 +267,19 @@ async def get_api(
 async def create_api(
     project_id: int,
     req: ApiConfigCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """创建 API"""
+    from app.core.permissions import can_edit_project_resources
     log.info(f"创建 API 请求 | project_id={project_id} | name={req.name} | url_path={req.url_path} | method={req.method}")
+
+    # 权限：项目管理员/研发/超管（v2.20：原来任何登录用户都能往任意项目里建 API）
+    if not await can_edit_project_resources(db, _user, project_id):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="无权在该项目中创建 API")
+    if ((req.api_type or "sql").lower() == "plugin" or (getattr(req, "plugin_code", "") or "").strip()) \
+            and plugin_edit_denied(_user):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="插件类 API 只能由超级管理员创建")
 
     # 数据同步 API (v2.17+)：写入类接口，只有超级管理员能创建
     if (getattr(req, "api_type", "sql") or "sql").lower() == "sync":
@@ -248,6 +297,10 @@ async def create_api(
     if getattr(req, "cache_prewarm", False) and not req.cache_enabled:
         return R_fail(ErrCode.SYSTEM_PARAM_INVALID,
                       msg="开启「自动预热」需要先开启「缓存」——预热是把结果提前写入缓存，未启用缓存时不会生效")
+
+    scope_err = await datasource_scope_error(db, project_id, req.datasource_id)
+    if scope_err:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=scope_err)
 
     # 检查路径冲突
     existing = await db.execute(
@@ -314,7 +367,7 @@ async def update_api(
     project_id: int,
     api_id: int,
     req: ApiConfigUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """更新 API"""
@@ -366,6 +419,11 @@ async def update_api(
     # 更新字段（禁止通过普通更新接口篡改生命周期 status，须走专用状态流转接口）
     update_fields = req.model_dump(exclude_unset=True, exclude={"parameters", "status"})
 
+    if update_fields.get("datasource_id") and update_fields["datasource_id"] != api.datasource_id:
+        scope_err = await datasource_scope_error(db, project_id, update_fields["datasource_id"])
+        if scope_err:
+            return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=scope_err)
+
     # 数据同步 API (v2.17+)：涉及写库，只有超管能改。
     # 要拦的是三种「真的和 sync 有关」的情况：
     #   1. 这个 API 本来就是 sync
@@ -382,6 +440,11 @@ async def update_api(
     if _touch_sync and not _is_sa(_user):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED,
                       msg="数据同步类 API 只能由超级管理员修改")
+    # 插件类 API (v2.20)：判定方式同上面的 sync
+    _plugin_submitted = (update_fields.get("plugin_code") or "").strip()
+    _touch_plugin = (_old_type == "plugin") or (_new_type == "plugin") or bool(_plugin_submitted)
+    if _touch_plugin and plugin_edit_denied(_user):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="插件类 API 只能由超级管理员修改")
     if _final_type == "sync":
         from app.services.data_sync import parse_whitelist, SyncError
         _wl = update_fields.get("sync_tables", getattr(api, "sync_tables", "") or "")
@@ -427,7 +490,7 @@ async def update_api(
 async def delete_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """删除 API"""
@@ -474,11 +537,17 @@ async def delete_api(
 async def copy_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
-    """复制 API"""
+    """复制 API（副本为草稿、不带独立 API Key，需重新走上线审批）"""
+    from app.core.permissions import can_edit_project_resources, is_super_admin
     log.info(f"复制 API 请求 | project_id={project_id} | api_id={api_id}")
+
+    # v2.20：原来无权限校验，且副本照抄状态（复制一个已上线 API 得到的副本直接是「已上线」，
+    # 绕过审批）、照抄 API Key、重复复制时路径冲突
+    if not await can_edit_project_resources(db, _user, project_id):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="无权复制该项目的 API")
 
     result = await db.execute(
         select(ApiConfig).where(ApiConfig.id == api_id, ApiConfig.project_id == project_id)
@@ -488,11 +557,25 @@ async def copy_api(
         log.warning(f"复制 API 失败: API 不存在 | api_id={api_id}")
         return R_fail(ErrCode.API_NOT_FOUND)
 
+    _src_type = (api.api_type or "sql").lower()
+    if _src_type == "sync" and not is_super_admin(_user):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="数据同步类 API 只能由超级管理员复制")
+    if (_src_type == "plugin" or (getattr(api, "plugin_code", "") or "").strip()) and plugin_edit_denied(_user):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="插件类 API 只能由超级管理员复制")
+
+    # 生成不冲突的路径：/x_copy、/x_copy2、/x_copy3 ...
+    new_path, n = f"{api.url_path}_copy", 1
+    while (await db.execute(select(ApiConfig.id).where(
+            ApiConfig.project_id == project_id, ApiConfig.url_path == new_path,
+            ApiConfig.method == api.method))).first():
+        n += 1
+        new_path = f"{api.url_path}_copy{n}"
+
     new_api = ApiConfig(
         project_id=project_id,
         name=f"{api.name} (副本)",
         description=api.description,
-        url_path=f"{api.url_path}_copy",
+        url_path=new_path,
         method=api.method,
         datasource_id=api.datasource_id,
         sql_template=api.sql_template,
@@ -502,9 +585,11 @@ async def copy_api(
         css_content=api.css_content or "",
         js_content=api.js_content or "",
         plugin_code=getattr(api, "plugin_code", "") or "",
-        status=getattr(api, "status", "draft") or "draft",
+        status="draft",
         is_enabled=False,
-        api_key=api.api_key,
+        api_key="",
+        created_by=_user.id,
+        owner_id=_user.id,
         require_api_key=bool(api.require_api_key) if api.require_api_key is not None else True,
         cache_enabled=api.cache_enabled,
         cache_prewarm=bool(getattr(api, 'cache_prewarm', False)),
@@ -542,11 +627,15 @@ async def copy_api(
 async def generate_api_key(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """生成独立 API Key（始终生成全新的独立 Key）"""
     import secrets
+    from app.core.permissions import can_edit_project_resources
+    # v2.20：原来无权限校验，任何登录用户都能操作任意项目的 API
+    if not await can_edit_project_resources(db, _user, project_id):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="无权操作该项目的 API")
 
     log.info(f"生成独立 API Key | project_id={project_id} | api_id={api_id}")
 
@@ -567,10 +656,14 @@ async def generate_api_key(
 async def toggle_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """启用/禁用 API"""
+    from app.core.permissions import can_edit_project_resources
+    # v2.20：原来无权限校验，任何登录用户都能操作任意项目的 API
+    if not await can_edit_project_resources(db, _user, project_id):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="无权操作该项目的 API")
     log.info(f"切换 API 状态 | project_id={project_id} | api_id={api_id}")
 
     result = await db.execute(
@@ -591,7 +684,7 @@ async def toggle_api(
 async def lock_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """锁定 API（锁定后不可编辑/提交上线）。创建者本人 / 项目管理员 / 超管可操作。"""
@@ -602,7 +695,7 @@ async def lock_api(
 async def unlock_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """解锁 API。创建者本人 / 项目管理员 / 超管可操作。"""
@@ -634,7 +727,7 @@ async def _set_lock(project_id, api_id, locked, db, _user):
 async def publish_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """提交者确认上线（approved -> online）。
@@ -684,7 +777,7 @@ async def publish_api(
 async def offline_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """下线 API（online -> offline，回到可编辑状态）。责任人/管理员可直接下线，其他人走申请。"""
@@ -699,7 +792,10 @@ async def offline_api(
     if not api:
         return R_fail(ErrCode.API_NOT_FOUND)
 
-    # 责任人制 (v2.10)：非责任人非管理员 -> 提交下线申请
+    # 责任人制 (v2.10)：非责任人非管理员 -> 提交下线申请（须是项目成员）
+    from app.core.permissions import is_project_member
+    if not await is_project_member(db, _user, project_id):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="你不是该项目成员，无权操作该项目的 API")
     if not await can_act_directly(db, _user, api):
         appr = await create_request(db, _user, api, "offline")
         return R_ok(data={"pending_approval": True, "approval_id": appr.id},
@@ -719,7 +815,7 @@ async def offline_api(
 async def clear_api_cache(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """清除该 API 的所有缓存 (v2.13+)。

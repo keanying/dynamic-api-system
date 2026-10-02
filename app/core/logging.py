@@ -38,6 +38,16 @@ def set_trace_id(value: str) -> None:
     trace_id_var.set(value or "-")
 
 
+# 当前是否有任何输出会接收 DEBUG 日志（setup_logging 时确定）。
+# 热路径上的 debug 日志常带 json.dumps / 大字典 repr，f-string 在调用前就会求值，
+# 即使最终不输出也要付出拼接成本，所以先用 is_debug() 判断再拼。
+_DEBUG_ENABLED = True
+
+
+def is_debug() -> bool:
+    return _DEBUG_ENABLED
+
+
 def _trace_id_patcher(record):
     """loguru patcher：把当前上下文中的 trace_id 注入到日志 record.extra"""
     # 不覆盖已经显式 bind 的 trace_id
@@ -50,7 +60,8 @@ logger.remove()
 logger.configure(patcher=_trace_id_patcher)
 
 
-def setup_logging(log_dir: str = "./logs", level: str = "DEBUG", retention_days: int = 3):
+def setup_logging(log_dir: str = "./logs", level: str = "DEBUG", retention_days: int = 3,
+                  file_level: str = ""):
     """
     初始化全局日志配置
 
@@ -58,7 +69,14 @@ def setup_logging(log_dir: str = "./logs", level: str = "DEBUG", retention_days:
         log_dir: 日志文件目录，支持相对路径和绝对路径
         level: 日志级别（DEBUG / INFO / WARNING / ERROR）
         retention_days: 日志保留天数，默认 3 天
+        file_level: 全量日志文件 / 网关日志文件的级别，留空则与 level 相同。
+                    v2.19 之前这两个文件固定为 DEBUG，每个网关请求要写二十来条
+                    debug 日志，压测中占到主线程约 40% 的 CPU。需要排查问题时可以
+                    在 config.yaml 里临时设 log.file_level: DEBUG。
     """
+    global _DEBUG_ENABLED
+    file_level = (file_level or level or "INFO").upper()
+    _DEBUG_ENABLED = "DEBUG" in (str(level).upper(), file_level)
     log_path = Path(log_dir)
     # 如果是相对路径，基于项目根目录解析，确保无论从哪里启动都写到项目根目录下
     if not log_path.is_absolute():
@@ -84,7 +102,7 @@ def setup_logging(log_dir: str = "./logs", level: str = "DEBUG", retention_days:
     # 2. 全量日志文件（按日切割，保留 N 天）
     logger.add(
         str(log_path / "app_{time:YYYY-MM-DD}.log"),
-        level="DEBUG",
+        level=file_level,
         format=(
             "{time:YYYY-MM-DD HH:mm:ss.SSS} | "
             "{level: <8} | "
@@ -124,7 +142,7 @@ def setup_logging(log_dir: str = "./logs", level: str = "DEBUG", retention_days:
     # 4. 网关调用日志文件（专门记录外部 API 调用）
     logger.add(
         str(log_path / "gateway_{time:YYYY-MM-DD}.log"),
-        level="DEBUG",
+        level=file_level,
         format=(
             "{time:YYYY-MM-DD HH:mm:ss.SSS} | "
             "{level: <8} | "

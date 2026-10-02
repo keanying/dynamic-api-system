@@ -47,7 +47,7 @@ async def _user_name_map(db, ids):
 
 
 @router.get("/pending")
-async def pending_for_me(db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def pending_for_me(db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     """待我审批：我是责任人的 API 的申请，或我是管理员的项目的申请。"""
     # 我作为责任人的 API
     owned = await db.execute(select(ApiConfig.id).where(ApiConfig.owner_id == user.id))
@@ -91,7 +91,7 @@ async def pending_for_me(db: AsyncSession = Depends(get_db), user=Depends(get_cu
 
 
 @router.get("/mine")
-async def my_requests(db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def my_requests(db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     r = await db.execute(select(ApiOwnerApproval).where(
         ApiOwnerApproval.requester_id == user.id).order_by(ApiOwnerApproval.created_at.desc()))
     rows = r.scalars().all()
@@ -116,7 +116,7 @@ async def _load_pending(db, approval_id):
 
 
 @router.post("/{approval_id}/approve")
-async def approve(approval_id: int, body: DecisionBody, db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def approve(approval_id: int, body: DecisionBody, db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     """审批通过 -> 执行对应操作（删除/上线/下线）。"""
     appr = await _load_pending(db, approval_id)
     if not appr:
@@ -132,14 +132,25 @@ async def approve(approval_id: int, body: DecisionBody, db: AsyncSession = Depen
     if not await can_approve(db, user, api):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="只有责任人或管理员可审批")
 
-    # 执行动作
+    # 执行动作。v2.20：按 API「当前」状态重新校验——申请到审批之间状态可能已变化，
+    # 原来不校验，会出现「申请删除时是草稿、期间上线了、审批通过后直接删掉线上接口」
+    from app.services.api_lifecycle import can_delete, can_transition, STATUS_LABELS
     action = appr.action
+    cur = getattr(api, "status", "draft") or "draft"
+    cur_label = STATUS_LABELS.get(cur, cur)
     if action == "delete":
+        if not can_delete(cur):
+            return R_fail(ErrCode.API_DELETE_FAILED, msg=f"API 当前状态「{cur_label}」不可删除，请驳回该申请")
         await db.delete(api)
     elif action == "online":
+        # 旧版本遗留的上线申请：只允许把「待上线」(审批已通过) 的 API 上线，不能绕过上线审批
+        if not can_transition("publish", cur):
+            return R_fail(ErrCode.API_UPDATE_FAILED, msg=f"API 当前状态「{cur_label}」不可上线，请驳回该申请")
         api.status = "online"
         api.updated_at = cst_now()
     elif action == "offline":
+        if not can_transition("offline", cur):
+            return R_fail(ErrCode.API_UPDATE_FAILED, msg=f"API 当前状态「{cur_label}」不可下线，请驳回该申请")
         api.status = "offline"
         api.updated_at = cst_now()
     else:
@@ -154,7 +165,7 @@ async def approve(approval_id: int, body: DecisionBody, db: AsyncSession = Depen
 
 
 @router.post("/{approval_id}/reject")
-async def reject(approval_id: int, body: DecisionBody, db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def reject(approval_id: int, body: DecisionBody, db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     appr = await _load_pending(db, approval_id)
     if not appr:
         return R_fail(ErrCode.API_NOT_FOUND, msg="申请单不存在")
@@ -173,7 +184,7 @@ async def reject(approval_id: int, body: DecisionBody, db: AsyncSession = Depend
 
 
 @router.post("/{approval_id}/cancel")
-async def cancel(approval_id: int, db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def cancel(approval_id: int, db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     appr = await _load_pending(db, approval_id)
     if not appr:
         return R_fail(ErrCode.API_NOT_FOUND, msg="申请单不存在")
@@ -187,7 +198,7 @@ async def cancel(approval_id: int, db: AsyncSession = Depends(get_db), user=Depe
 
 
 @router.post("/transfer")
-async def transfer(body: TransferBody, db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def transfer(body: TransferBody, db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     ar = await db.execute(select(ApiConfig).where(ApiConfig.id == body.api_id))
     api = ar.scalar_one_or_none()
     if not api:
@@ -212,7 +223,7 @@ async def _project_name_map(db, pids):
 
 
 @router.get("/center/pending")
-async def center_pending(db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def center_pending(db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     """待我审批：合并「上线单(我是会审研发/管理员/超管)」+「责任人操作单(我是责任人/管理员)」。"""
     is_super = await is_global_admin(user)
     # 我管理的项目
@@ -288,7 +299,7 @@ async def center_pending(db: AsyncSession = Depends(get_db), user=Depends(get_cu
 
 
 @router.get("/center/mine")
-async def center_mine(db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def center_mine(db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     """我发起的：合并「我提交的上线单」+「我发起的责任人操作单」。"""
     result = []
     # 上线单

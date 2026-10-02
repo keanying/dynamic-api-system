@@ -198,6 +198,11 @@ async def _exec_sql_step(step: dict, ctx: dict, datasource_resolver, sql_runner,
     # 复用同一份连接信息（host/port/账号/密码/类型），只切换 db。
     override_db = step.get("database")
     if override_db:
+        from app.services.ds_scope import check_database_override
+        try:
+            check_database_override(override_db)   # v2.21：不允许切到平台系统库 / mysql 等系统库
+        except Exception as e:
+            raise PipelineError(step["name"], str(e))
         ds = _clone_ds_with_db(ds, override_db)
 
     # 复用 engine 的 _parse_sql_params 处理模板渲染 + IN 展开 + LIKE 后缀
