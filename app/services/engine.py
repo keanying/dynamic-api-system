@@ -688,6 +688,19 @@ def _validate_nested_params(params: dict, api_params) -> None:
 # 单 SQL 模式 / 管线模式 分流
 # ============================================================
 
+def apply_param_defaults(params: dict, api_params) -> dict:
+    """未传（或传 null）的参数补上配置的默认值，并按声明类型转换。返回新 dict。"""
+    effective = dict(params or {})
+    filled = {}
+    for ap in api_params:
+        if effective.get(ap.name) is None and ap.default_value not in (None, ""):
+            filled[ap.name] = ap.default_value
+    if filled:
+        effective.update(filled)
+        _coerce_param_types(effective, [ap for ap in api_params if ap.name in filled])
+    return effective
+
+
 async def _execute_single_sql_mode(api_config, params, api_params, datasource):
     """原有逻辑：渲染 sql_template + 执行 + 返回结果。"""
     from app.services.trace_context import get_trace
@@ -700,6 +713,12 @@ async def _execute_single_sql_mode(api_config, params, api_params, datasource):
     # DDL 拦截
     if _check_ddl(api_config.sql_template):
         raise Exception("禁止执行 DDL 操作")
+
+    # 参数默认值对模板条件可见（v2.21，query.defaults_visible_in_template，默认关闭保持原行为）：
+    # 原来单 SQL 模式下默认值只用于填充占位符，$if$/$for$ 里看不到；流水线/插件模式则看得到。
+    # 开启后两种模式一致。开启前可用 scripts/check_param_defaults.py 列出结果会变化的 API。
+    if getattr(settings.query, "defaults_visible_in_template", False):
+        params = apply_param_defaults(params, api_params)
 
     if tctx:
         tctx.mark_render_start()
@@ -753,11 +772,14 @@ async def _execute_plugin_mode(api_config, params, api_params, db, primary_datas
 
     async def _resolve_ds(name_or_id):
         from app.models.models import DataSource
+        from app.services import ds_scope
         if isinstance(name_or_id, int) or (isinstance(name_or_id, str) and str(name_or_id).isdigit()):
             r = await db.execute(select(DataSource).where(DataSource.id == int(name_or_id)))
         else:
             r = await db.execute(select(DataSource).where(DataSource.name == name_or_id))
-        return r.scalar_one_or_none()
+        ds = r.scalar_one_or_none()
+        ds_scope.ensure_allowed(ds, await ds_scope.project_code(db, api_config.project_id))
+        return ds
 
     async def _run_query_async(datasource, sql, qparams):
         if _check_ddl(sql):
@@ -850,11 +872,14 @@ async def _execute_pipeline_mode(api_config, params, api_params, db, primary_dat
     async def datasource_resolver(name_or_id):
         # 支持按 id（int 或数字字符串）或 name 查找
         from app.models.models import DataSource
+        from app.services import ds_scope
         if isinstance(name_or_id, int) or (isinstance(name_or_id, str) and name_or_id.isdigit()):
             r = await db.execute(select(DataSource).where(DataSource.id == int(name_or_id)))
         else:
             r = await db.execute(select(DataSource).where(DataSource.name == name_or_id))
-        return r.scalar_one_or_none()
+        ds = r.scalar_one_or_none()
+        ds_scope.ensure_allowed(ds, await ds_scope.project_code(db, api_config.project_id))
+        return ds
 
     async def sql_runner(ds, sql, bound, timeout, max_rows):
         if _check_ddl(sql):
@@ -1009,6 +1034,11 @@ async def execute_api(
                 raise Exception("未配置数据源")
             if not datasource:
                 raise Exception("数据源不存在")
+
+        # 数据源可用项目范围 (v2.21)
+        from app.services import ds_scope
+        proj_code = await ds_scope.project_code(db, api_config.project_id)
+        ds_scope.ensure_allowed(datasource, proj_code)
 
         if datasource:
             if _is_debug():
@@ -1249,6 +1279,9 @@ async def _execute_mysql(
 
     # 只读防护：检查渲染后真正要执行的 SQL（v2.20），在建池/借连接之前做
     violation = _readonly_violation(sql)
+    if not violation:
+        from app.services.ds_scope import schema_violation
+        violation = schema_violation(sql, datasource)
     if violation:
         log.warning(f"拦截非只读 SQL | ds={datasource.name} | 原因={violation} | sql={sql[:200]}")
         raise Exception(violation)

@@ -1506,7 +1506,7 @@ async function clearApiCache() {
 }
 
 async function loadDatasources() {
-    const data = await API.get('/api/datasources?page_size=100');
+    const data = await API.get(`/api/datasources?page_size=100&project_id=${PROJECT_ID}`);
     if (!data || !data.data) return;
     const sel = document.getElementById('apiDatasource');
     const currentVal = sel.value;

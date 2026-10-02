@@ -31,7 +31,7 @@
         <div class="modal-header"><h3>提交上线审批</h3><button class="btn-icon" onclick="closeSubmitModal()">&times;</button></div>
         <div class="modal-body">
             <p class="text-sm text-muted" style="margin-bottom:12px;">
-                上线需 <b>项目管理员</b> 和 <b>一名会审研发</b> 双双通过。请选择会审研发（不能是你自己）。
+                {% if approval_rule == 'both' %}上线需 <b>项目管理员</b> 和 <b>会审研发</b> 双方都审核通过{% else %}上线需 <b>项目管理员</b> 或 <b>会审研发</b> 任一方审核通过{% endif %}，之后由你点「上线」正式生效。请选择会审研发（不能是你自己）。
             </p>
             <input type="hidden" id="submitApiId">
             <div class="form-group">

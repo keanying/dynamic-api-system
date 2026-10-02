@@ -74,7 +74,8 @@ async def _check_admin(scope) -> Optional[JSONResponse]:
     async with async_session() as db:
         user = (await db.execute(select(User).where(User.id == payload.get("user_id")))).scalar_one_or_none()
 
-    if not user or not user.is_active:
+    from app.api.auth import token_revoked
+    if not user or not user.is_active or token_revoked(payload, user):
         return _deny(401, ErrCode.AUTH_TOKEN_INVALID, "未登录或登录已过期")
     if not is_admin_or_above(user):
         log.warning(f"生产写保护拦截 | user={user.username} | {request.method} {request.url.path}")

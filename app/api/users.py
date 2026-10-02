@@ -170,8 +170,14 @@ async def update_user(
         user.username = req.username
 
     if req.password is not None:
+        # 与创建用户一致的长度要求（原来修改时不校验，可通过接口改成空密码）
+        if not (4 <= len(req.password) <= 128):
+            return R_fail(ErrCode.USER_PARAM_INVALID, msg="密码长度需为 4~128 位")
         user.password_hash = hash_password(req.password)
-        log.debug(f"用户密码已更新 | user_id={user_id}")
+        # 该用户此前签发的登录凭证全部作废（v2.21）
+        import time as _time
+        user.token_epoch = int(_time.time())
+        log.debug(f"用户密码已更新，旧登录凭证已作废 | user_id={user_id}")
 
     if req.is_active is not None:
         user.is_active = req.is_active

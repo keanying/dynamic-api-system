@@ -42,6 +42,15 @@ def is_super_admin(user: User) -> bool:
     return getattr(user, "global_role", "user") == ROLE_SUPER_ADMIN
 
 
+_ROLE_RANK = {ROLE_USER: 0, ROLE_DEVELOPER: 1, ROLE_ADMIN: 2, ROLE_SUPER_ADMIN: 3}
+
+
+def role_at_least(user: User, role: str) -> bool:
+    """全局角色是否不低于 role（user < developer < admin < super_admin）。"""
+    mine = _ROLE_RANK.get(getattr(user, "global_role", ROLE_USER), 0)
+    return mine >= _ROLE_RANK.get(role or ROLE_USER, 0)
+
+
 def is_admin_or_above(user: User) -> bool:
     """管理员或超级管理员（拥有用户管理权限）。"""
     return getattr(user, "global_role", "user") in (ROLE_SUPER_ADMIN, ROLE_ADMIN)

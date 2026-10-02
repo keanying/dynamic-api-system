@@ -76,6 +76,11 @@ class SecurityConfig:
     max_array_length: int = 100
     # 谁可以创建/修改插件类 API (v2.20+)：super_admin（默认）/ developer（项目研发即可，旧行为）
     plugin_editor: str = "super_admin"
+    # 可信代理 (v2.21+)：只有对端在这些地址/网段内时才采信 X-Forwarded-For。None = 本机 + 内网网段
+    trusted_proxies: Optional[List[str]] = None
+    # 创建项目 / 数据源所需的最低全局角色 (v2.21+)：user / developer（默认）/ admin / super_admin
+    project_creator_role: str = "developer"
+    datasource_creator_role: str = "developer"
 
 
 @dataclass
@@ -86,6 +91,8 @@ class QueryConfig:
     slow_query_alert_threshold: int = 1000
     # 业务数据源 MySQL 驱动 (v2.20+)：asyncmy（默认，C 扩展，快 4~6 倍）/ aiomysql
     mysql_driver: str = "asyncmy"
+    # 单 SQL 模式下参数默认值是否对 $if$/$for$ 条件可见 (v2.21+)，与流水线模式一致
+    defaults_visible_in_template: bool = False
     ddl_keywords: List[str] = field(default_factory=lambda: [
         "DROP", "CREATE", "ALTER", "TRUNCATE",
         "INSERT", "UPDATE", "DELETE", "GRANT", "REVOKE"
@@ -149,6 +156,13 @@ class GatewayConfig:
 
 
 @dataclass
+class ApprovalConfig:
+    # 上线审批通过条件 (v2.21+)：any = 项目管理员或会审研发任一方通过（v2.10 起的行为，默认）；
+    # both = 两方都要通过（管理员提交且未指定会审人时，管理员通过即可）
+    online_mode: str = "any"
+
+
+@dataclass
 class AuthConfig:
     default_admin: str = "admin"
     default_password: str = "admin123"
@@ -180,6 +194,7 @@ class FullConfig:
     log: LogConfig = field(default_factory=LogConfig)
     monitor: MonitorConfig = field(default_factory=MonitorConfig)
     gateway: GatewayConfig = field(default_factory=GatewayConfig)
+    approval: ApprovalConfig = field(default_factory=ApprovalConfig)
 
 
 def load_config() -> FullConfig:
@@ -259,6 +274,9 @@ def load_config() -> FullConfig:
             max_request_body=sec_raw.get("max_request_body", 1048576),
             max_array_length=sec_raw.get("max_array_length", 100),
             plugin_editor=sec_raw.get("plugin_editor", "super_admin"),
+            trusted_proxies=sec_raw.get("trusted_proxies"),
+            project_creator_role=sec_raw.get("project_creator_role", "developer"),
+            datasource_creator_role=sec_raw.get("datasource_creator_role", "developer"),
         ),
         query=QueryConfig(
             default_max_rows=query_raw.get("default_max_rows", 10000),
@@ -266,6 +284,7 @@ def load_config() -> FullConfig:
             slow_query_threshold=query_raw.get("slow_query_threshold", 500),
             slow_query_alert_threshold=query_raw.get("slow_query_alert_threshold", 1000),
             mysql_driver=_env("MYSQL_DRIVER", query_raw.get("mysql_driver", "asyncmy")),
+            defaults_visible_in_template=bool(query_raw.get("defaults_visible_in_template", False)),
             ddl_keywords=query_raw.get("ddl_keywords", [
                 "DROP", "CREATE", "ALTER", "TRUNCATE",
                 "INSERT", "UPDATE", "DELETE", "GRANT", "REVOKE"
@@ -297,6 +316,9 @@ def load_config() -> FullConfig:
             single_latency_threshold=monitor_raw.get("single_latency_threshold", 5000),
             collect_interval=monitor_raw.get("collect_interval", 60),
             call_log_retention_days=int(monitor_raw.get("call_log_retention_days", 0) or 0),
+        ),
+        approval=ApprovalConfig(
+            online_mode=(raw.get("approval", {}) or {}).get("online_mode", "any"),
         ),
         gateway=GatewayConfig(
             prefix=_env("GATEWAY_PREFIX", raw.get("gateway", {}).get("prefix", "/v1/data")),

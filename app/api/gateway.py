@@ -31,14 +31,10 @@ router = APIRouter(prefix=GATEWAY_PREFIX, tags=["动态调用网关"])
 
 
 def _get_client_ip(request: Request) -> str:
-    """获取客户端 IP"""
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        ip = forwarded.split(",")[0].strip()
-        log.debug(f"从 X-Forwarded-For 获取客户端 IP: {ip}")
-        return ip
-    ip = request.client.host if request.client else "unknown"
-    return ip
+    """获取客户端 IP（只在对端是可信代理时采信 X-Forwarded-For，见 app/core/client_ip.py）"""
+    from app.core.client_ip import resolve_client_ip
+    peer = request.client.host if request.client else ""
+    return resolve_client_ip(peer, request.headers.get("X-Forwarded-For", ""))
 
 
 def _check_ip_whitelist(client_ip: str) -> bool:

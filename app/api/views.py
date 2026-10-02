@@ -42,6 +42,11 @@ def _compute_static_ver() -> str:
 # 进程启动时计算一次（生产环境静态文件不变；开发热重载会重启进程，自然刷新）
 STATIC_VER = _compute_static_ver()
 
+def _approval_rule() -> str:
+    from app.api.approvals import online_rule
+    return online_rule()
+
+
 # 公共模板上下文
 def _ctx(extra: dict = None) -> dict:
     """构建公共模板上下文"""
@@ -50,6 +55,7 @@ def _ctx(extra: dict = None) -> dict:
         "gateway_prefix": settings.gateway.prefix.rstrip("/"),
         "static_ver": STATIC_VER,
         "app_env": env_info(),   # 当前环境（预发/生产），布局横幅与跨环境跳转用
+        "approval_rule": _approval_rule(),   # 上线审批通过条件：any / both
     }
     if extra:
         ctx.update(extra)

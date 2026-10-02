@@ -65,6 +65,13 @@ security:
   # 谁可以创建/修改插件类 API (v2.20+)。插件代码在服务进程内直接执行（可读本配置文件、执行系统命令），
   # 默认仅超级管理员；设为 developer 恢复旧行为（项目研发即可编辑）
   plugin_editor: "super_admin"
+  # 只有对端在这些地址/网段内时才采信 X-Forwarded-For 请求头 (v2.21+)。
+  # 不配置 = 本机 + 内网网段；服务前面的代理/负载均衡若在公网，需把它的地址加进来
+  # trusted_proxies: ["127.0.0.1/32", "10.0.0.0/8"]
+  # 创建项目 / 数据源所需的最低全局角色 (v2.21+)：user / developer / admin / super_admin
+  # 原来任何登录用户都能创建；设为 user 恢复旧行为
+  project_creator_role: "developer"
+  datasource_creator_role: "developer"
 
 query:
   # 默认最大返回行数
@@ -73,6 +80,10 @@ query:
   default_timeout: 30
   # 业务数据源 MySQL 驱动 (v2.20+)：asyncmy（默认，C 扩展，解析结果集快 4~6 倍）/ aiomysql
   mysql_driver: "asyncmy"
+  # 单 SQL 模式下参数默认值是否对 $if$/$for$ 条件可见 (v2.21+)，开启后与流水线模式一致。
+  # 开启会改变「配置了默认值、且在条件里判断该参数」的 API 的结果，
+  # 先运行 python scripts/check_param_defaults.py 查看受影响的 API
+  defaults_visible_in_template: false
   # 慢查询阈值 (毫秒)
   slow_query_threshold: 500
   # 慢查询告警阈值 (毫秒)
@@ -147,6 +158,10 @@ monitor:
   # 调用日志保留天数 (v2.19+)：> 0 时每小时自动删除更早的日志（分批删除，不长时间锁表）；
   # 0 = 不自动清理。call_logs 每次调用一行、单行可达十几 KB，不清理会无限增长
   call_log_retention_days: 0
+approval:
+  # 上线审批通过条件 (v2.21+)：any = 项目管理员或会审研发任一方通过（当前行为）；both = 双方都要通过
+  online_mode: "any"
+
 gateway:
   # API 调用地址前缀 (默认 /v1/data)
   prefix: "/v1/data"

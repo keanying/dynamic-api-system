@@ -18,7 +18,7 @@ API 生命周期状态机 (v2.0+)
 
 STATUS_DRAFT = "draft"
 STATUS_PENDING = "pending"
-STATUS_APPROVED = "approved"   # 审核通过待上线（两方已通过，等提交者点上线）
+STATUS_APPROVED = "approved"   # 审核通过待上线（满足审批通过条件，等提交者点上线）
 STATUS_ONLINE = "online"
 STATUS_OFFLINE = "offline"
 
@@ -35,7 +35,7 @@ STATUS_LABELS = {
 # 动作 -> (允许的当前状态集合, 目标状态)
 _TRANSITIONS = {
     "submit":   ({STATUS_DRAFT, STATUS_OFFLINE}, STATUS_PENDING),
-    "approve":  ({STATUS_PENDING}, STATUS_APPROVED),   # 两方通过 -> 待上线（不自动 online）
+    "approve":  ({STATUS_PENDING}, STATUS_APPROVED),   # 审批通过 -> 待上线（不自动 online）
     "reject":   ({STATUS_PENDING}, STATUS_DRAFT),
     "withdraw": ({STATUS_PENDING, STATUS_APPROVED}, STATUS_DRAFT),
     "publish":  ({STATUS_APPROVED}, STATUS_ONLINE),    # 提交者确认上线

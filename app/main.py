@@ -185,8 +185,9 @@ class RequestLoggingMiddleware:
         path = scope.get("path", "")
         start_time = time.time()
         if is_debug():
-            client_ip = req_headers.get("x-forwarded-for", "").split(",")[0].strip() or (
-                scope["client"][0] if scope.get("client") else "unknown")
+            from app.core.client_ip import resolve_client_ip
+            client_ip = resolve_client_ip(scope["client"][0] if scope.get("client") else "",
+                                          req_headers.get("x-forwarded-for", ""))
             log.debug(
                 f"[{request_id}] --> {method} {path} | IP={client_ip} | "
                 f"Query={scope.get('query_string', b'').decode('latin-1')} | "

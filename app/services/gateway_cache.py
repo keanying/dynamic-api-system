@@ -35,6 +35,8 @@ def ttl() -> float:
 
 def invalidate() -> None:
     _entries.clear()
+    from app.services import ds_scope
+    ds_scope.clear_cache()
 
 
 def get(project_code: str, method: str, url_path: str):

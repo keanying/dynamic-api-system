@@ -123,6 +123,12 @@
                 </div>
             </div>
 
+            <div class="form-group">
+                <label class="form-label">可用项目</label>
+                <input type="text" class="form-input" id="dsProjectScope" placeholder="项目编码，多个用逗号分隔；留空 = 所有项目可用">
+                <div class="text-muted text-sm" style="margin-top:4px;">限定哪些项目的 API（含流水线步骤、插件查询）可以使用此数据源</div>
+            </div>
+
             <div id="testResult" style="margin-top: 12px; display: none;">
                 <div id="testResultMsg" class="text-sm"></div>
             </div>
@@ -220,6 +226,7 @@ function showCreateDs() {
     document.getElementById('redisPort').value = '6379';
     document.getElementById('redisPassword').value = '';
     document.getElementById('redisDb').value = '0';
+    document.getElementById('dsProjectScope').value = '';
     document.getElementById('testResult').style.display = 'none';
     toggleDsForm();
     document.getElementById('dsModal').style.display = 'flex';
@@ -238,6 +245,7 @@ async function editDs(id) {
     document.getElementById('editDsId').value = id;
     document.getElementById('dsName').value = ds.name;
     document.getElementById('dsType').value = ds.type;
+    document.getElementById('dsProjectScope').value = ds.project_scope || '';
     toggleDsForm();
 
     if (ds.type === 'redis') {
@@ -263,6 +271,7 @@ function getDsFormData() {
     const name = document.getElementById('dsName').value.trim();
 
     if (!name) { Toast.error('请输入数据源名称'); return null; }
+    const project_scope = document.getElementById('dsProjectScope').value.trim();
 
     if (type === 'redis') {
         return {
@@ -271,7 +280,7 @@ function getDsFormData() {
             port: parseInt(document.getElementById('redisPort').value) || 6379,
             password: document.getElementById('redisPassword').value,
             database_name: document.getElementById('redisDb').value || '0',
-            username: '', pool_size: 10,
+            username: '', pool_size: 10, project_scope,
         };
     } else {
         return {
@@ -282,6 +291,7 @@ function getDsFormData() {
             password: document.getElementById('dsPassword').value,
             database_name: document.getElementById('dsDatabase').value.trim(),
             pool_size: parseInt(document.getElementById('dsPoolSize').value) || 10,
+            project_scope,
         };
     }
 }

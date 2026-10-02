@@ -20,6 +20,17 @@ log = get_logger("api_configs")
 router = APIRouter(prefix="/api/projects/{project_id}/apis", tags=["API配置"])
 
 
+async def datasource_scope_error(db, project_id: int, datasource_id):
+    """所选数据源未对本项目开放时返回错误信息（v2.21，保存时提前提示，执行时还会再校验）。"""
+    if not datasource_id:
+        return None
+    from app.services import ds_scope
+    ds = (await db.execute(select(DataSource).where(DataSource.id == datasource_id))).scalar_one_or_none()
+    if ds is not None and not ds_scope.is_allowed(ds, await ds_scope.project_code(db, project_id)):
+        return f"数据源「{ds.name}」未对本项目开放"
+    return None
+
+
 def plugin_edit_denied(user) -> bool:
     """插件代码是在服务进程里直接执行的 Python（可读配置里的数据库密码、执行系统命令），
     v2.20 起默认仅超级管理员可创建/修改插件类 API（与插件库、数据同步类 API 的权限一致）。
@@ -287,6 +298,10 @@ async def create_api(
         return R_fail(ErrCode.SYSTEM_PARAM_INVALID,
                       msg="开启「自动预热」需要先开启「缓存」——预热是把结果提前写入缓存，未启用缓存时不会生效")
 
+    scope_err = await datasource_scope_error(db, project_id, req.datasource_id)
+    if scope_err:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=scope_err)
+
     # 检查路径冲突
     existing = await db.execute(
         select(ApiConfig).where(
@@ -403,6 +418,11 @@ async def update_api(
 
     # 更新字段（禁止通过普通更新接口篡改生命周期 status，须走专用状态流转接口）
     update_fields = req.model_dump(exclude_unset=True, exclude={"parameters", "status"})
+
+    if update_fields.get("datasource_id") and update_fields["datasource_id"] != api.datasource_id:
+        scope_err = await datasource_scope_error(db, project_id, update_fields["datasource_id"])
+        if scope_err:
+            return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=scope_err)
 
     # 数据同步 API (v2.17+)：涉及写库，只有超管能改。
     # 要拦的是三种「真的和 sync 有关」的情况：

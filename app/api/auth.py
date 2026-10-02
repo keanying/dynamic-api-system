@@ -19,6 +19,12 @@ log = get_logger("auth")
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
 
+def token_revoked(payload: dict, user) -> bool:
+    """签发时间早于用户 token_epoch（修改密码时更新）的凭证作废 (v2.21)。
+    原来 JWT 无状态，改密码后旧 token 在过期前（默认 24 小时）仍然有效。"""
+    return int(payload.get("iat", 0) or 0) < int(getattr(user, "token_epoch", 0) or 0)
+
+
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db, scope="function")) -> User:
     """从请求中提取并验证当前用户"""
     token = request.cookies.get("token") or request.headers.get("Authorization", "").replace("Bearer ", "")
@@ -42,6 +48,9 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db, 
     if not user.is_active:
         log.warning(f"认证失败: 用户已禁用 | user_id={user_id} | username={user.username}")
         raise HTTPException(status_code=401, detail={"code": ErrCode.AUTH_USER_DISABLED, "msg": "用户已被禁用"})
+    if token_revoked(payload, user):
+        log.warning(f"认证失败: 密码已修改，旧凭证作废 | user_id={user_id} | username={user.username}")
+        raise HTTPException(status_code=401, detail={"code": ErrCode.AUTH_TOKEN_INVALID, "msg": "密码已修改，请重新登录"})
 
     log.debug(f"认证成功 | user_id={user.id} | username={user.username}")
     return user

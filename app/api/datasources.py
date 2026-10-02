@@ -19,6 +19,8 @@ from app.api.auth import get_current_user
 
 log = get_logger("datasources")
 
+from app.services import ds_scope
+
 router = APIRouter(prefix="/api/datasources", tags=["数据源管理"])
 
 
@@ -26,6 +28,7 @@ router = APIRouter(prefix="/api/datasources", tags=["数据源管理"])
 async def list_datasources(
     keyword: str = Query("", description="搜索关键字"),
     ds_type: str = Query("all", description="类型筛选: all/mysql/redis/postgresql"),
+    project_id: int = Query(0, description="只返回对该项目开放的数据源（0 = 不过滤）"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db, scope="function"),
@@ -47,6 +50,10 @@ async def list_datasources(
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     datasources = result.scalars().all()
+    if project_id:
+        from app.services import ds_scope
+        code = await ds_scope.project_code(db, project_id)
+        datasources = [d for d in datasources if ds_scope.is_allowed(d, code)]
 
     # 批量取创建人名
     from app.models.models import User as _U
@@ -70,6 +77,7 @@ async def list_datasources(
             extra_config=ds.extra_config, status=ds.status,
             last_test_at=ds.last_test_at, api_count=api_count,
             created_by=cb, created_by_name=cname.get(cb, "") if cb else "",
+            project_scope=getattr(ds, "project_scope", "") or "",
             created_at=ds.created_at, updated_at=ds.updated_at,
         ))
 
@@ -107,6 +115,7 @@ async def get_datasource(
         database_name=ds.database_name, pool_size=ds.pool_size,
         extra_config=ds.extra_config, status=ds.status,
         last_test_at=ds.last_test_at, api_count=api_count,
+        project_scope=getattr(ds, "project_scope", "") or "",
         created_at=ds.created_at, updated_at=ds.updated_at,
     ).model_dump())
 
@@ -120,6 +129,14 @@ async def create_datasource(
     """创建数据源"""
     log.info(f"创建数据源请求 | name={req.name} | type={req.type} | host={req.host}:{req.port} | db={req.database_name}")
 
+    # v2.21：原来任何登录用户都能创建数据源（创建项目即自动成为项目管理员）
+    from app.core.config import settings as _settings
+    from app.core.permissions import role_at_least
+    _need = getattr(_settings.security, "datasource_creator_role", "developer") or "developer"
+    if not role_at_least(_user, _need):
+        _label = {"user": "普通用户", "developer": "研发", "admin": "管理员", "super_admin": "超级管理员"}.get(_need, _need)
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=f"创建数据源需要「{_label}」及以上角色")
+
     ds = DataSource(
         name=req.name, type=req.type,
         host=req.host, port=req.port,
@@ -128,6 +145,7 @@ async def create_datasource(
         database_name=req.database_name,
         pool_size=req.pool_size,
         extra_config=req.extra_config,
+        project_scope=ds_scope.normalize_scope(req.project_scope),
         created_by=_user.id,
     )
     db.add(ds)
@@ -179,6 +197,8 @@ async def update_datasource(
         ds.pool_size = req.pool_size
     if req.extra_config is not None:
         ds.extra_config = req.extra_config
+    if req.project_scope is not None:
+        ds.project_scope = ds_scope.normalize_scope(req.project_scope)
 
     log.info(f"数据源更新成功 | ds_id={ds_id} | name={ds.name}")
     return R_ok(msg="数据源更新成功")

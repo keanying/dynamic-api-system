@@ -29,6 +29,8 @@ class User(Base):
     # 全局角色 (v2.0+): super_admin（超级管理员，全平台最高权限）/ user（普通用户，默认）
     # 普通用户注册后无任何项目权限，需被项目管理员加入项目并赋予项目角色后才能操作。
     global_role = Column(String(16), nullable=False, default="user", index=True)
+    # 早于该时间（unix 秒）签发的登录凭证一律作废 (v2.21+)：修改密码时更新，旧 token 立即失效
+    token_epoch = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=_cst_now)
     updated_at = Column(DateTime, default=_cst_now, onupdate=_cst_now)
 
@@ -87,6 +89,8 @@ class DataSource(Base):
     status = Column(String(32), default="unknown")  # unknown / connected / error
     last_test_at = Column(DateTime, nullable=True)
     created_by = Column(Integer, nullable=True, index=True)   # 创建人 user_id (v2.7+)
+    # 可用项目范围 (v2.21+)：逗号分隔的项目编码，空 = 所有项目可用（兼容旧数据）
+    project_scope = Column(Text, default="")
     created_at = Column(DateTime, default=_cst_now)
     updated_at = Column(DateTime, default=_cst_now, onupdate=_cst_now)
 

@@ -143,6 +143,14 @@ async def create_project(
     """创建项目"""
     log.info(f"创建项目请求 | code={req.code} | name={req.name}")
 
+    # v2.21：原来任何登录用户都能创建项目（创建项目即自动成为项目管理员）
+    from app.core.config import settings as _settings
+    from app.core.permissions import role_at_least
+    _need = getattr(_settings.security, "project_creator_role", "developer") or "developer"
+    if not role_at_least(_user, _need):
+        _label = {"user": "普通用户", "developer": "研发", "admin": "管理员", "super_admin": "超级管理员"}.get(_need, _need)
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=f"创建项目需要「{_label}」及以上角色")
+
     # 检查编码唯一性
     existing = await db.execute(select(Project).where(Project.code == req.code))
     if existing.scalar_one_or_none():

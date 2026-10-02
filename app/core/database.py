@@ -485,6 +485,28 @@ async def _run_migration(conn, table_suffix: str = ""):
     except Exception as e:
         log.warning(f"迁移 src_dop_datasources.created_by 失败 | error={str(e)}")
 
+    # ---- src_dop_datasources: 补 project_scope (v2.21+，可用项目范围，空 = 全部项目) ----
+    try:
+        cols = await _get_existing_columns(conn, "src_dop_datasources" + table_suffix, is_mysql)
+        if cols and "project_scope" not in cols:
+            await conn.execute(text(
+                f"ALTER TABLE `src_dop_datasources{table_suffix}` ADD COLUMN `project_scope` TEXT NULL"
+            ))
+            log.info("迁移: src_dop_datasources 添加 project_scope 列")
+    except Exception as e:
+        log.warning(f"迁移 src_dop_datasources.project_scope 失败 | error={str(e)}")
+
+    # ---- src_dop_users: 补 token_epoch (v2.21+，早于该时间签发的登录凭证作废) ----
+    try:
+        cols = await _get_existing_columns(conn, "src_dop_users" + table_suffix, is_mysql)
+        if cols and "token_epoch" not in cols:
+            await conn.execute(text(
+                f"ALTER TABLE `src_dop_users{table_suffix}` ADD COLUMN `token_epoch` INTEGER NOT NULL DEFAULT 0"
+            ))
+            log.info("迁移: src_dop_users 添加 token_epoch 列")
+    except Exception as e:
+        log.warning(f"迁移 src_dop_users.token_epoch 失败 | error={str(e)}")
+
     # ---- src_dop_api_configs: 补 is_locked (v2.9+) ----
     try:
         cols = await _get_existing_columns(conn, "src_dop_api_configs" + table_suffix, is_mysql)
