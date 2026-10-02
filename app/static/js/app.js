@@ -732,3 +732,237 @@ async function compareWithOtherEnv(projectId, apiId) {
     ov.querySelectorAll('[data-x]').forEach(b => b.onclick = () => ov.remove());
     document.body.appendChild(ov);
 }
+
+// ============================================================
+// 交互按钮（v2.23，参考 InteractiveHoverButton）：
+//   左侧小圆点，悬停时圆点扩散铺满按钮，原文字右滑淡出，同样文字 + 箭头滑入
+// 只作用于页面级主要按钮（主按钮 / 次按钮 / 亮绿 / 危险 / 成功，常规尺寸）；
+// 表格、卡片底栏、分段切换里的小按钮不处理；不想要效果的按钮加 class="no-fx"
+// ============================================================
+const UIButton = (() => {
+    const SEL = '.btn.btn-primary, .btn.btn-secondary, .btn.btn-lime, .btn.btn-danger, .btn.btn-success';
+    const ARROW = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+
+    function eligible(b) {
+        return b.matches && b.matches(SEL) && !b.matches('.btn-sm, .btn-xs, .no-fx')
+            && !b.closest('.seg, .api-actions, .pc-foot, .card-actions, table, .editor-tabs, .seg-toggle')
+            && b.textContent.trim();
+    }
+
+    function enhance(b) {
+        if (!eligible(b)) return;
+        if (b.querySelector(':scope > .ihb-label')) return;   // 已处理（且结构完好）
+        b.querySelectorAll(':scope > .ihb-dot, :scope > .ihb-hover').forEach(x => x.remove());
+        const text = b.textContent.trim();
+        const label = document.createElement('span');
+        label.className = 'ihb-label';
+        while (b.firstChild) label.appendChild(b.firstChild);
+        const dot = document.createElement('span');
+        dot.className = 'ihb-dot';
+        const hover = document.createElement('span');
+        hover.className = 'ihb-hover';
+        hover.setAttribute('aria-hidden', 'true');
+        hover.innerHTML = `<span></span>${ARROW}`;
+        hover.firstChild.textContent = text;
+        b.classList.add('ihb');
+        b.classList.toggle('ihb-icon', !!label.querySelector('svg'));
+        b.append(dot, label, hover);
+    }
+
+    function scan(root) {
+        if (!root || root.nodeType !== 1) return;
+        if (root.matches && root.matches(SEL)) enhance(root);
+        if (root.querySelectorAll) root.querySelectorAll(SEL).forEach(enhance);
+    }
+
+    function init() {
+        scan(document.body);
+        // 新增的按钮自动处理；旧代码用 textContent 改按钮文字（如「登录中...」）会冲掉结构，这里重新处理
+        new MutationObserver(ms => ms.forEach(m => {
+            const t = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+            const btn = t && t.closest && t.closest('.btn');
+            if (btn && !btn.querySelector(':scope > .ihb-label')) enhance(btn);
+            m.addedNodes.forEach(n => { if (n.nodeType === 1) scan(n); });
+        })).observe(document.body, { childList: true, subtree: true, characterData: true });
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+    return { enhance };
+})();
+
+// ============================================================
+// 日期选框（v2.23，参考 antd DatePicker）：替换原生 <input type="date">
+// - 显示 YYYY/MM/DD，中文日历浮层（周一开头），今天 / 清除，悬停可一键清除
+// - 原生 input 保留并隐藏，value 仍是 YYYY-MM-DD，读写 value / onchange 的旧代码不用改
+// - 支持 min / max 属性；data-min-from="另一个日期框 id" / data-max-from 联动成日期范围
+// - placeholder 写在原 input 的 placeholder 上（默认「选择日期」）
+// ============================================================
+const UIDate = (() => {
+    const vDesc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    const CAL = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="3"/><line x1="16" y1="2.5" x2="16" y2="6.5"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+    const WEEK = ['一', '二', '三', '四', '五', '六', '日'];
+    let panel = null, current = null, view = null;   // view: {y, m}
+
+    const pad = n => String(n).padStart(2, '0');
+    const iso = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
+    const parse = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? { y: +m[1], m: +m[2] - 1, d: +m[3] } : null; };
+    const todayIso = () => { const t = new Date(); return iso(t.getFullYear(), t.getMonth(), t.getDate()); };
+
+    function bound(inp, which) {
+        let v = inp.getAttribute(which) || '';
+        const from = inp.dataset[which === 'min' ? 'minFrom' : 'maxFrom'];
+        const other = from && document.getElementById(from);
+        const ov = other ? vDesc.get.call(other) : '';
+        if (ov && (!v || (which === 'min' ? ov > v : ov < v))) v = ov;
+        return v;
+    }
+
+    function enhance(inp) {
+        if (inp.dataset.ui === '1' || !inp.parentNode) return;
+        inp.dataset.ui = '1';
+        const wrap = document.createElement('div');
+        wrap.className = 'ui-date ' + [...inp.classList].filter(c => c !== 'form-input').join(' ');
+        wrap.style.cssText = inp.style.cssText;
+        wrap.tabIndex = 0;
+        wrap.innerHTML = `<span class="ui-date-text"></span><button type="button" class="ui-date-clear" tabindex="-1" aria-label="清除">×</button><span class="ui-date-icon">${CAL}</span>`;
+        inp.parentNode.insertBefore(wrap, inp);
+        wrap.appendChild(inp);
+        inp.removeAttribute('style');
+        inp.classList.add('ui-date-native');
+        inp.tabIndex = -1;
+        inp._ui = wrap; wrap._inp = inp;
+        Object.defineProperty(inp, 'value', { configurable: true, get() { return vDesc.get.call(this); }, set(v) { vDesc.set.call(this, v); refresh(this); } });
+        inp.addEventListener('change', () => refresh(inp));
+        new MutationObserver(() => refresh(inp)).observe(inp, { attributes: true, attributeFilter: ['disabled', 'style', 'placeholder'] });
+        wrap.addEventListener('mousedown', e => {
+            if (e.target.closest('.ui-date-clear')) { e.preventDefault(); setValue(inp, ''); return; }
+            e.preventDefault(); wrap.focus(); current === wrap ? close() : open(wrap);
+        });
+        wrap.addEventListener('keydown', e => {
+            if (e.key === 'Escape') close();
+            else if ((e.key === 'Enter' || e.key === ' ') && current !== wrap) { e.preventDefault(); open(wrap); }
+        });
+        refresh(inp);
+    }
+
+    function refresh(inp) {
+        const wrap = inp._ui; if (!wrap) return;
+        const v = parse(vDesc.get.call(inp));
+        const text = wrap.querySelector('.ui-date-text');
+        text.textContent = v ? `${v.y}/${pad(v.m + 1)}/${pad(v.d)}` : (inp.getAttribute('placeholder') || '选择日期');
+        text.classList.toggle('is-placeholder', !v);
+        wrap.classList.toggle('has-value', !!v);
+        wrap.classList.toggle('is-disabled', inp.disabled);
+        const d = inp.style.display;
+        if (d) { wrap.style.display = d === 'none' ? 'none' : ''; inp.style.display = ''; }
+        if (current === wrap) render();
+    }
+
+    function setValue(inp, v) {
+        if (vDesc.get.call(inp) === v) { close(); return; }
+        vDesc.set.call(inp, v);
+        refresh(inp);
+        close();
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+        inp.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function open(wrap) {
+        if (wrap._inp.disabled) return;
+        close();
+        current = wrap;
+        wrap.classList.add('is-open');
+        const v = parse(vDesc.get.call(wrap._inp)) || parse(bound(wrap._inp, 'min')) || parse(todayIso());
+        view = { y: v.y, m: v.m };
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.className = 'ui-date-panel';
+            panel.addEventListener('mousedown', e => e.preventDefault());
+            panel.addEventListener('click', e => {
+                const t = e.target.closest('[data-act]');
+                if (!t || !current) return;
+                const act = t.dataset.act, inp = current._inp;
+                if (act === 'day' && !t.classList.contains('is-disabled')) setValue(inp, t.dataset.v);
+                else if (act === 'today' && !t.disabled) setValue(inp, todayIso());
+                else if (act === 'clear') setValue(inp, '');
+                else if (act === 'prevY') { view.y--; render(); }
+                else if (act === 'nextY') { view.y++; render(); }
+                else if (act === 'prevM') { view.m--; if (view.m < 0) { view.m = 11; view.y--; } render(); }
+                else if (act === 'nextM') { view.m++; if (view.m > 11) { view.m = 0; view.y++; } render(); }
+            });
+            document.body.appendChild(panel);
+        }
+        render();
+        panel.style.display = 'block';
+        position();
+    }
+
+    function render() {
+        if (!panel || !current) return;
+        const inp = current._inp, sel = vDesc.get.call(inp), today = todayIso();
+        const min = bound(inp, 'min'), max = bound(inp, 'max');
+        const first = new Date(view.y, view.m, 1);
+        const lead = (first.getDay() + 6) % 7;             // 周一开头
+        const start = new Date(view.y, view.m, 1 - lead);
+        let cells = '';
+        for (let i = 0; i < 42; i++) {
+            const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+            const v = iso(d.getFullYear(), d.getMonth(), d.getDate());
+            const cls = ['ui-day'];
+            if (d.getMonth() !== view.m) cls.push('is-other');
+            if (v === today) cls.push('is-today');
+            if (v === sel) cls.push('is-selected');
+            if ((min && v < min) || (max && v > max)) cls.push('is-disabled');
+            cells += `<span class="${cls.join(' ')}" data-act="day" data-v="${v}">${d.getDate()}</span>`;
+        }
+        const todayOff = (min && today < min) || (max && today > max);
+        panel.innerHTML = `
+            <div class="ui-date-head">
+                <button type="button" data-act="prevY" title="上一年">«</button><button type="button" data-act="prevM" title="上个月">‹</button>
+                <span class="ui-date-title">${view.y}年 ${view.m + 1}月</span>
+                <button type="button" data-act="nextM" title="下个月">›</button><button type="button" data-act="nextY" title="下一年">»</button>
+            </div>
+            <div class="ui-date-week">${WEEK.map(w => `<span>${w}</span>`).join('')}</div>
+            <div class="ui-date-grid">${cells}</div>
+            <div class="ui-date-foot">
+                <button type="button" data-act="clear">清除</button>
+                <button type="button" data-act="today" ${todayOff ? 'disabled' : ''}>今天</button>
+            </div>`;
+    }
+
+    function position() {
+        if (!current || !panel) return;
+        const r = current.getBoundingClientRect();
+        if (r.bottom < 0 || r.top > window.innerHeight) { close(); return; }
+        panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - panel.offsetWidth - 8)) + 'px';
+        const below = window.innerHeight - r.bottom - 8, h = panel.offsetHeight;
+        panel.style.top = (below < h && r.top > below ? r.top - h - 6 : r.bottom + 6) + 'px';
+    }
+
+    function close() {
+        if (current) current.classList.remove('is-open');
+        current = null;
+        if (panel) panel.style.display = 'none';
+    }
+
+    function scan(root) {
+        if (!root || root.nodeType !== 1) return;
+        if (root.matches && root.matches('input[type="date"]')) enhance(root);
+        if (root.querySelectorAll) root.querySelectorAll('input[type="date"]').forEach(enhance);
+    }
+
+    function init() {
+        scan(document.body);
+        new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => {
+            if (n.nodeType === 1 && !(panel && panel.contains(n))) scan(n);
+        }))).observe(document.body, { childList: true, subtree: true });
+        document.addEventListener('mousedown', e => {
+            if (current && !current.contains(e.target) && !(panel && panel.contains(e.target))) close();
+        });
+        window.addEventListener('scroll', e => { if (!(panel && panel.contains(e.target))) position(); }, true);
+        window.addEventListener('resize', close);
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+    return { enhance };
+})();
