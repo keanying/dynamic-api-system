@@ -10,18 +10,18 @@
 
 {% block content %}
 <!-- 项目信息头 -->
-<div class="card mb-24" id="projectHeader">
-    <div class="card-body" style="display: flex; align-items: center; justify-content: space-between;">
-        <div>
-            <h2 id="projectName" style="font-size: 20px; font-weight: 700; margin-bottom: 4px;"></h2>
-            <p style="margin-bottom: 4px;"><code id="projectCode" style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px;color:#475569;"></code></p>
-            <p id="projectDesc" class="text-muted text-sm"></p>
+<div class="proj-hero" id="projectHeader">
+    <div class="ph-main">
+        <span class="avatar ph-avatar av-{{ project_id % 3 }}" id="projectAvatar"></span>
+        <div style="min-width:0;">
+            <h1 id="projectName"></h1>
+            <div class="ph-meta"><span class="code-chip" id="projectCode"></span><span id="projectDesc"></span></div>
         </div>
-        <div style="display: flex; gap: 16px; text-align: center;">
-            <div><div class="text-muted text-sm">API 总数</div><div style="font-size: 20px; font-weight: 700;" id="pApiCount">0</div></div>
-            <div><div class="text-muted text-sm">总调用</div><div style="font-size: 20px; font-weight: 700;" id="pTotalCalls">0</div></div>
-            <div><div class="text-muted text-sm">平均耗时</div><div style="font-size: 20px; font-weight: 700;" id="pAvgTime">-</div></div>
-        </div>
+    </div>
+    <div class="ph-stats">
+        <div class="ph-stat s-violet"><span>接口</span><b id="pApiCount">0</b></div>
+        <div class="ph-stat s-lime"><span>累计调用</span><b id="pTotalCalls">0</b></div>
+        <div class="ph-stat s-dark"><span>平均耗时</span><b id="pAvgTime">-</b></div>
     </div>
 </div>
 
@@ -111,10 +111,12 @@ async function loadProjectInfo() {
     const p = data.data;
     document.getElementById('breadcrumbName').textContent = p.name;
     document.getElementById('projectName').textContent = p.name;
+    document.getElementById('projectAvatar').textContent = (p.name || '').slice(0, 1);
     document.getElementById('projectCode').textContent = p.code || '';
-    document.getElementById('projectDesc').textContent = p.description || '暂无描述';
+    document.getElementById('projectDesc').textContent = p.description || '';
     document.getElementById('pApiCount').textContent = p.api_count;
-    document.getElementById('pTotalCalls').textContent = p.total_calls.toLocaleString();
+    document.getElementById('pTotalCalls').textContent = compactNum(p.total_calls);
+    document.getElementById('pTotalCalls').title = (p.total_calls || 0).toLocaleString();
     document.getElementById('pAvgTime').textContent = formatMs(p.avg_response_time);
 }
 
@@ -148,30 +150,30 @@ async function loadApis(page) {
         const fullUrl = `${window.location.origin}${GATEWAY_PREFIX}/${PROJECT_CODE}${api.url_path}`;
         const st = api.status || 'draft';
         const stMap = {
-            draft:    ['草稿', '#64748b', '#f1f5f9'],
+            draft:    ['草稿', '#71717a', '#f1f1f3'],
             pending:  ['审核中', '#92400e', '#fef3c7'],
-            approved: ['待上线', '#1d4ed8', '#dbeafe'],
-            online:   ['已上线', '#166534', '#dcfce7'],
+            approved: ['待上线', '#5b44c9', '#ece8fd'],
+            online:   ['已上线', '#3d5a0a', '#eaf8c4'],
             offline:  ['已下线', '#9a3412', '#ffedd5'],
         };
         const [stLabel, stColor, stBg] = stMap[st] || stMap.draft;
-        const statusBadge = `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${stBg};color:${stColor};font-weight:600;">${stLabel}</span>`;
+        const statusBadge = `<span style="font-size:11px;padding:2px 9px;border-radius:999px;background:${stBg};color:${stColor};font-weight:600;">${stLabel}</span>`;
         const isLocked = !!api.is_locked;
         const lockBadge = isLocked
-            ? `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#fee2e2;color:#b91c1c;font-weight:600;">🔒 已锁定</span>`
+            ? `<span style="font-size:11px;padding:2px 9px;border-radius:999px;background:#fee2e2;color:#b91c1c;font-weight:600;">🔒 已锁定</span>`
             : '';
 
         // 缓存 / 预热 状态标 (v2.13)
         const cacheOn = !!api.cache_enabled;
         const prewarmOn = !!api.cache_prewarm;
         const cacheBadge = cacheOn
-            ? `<span title="已开启缓存，TTL ${api.cache_ttl || 300} 秒" style="font-size:11px;padding:2px 8px;border-radius:4px;background:#e0f2fe;color:#075985;font-weight:600;">⚡ 缓存 ${api.cache_ttl || 300}s</span>`
+            ? `<span title="已开启缓存，TTL ${api.cache_ttl || 300} 秒" style="font-size:11px;padding:2px 9px;border-radius:999px;background:#ece8fd;color:#5b44c9;font-weight:600;">⚡ 缓存 ${api.cache_ttl || 300}s</span>`
             : '';
         // 预热依赖缓存，没开缓存时即使标记了预热也不会生效，这里给出提示
         const prewarmBadge = prewarmOn
             ? (cacheOn
-                ? `<span title="已开启自动预热：缓存快过期时后台自动重新查询回填（参数记录按自然日隔离）" style="font-size:11px;padding:2px 8px;border-radius:4px;background:#dcfce7;color:#166534;font-weight:600;">🔥 预热</span>`
-                : `<span title="历史遗留配置：勾了预热但没开缓存，预热不会生效，建议编辑该 API 开启缓存或关掉预热" style="font-size:11px;padding:2px 8px;border-radius:4px;background:#fef3c7;color:#92400e;font-weight:600;">🔥 预热(未启用缓存)</span>`)
+                ? `<span title="已开启自动预热：缓存快过期时后台自动重新查询回填（参数记录按自然日隔离）" style="font-size:11px;padding:2px 9px;border-radius:999px;background:#eaf8c4;color:#3d5a0a;font-weight:600;">🔥 预热</span>`
+                : `<span title="历史遗留配置：勾了预热但没开缓存，预热不会生效，建议编辑该 API 开启缓存或关掉预热" style="font-size:11px;padding:2px 9px;border-radius:999px;background:#fef3c7;color:#92400e;font-weight:600;">🔥 预热(未启用缓存)</span>`)
             : '';
 
         // 当前登录用户 id（用于判断"待上线"时是否本人提交，显示上线按钮）
@@ -225,7 +227,7 @@ async function loadApis(page) {
                     <span class="slider"></span>
                 </label>
             </div>
-            <div class="api-desc" title="${escapeHtml(api.description || '')}">${escapeHtml(api.description || '（无描述）')}</div>
+            ${api.description ? `<div class="api-desc" title="${escapeHtml(api.description)}">${escapeHtml(api.description)}</div>` : ''}
             <div class="api-path">
                 ${methodBadge(api.method)}
                 <code title="${escapeHtml(api.url_path)}">${escapeHtml(api.url_path)}</code>
@@ -237,18 +239,18 @@ async function loadApis(page) {
                     ? '<span class="text-muted" style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px;font-size:11px;">HTML</span>'
                     : ''}
                 ${(api.api_type === 'plugin')
-                    ? '<span class="text-muted" style="background:#e0e7ff;color:#3730a3;padding:1px 6px;border-radius:4px;font-size:11px;">插件</span>'
+                    ? '<span class="text-muted" style="background:#ece8fd;color:#5b44c9;padding:1px 6px;border-radius:4px;font-size:11px;">插件</span>'
                     : ''}
                 ${(api.api_type === 'sync')
                     ? '<span title="数据同步：写库接口，仅超级管理员可创建和调用" style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600;">✎ 数据同步</span>'
                     : ''}
                 ${(api.api_type === 'federated')
-                    ? '<span title="多源 SQL：一条 SQL 关联多个数据源的表" style="background:#ccfbf1;color:#0f766e;padding:1px 6px;border-radius:4px;font-size:11px;">多源 SQL</span>'
+                    ? '<span title="多源 SQL：一条 SQL 关联多个数据源的表" style="background:#eaf8c4;color:#3d5a0a;padding:1px 6px;border-radius:4px;font-size:11px;">多源 SQL</span>'
                     : ''}
                 ${api.datasource_name ? `<span class="text-muted">· ${escapeHtml(api.datasource_name)}</span>` : ''}
             </div>
             <div class="api-call-url">
-                <span style="font-size:11px; color:#64748b; white-space:nowrap;">调用</span>
+                <span style="font-size:11px; color:#71717a; white-space:nowrap;">调用</span>
                 <code title="${escapeHtml(fullUrl)}">${escapeHtml(fullUrl)}</code>
                 <button class="btn btn-ghost btn-sm" data-action="copy-url" title="复制调用地址" style="flex-shrink:0; padding:3px 7px;">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
@@ -258,7 +260,7 @@ async function loadApis(page) {
                 <span>调用 ${api.total_calls}</span>
                 <span>${formatMs(api.avg_time_ms)}</span>
                 <span>v${api.version}</span>
-                ${api.owner_name ? `<span title="责任人" style="color:#0f766e;">👤 ${escapeHtml(api.owner_name)}</span>` : ''}
+                ${api.owner_name ? `<span title="责任人" style="color:#3d5a0a;">👤 ${escapeHtml(api.owner_name)}</span>` : ''}
             </div>
             <div class="api-actions">
                 ${editBtn}
@@ -373,37 +375,37 @@ async function openVariablesDialog() {
     __varTypes = (res && res.data && res.data.var_types) || [];
 
     const html = `
-      <div id="__varsModal" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:9999;">
-        <div style="background:#fff;border-radius:8px;padding:20px;width:860px;max-height:86vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);">
-          <h3 style="margin:0 0 6px;font-size:16px;">项目环境变量</h3>
-          <p style="font-size:12px;color:#64748b;margin:0 0 14px;">
-            供「缓存预热参数模板」引用，写法 <code>\${变量名}</code>。
-            预热时实时求值，这样参数里的时间不会写死过期（例如今天预热就是今天的时间范围）。
-          </p>
+      <div id="__varsModal" class="modal-overlay" style="display:flex;">
+        <div class="modal" style="max-width:880px;width:94%;">
+          <div class="modal-header"><h3>项目环境变量</h3><button class="btn-icon" onclick="document.getElementById('__varsModal').remove()">&times;</button></div>
+          <div class="modal-body" style="max-height:70vh;overflow:auto;">
+          <div class="note" style="margin:0 0 14px;font-size:12.5px;"><span>供「缓存预热参数模板」引用，写法 <code>\${变量名}</code>。
+            预热时实时求值，这样参数里的时间不会写死过期（例如今天预热就是今天的时间范围）。</span></div>
           <div id="__varsList"></div>
-          <div style="border-top:1px solid #e2e8f0;margin-top:14px;padding-top:14px;">
-            <div style="font-size:13px;font-weight:600;margin-bottom:8px;">新增变量</div>
+          <div style="background:#f7f7f8;border-radius:18px;margin-top:14px;padding:16px;">
+            <div style="font-size:13px;font-weight:600;margin-bottom:10px;">新增变量</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-              <div><label style="font-size:11px;color:#64748b;display:block;">变量名</label>
+              <div><label style="font-size:11px;color:#71717a;display:block;">变量名</label>
                 <input id="__vName" class="form-input" style="width:150px;" placeholder="TODAY_START"></div>
-              <div><label style="font-size:11px;color:#64748b;display:block;">类型</label>
+              <div><label style="font-size:11px;color:#71717a;display:block;">类型</label>
                 <select id="__vType" class="form-select" style="width:170px;">
                   ${__varTypes.map(t => `<option value="${t.value}">${t.label}</option>`).join('')}
                 </select></div>
-              <div><label style="font-size:11px;color:#64748b;display:block;">偏移</label>
+              <div><label style="font-size:11px;color:#71717a;display:block;">偏移</label>
                 <input id="__vOffset" type="number" class="form-input" style="width:80px;" value="0"></div>
-              <div><label style="font-size:11px;color:#64748b;display:block;">格式(可空)</label>
+              <div><label style="font-size:11px;color:#71717a;display:block;">格式(可空)</label>
                 <input id="__vFormat" class="form-input" style="width:150px;" placeholder="%Y-%m-%d"></div>
-              <div><label style="font-size:11px;color:#64748b;display:block;">固定值(仅const)</label>
+              <div><label style="font-size:11px;color:#71717a;display:block;">固定值(仅const)</label>
                 <input id="__vConst" class="form-input" style="width:120px;"></div>
               <button class="btn btn-primary btn-sm" onclick="addVariable()">添加</button>
             </div>
-            <div style="font-size:11px;color:#94a3b8;margin-top:6px;">
+            <div style="font-size:11px;color:#a1a1aa;margin-top:6px;">
               偏移含义随类型而定：日期类按天，周类按周，月类按月。例：类型「日期」偏移 -1 = 昨天；类型「月初」偏移 -1 = 上月一号。
             </div>
           </div>
-          <div style="text-align:right;margin-top:16px;">
-            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('__varsModal').remove()">关闭</button>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="document.getElementById('__varsModal').remove()">关闭</button>
           </div>
         </div>
       </div>`;
@@ -415,7 +417,7 @@ function renderVariables(items) {
     const box = document.getElementById('__varsList');
     if (!box) return;
     if (!items.length) {
-        box.innerHTML = '<div style="color:#94a3b8;font-size:13px;padding:10px 0;">还没有变量，在下面添加。</div>';
+        box.innerHTML = '<div style="color:#a1a1aa;font-size:13px;padding:10px 0;">还没有变量，在下面添加。</div>';
         return;
     }
     box.innerHTML = `
@@ -429,8 +431,8 @@ function renderVariables(items) {
             <td><code>\${${escapeHtml(v.name)}}</code></td>
             <td>${escapeHtml(v.var_type)}</td>
             <td>${v.offset_days}</td>
-            <td style="color:#0f766e;">${escapeHtml(String(v.preview))}</td>
-            <td style="color:#64748b;">${escapeHtml(v.description || '')}</td>
+            <td style="color:#3d5a0a;">${escapeHtml(String(v.preview))}</td>
+            <td style="color:#71717a;">${escapeHtml(v.description || '')}</td>
             <td style="text-align:right;">
               <button class="btn btn-ghost btn-xs" onclick="deleteVariable(${v.id})">删除</button>
             </td>
@@ -493,7 +495,7 @@ async function openTransferDialog(apiId, apiName) {
       <div id="__transferModal" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:9999;">
         <div style="background:#fff;border-radius:8px;padding:20px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
           <h3 style="margin:0 0 12px;font-size:16px;">转交责任人</h3>
-          <p style="font-size:12px;color:#64748b;margin:0 0 10px;">API：<b>${escapeHtml(apiName || '')}</b></p>
+          <p style="font-size:12px;color:#71717a;margin:0 0 10px;">API：<b>${escapeHtml(apiName || '')}</b></p>
           <select id="__newOwner" class="form-select" style="width:100%;margin-bottom:14px;">
             <option value="">选择新责任人…</option>${opts}
           </select>
@@ -645,7 +647,7 @@ function offlineApi(apiId, apiName) {
     });
 }
 
-console.log('%c[OneData] project_detail 版本: v2.11.8 (延迟刷新修复状态不同步)', 'color:#0f766e;font-weight:bold;');
+console.log('%c[OneData] project_detail 版本: v2.11.8 (延迟刷新修复状态不同步)', 'color:#3d5a0a;font-weight:bold;');
 loadProjectInfo();
 loadApis();
 </script>

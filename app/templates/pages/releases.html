@@ -7,25 +7,24 @@
 {% endblock %}
 
 {% block content %}
-<div class="card mb-24">
-    <div class="card-body text-sm text-muted" style="line-height:1.8;">
-        {% if app_env.is_prod %}
-        预发环境发起的发布单在这里审核。打开发布单可以看到 <b>待发布内容</b> 与 <b>生产当前配置</b> 的逐项差异；
-        审核通过后会写入生产并直接上线，驳回则生产不做任何改动。仅管理员可审核。
-        {% else %}
-        在项目的 API 列表里，对 <b>已上线</b> 的 API 点「发布到生产」即可发起发布单。
-        发布单需要到 <b>生产环境</b> 由管理员核对差异后审核，审核前可以在这里撤回。
-        {% endif %}
+<div class="page-head">
+    <h1>发布审核 <span class="count" id="relCount">-</span></h1>
+    <div class="actions">
+        <div class="seg">
+            <button class="btn btn-sm" data-tab="pending" onclick="switchTab('pending')">待审核</button>
+            <button class="btn btn-ghost btn-sm" data-tab="all" onclick="switchTab('all')">全部</button>
+        </div>
+        <button class="btn btn-secondary" onclick="loadReleases()">刷新</button>
     </div>
 </div>
 
-<div class="toolbar">
-    <div class="toolbar-left">
-        <button class="btn btn-sm" data-tab="pending" onclick="switchTab('pending')">待审核</button>
-        <button class="btn btn-ghost btn-sm" data-tab="all" onclick="switchTab('all')">全部</button>
-    </div>
-    <div class="toolbar-right">
-        <button class="btn btn-ghost btn-sm" onclick="loadReleases()">刷新</button>
+<div class="note mb-16">
+    <div>
+        {% if app_env.is_prod %}
+        预发环境发起的发布单在这里审核：核对 <b>待发布内容</b> 与 <b>生产当前配置</b> 的差异，通过即上线，驳回不改动生产。
+        {% else %}
+        对 <b>已上线</b> 的 API 点「发布到生产」发起发布单，由管理员在 <b>生产环境</b> 审核，审核前可撤回。
+        {% endif %}
     </div>
 </div>
 
@@ -45,7 +44,7 @@
                 </tr>
             </thead>
             <tbody id="relBody">
-                <tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:24px;">加载中…</td></tr>
+                <tr><td colspan="8" style="text-align:center;color:#a1a1aa;padding:24px;">加载中…</td></tr>
             </tbody>
         </table>
     </div>
@@ -73,16 +72,16 @@ let current = null;   // 当前打开的发布单详情
 
 const REL_STATUS = {
     pending:   ['待审核', '#92400e', '#fef3c7'],
-    approved:  ['已发布', '#166534', '#dcfce7'],
+    approved:  ['已发布', '#3d5a0a', '#eaf8c4'],
     rejected:  ['已驳回', '#991b1b', '#fee2e2'],
-    cancelled: ['已撤回', '#475569', '#f1f5f9'],
+    cancelled: ['已撤回', '#52525b', '#f1f1f3'],
 };
 
 function esc(v) { return escapeHtml(v === null || v === undefined ? '' : String(v)); }
 
 function relBadge(st) {
-    const [t, c, bg] = REL_STATUS[st] || [st, '#475569', '#f1f5f9'];
-    return `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${bg};color:${c};font-weight:600;">${t}</span>`;
+    const [t, c, bg] = REL_STATUS[st] || [st, '#52525b', '#f1f1f3'];
+    return `<span style="font-size:11px;padding:2px 9px;border-radius:999px;background:${bg};color:${c};font-weight:600;">${t}</span>`;
 }
 
 function switchTab(tab) {
@@ -98,19 +97,20 @@ async function loadReleases(page) {
     const body = document.getElementById('relBody');
     const res = await API.get(`/api/releases?status=${relTab}&page=${relPage}&page_size=20&_t=${Date.now()}`);
     const items = (res && res.data && res.data.items) || [];
+    document.getElementById('relCount').textContent = (res && res.data && res.data.total) || items.length;
     if (!items.length) {
-        body.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:24px;">暂无发布单</td></tr>`;
+        body.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#a1a1aa;padding:24px;">暂无发布单</td></tr>`;
         document.getElementById('relPagination').innerHTML = '';
         return;
     }
     body.innerHTML = items.map(r => `<tr>
-        <td style="color:#94a3b8;">${r.id}</td>
+        <td style="color:#a1a1aa;">${r.id}</td>
         <td>${methodBadge(r.method)} <b>${esc(r.api_name)}</b><div class="text-muted" style="font-size:12px;"><code>${esc(r.url_path)}</code></div></td>
         <td>${esc(r.project_name)}<div class="text-muted" style="font-size:12px;">${esc(r.project_code)}</div></td>
         <td>${esc(r.submitter_name)}</td>
-        <td style="max-width:220px;color:#64748b;font-size:12px;">${esc((r.remark || '').slice(0, 60))}</td>
+        <td style="max-width:220px;color:#71717a;font-size:12px;">${esc((r.remark || '').slice(0, 60))}</td>
         <td>${relBadge(r.status)}${r.reviewer_name ? `<div class="text-muted" style="font-size:12px;">${esc(r.reviewer_name)}</div>` : ''}</td>
-        <td style="color:#94a3b8;font-size:12px;">${esc(r.created_at)}</td>
+        <td style="color:#a1a1aa;font-size:12px;">${esc(r.created_at)}</td>
         <td style="text-align:right;"><button class="btn btn-secondary btn-xs" onclick="openRelease(${r.id})">${(res.data.can_review && r.status === 'pending') ? '核对差异并审核' : '查看'}</button></td>
     </tr>`).join('');
     renderPagination('relPagination', relPage, Math.ceil(res.data.total / res.data.page_size), 'loadReleases');
@@ -149,7 +149,7 @@ function renderDiff(d) {
         ? '对比对象：<b>生产当前配置</b>（实时）'
         : '对比对象：<b>发布当时的生产配置</b>';
     let html = `<p class="text-sm" style="margin-bottom:10px;">${basis}；`
-             + (diff.is_new ? '<b style="color:#1d4ed8;">生产环境尚无该 API，审核通过将新建</b>' : `共 <b>${diff.changed_count}</b> 项变更`)
+             + (diff.is_new ? '<b style="color:#5b44c9;">生产环境尚无该 API，审核通过将新建</b>' : `共 <b>${diff.changed_count}</b> 项变更`)
              + '</p>';
     const changed = diff.fields.filter(f => f.changed);
     const same = diff.fields.filter(f => !f.changed);
@@ -158,7 +158,7 @@ function renderDiff(d) {
     const simple = changed.filter(f => !f.multiline);
     if (simple.length) {
         html += `<table class="data-table" style="width:100%;margin-bottom:12px;"><thead><tr><th style="width:160px;">配置项</th><th>生产当前</th><th>待发布</th></tr></thead><tbody>`
-             + simple.map(f => `<tr><td>${esc(f.label)}</td><td style="color:#991b1b;">${fmtVal(f.before)}</td><td style="color:#166534;">${fmtVal(f.after)}</td></tr>`).join('')
+             + simple.map(f => `<tr><td>${esc(f.label)}</td><td style="color:#991b1b;">${fmtVal(f.before)}</td><td style="color:#3d5a0a;">${fmtVal(f.after)}</td></tr>`).join('')
              + '</tbody></table>';
     }
     changed.filter(f => f.multiline).forEach(f => {

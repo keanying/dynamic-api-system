@@ -8,18 +8,18 @@
         position: relative;
         border-radius: 8px;
         overflow: hidden;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #e4e4e7;
     }
     .code-editor-toolbar {
         display: flex;
         justify-content: space-between;
         align-items: center;
         padding: 8px 12px;
-        background: #1e293b;
-        border-bottom: 1px solid #334155;
+        background: #27272a;
+        border-bottom: 1px solid #3f3f46;
     }
     .code-editor-toolbar span {
-        color: #94a3b8;
+        color: #a1a1aa;
         font-size: 12px;
     }
     .code-editor-container {
@@ -29,9 +29,9 @@
     .code-editor-container textarea {
         width: 100%;
         min-height: 200px;
-        background: #282c34;
+        background: #2a2a2d;
         color: #abb2bf;
-        caret-color: #e2e8f0;
+        caret-color: #e4e4e7;
         font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
         font-size: 13px;
         line-height: 1.6;
@@ -53,7 +53,7 @@
         line-height: 1.6;
         white-space: pre;
         overflow: auto;
-        background: #282c34;
+        background: #2a2a2d;
         cursor: text;
     }
     .code-editor-container pre code {
@@ -75,7 +75,7 @@
     .test-result-wrapper {
         border-radius: 8px;
         overflow: hidden;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #e4e4e7;
         margin-top: 12px;
     }
     .test-result-header {
@@ -83,8 +83,8 @@
         justify-content: space-between;
         align-items: center;
         padding: 8px 12px;
-        background: #1e293b;
-        color: #94a3b8;
+        background: #27272a;
+        color: #a1a1aa;
         font-size: 12px;
     }
     .test-result-body pre {
@@ -103,16 +103,19 @@
         align-items: center;
         gap: 8px;
         padding: 10px 14px;
-        background: #f1f5f9;
+        background: #f1f1f3;
         border-radius: 8px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #e4e4e7;
         margin-top: 6px;
     }
     .call-url-box code {
         flex: 1;
+        min-width: 0;
         font-size: 12px;
-        color: #1e293b;
-        word-break: break-all;
+        color: #27272a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         user-select: all;
     }
     .call-url-box .copy-btn {
@@ -121,48 +124,48 @@
         font-size: 12px;
         cursor: pointer;
         background: #fff;
-        border: 1px solid #cbd5e1;
+        border: 1px solid #d4d4d8;
         border-radius: 4px;
-        color: #475569;
+        color: #52525b;
         transition: all 0.2s;
     }
     .call-url-box .copy-btn:hover {
-        background: #e2e8f0;
-        color: #1e293b;
+        background: #e4e4e7;
+        color: #27272a;
     }
     .param-validation-error {
         border: 2px solid #ef4444 !important;
         background: #fef2f2 !important;
     }
     /* 多步骤管线 - 可视化编排 */
-    .pmode-btn { border:none; background:#fff; padding:5px 12px; font-size:12px; color:#64748b; cursor:pointer; }
-    .pmode-btn.pmode-active { background:#4f46e5; color:#fff; }
-    .step-card { border:1px solid #e2e8f0; border-radius:10px; margin-bottom:10px; background:#fff; overflow:hidden; }
-    .step-card-head { display:flex; align-items:center; gap:10px; padding:10px 14px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
-    .step-num { width:22px; height:22px; border-radius:50%; background:#4f46e5; color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-weight:600; }
+    .pmode-btn { border:none; background:#fff; padding:5px 12px; font-size:12px; color:#71717a; cursor:pointer; }
+    .pmode-btn.pmode-active { background:#8f78ee; color:#fff; }
+    .step-card { border:1px solid #e4e4e7; border-radius:10px; margin-bottom:10px; background:#fff; overflow:hidden; }
+    .step-card-head { display:flex; align-items:center; gap:10px; padding:10px 14px; background:#f7f7f8; border-bottom:1px solid #e4e4e7; }
+    .step-num { width:22px; height:22px; border-radius:50%; background:#8f78ee; color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-weight:600; }
     .step-card-head .step-name-inp { font-weight:600; font-size:13px; border:1px solid transparent; background:transparent; padding:3px 6px; border-radius:4px; width:140px; }
-    .step-card-head .step-name-inp:hover, .step-card-head .step-name-inp:focus { border-color:#cbd5e1; background:#fff; outline:none; }
-    .step-type-badge { font-size:11px; padding:2px 8px; border-radius:4px; background:#ede9fe; color:#6d28d9; }
-    .step-type-badge.sql { background:#dbeafe; color:#1d4ed8; }
+    .step-card-head .step-name-inp:hover, .step-card-head .step-name-inp:focus { border-color:#d4d4d8; background:#fff; outline:none; }
+    .step-type-badge { font-size:11px; padding:2px 8px; border-radius:4px; background:#ece8fd; color:#5b44c9; }
+    .step-type-badge.sql { background:#ece8fd; color:#5b44c9; }
     .step-card-body { padding:12px 14px; }
     .step-field { margin-bottom:10px; }
-    .step-field label { display:block; font-size:11px; color:#64748b; margin-bottom:3px; font-weight:500; }
+    .step-field label { display:block; font-size:11px; color:#71717a; margin-bottom:3px; font-weight:500; }
     .step-field input, .step-field select, .step-field textarea {
-        width:100%; padding:6px 9px; font-size:12.5px; border:1px solid #cbd5e1; border-radius:5px; font-family:inherit;
+        width:100%; padding:6px 9px; font-size:12.5px; border:1px solid #d4d4d8; border-radius:5px; font-family:inherit;
     }
     .step-field textarea { font-family:'Fira Code','JetBrains Mono',monospace; font-size:12px; line-height:1.55; resize:vertical; }
-    .step-field .hint { font-size:10.5px; color:#94a3b8; margin-top:2px; }
+    .step-field .hint { font-size:10.5px; color:#a1a1aa; margin-top:2px; }
     .step-row { display:flex; gap:10px; }
     .step-row > * { flex:1; }
-    .step-icon-btn { border:none; background:none; cursor:pointer; color:#94a3b8; padding:3px 6px; border-radius:4px; font-size:13px; }
-    .step-icon-btn:hover { background:#e2e8f0; color:#475569; }
+    .step-icon-btn { border:none; background:none; cursor:pointer; color:#a1a1aa; padding:3px 6px; border-radius:4px; font-size:13px; }
+    .step-icon-btn:hover { background:#e4e4e7; color:#52525b; }
     .step-icon-btn.del:hover { background:#fee2e2; color:#dc2626; }
     .kv-row { display:flex; gap:6px; margin-bottom:6px; align-items:center; }
-    .kv-row input { flex:1; padding:5px 8px; font-size:12px; border:1px solid #cbd5e1; border-radius:5px; }
-    .kv-row .kv-del { border:none;background:none;color:#cbd5e1;cursor:pointer;font-size:16px;padding:0 4px; }
+    .kv-row input { flex:1; padding:5px 8px; font-size:12px; border:1px solid #d4d4d8; border-radius:5px; }
+    .kv-row .kv-del { border:none;background:none;color:#d4d4d8;cursor:pointer;font-size:16px;padding:0 4px; }
     .kv-row .kv-del:hover { color:#dc2626; }
-    .return-tag { font-size:10.5px; padding:2px 7px; border-radius:4px; background:#dcfce7; color:#15803d; cursor:pointer; border:1px solid #bbf7d0; }
-    .return-tag.off { background:#f1f5f9; color:#94a3b8; border-color:#e2e8f0; }
+    .return-tag { font-size:10.5px; padding:2px 7px; border-radius:4px; background:#eaf8c4; color:#3d5a0a; cursor:pointer; border:1px solid #d9f09a; }
+    .return-tag.off { background:#f1f1f3; color:#a1a1aa; border-color:#e4e4e7; }
 
     /* ===== v2.2 编辑器工作台布局 ===== */
     .editor-idbar {
@@ -178,7 +181,8 @@
     .idbar-name { flex: 1 1 200px; min-width: 180px; }
     .idbar-actions { display: flex; gap: 8px; align-items: center; margin-left: auto; }
     .idbar-sub { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
-    .idbar-sub .call-url-box { margin: 0; flex: 1; min-width: 260px; }
+    .idbar-sub .call-url-box { margin: 0; flex: 1 1 360px; min-width: 260px; }
+    .idbar-sub #ownerBox { flex: 0 0 auto; min-width: 0; }
     .idbar-enable { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); white-space: nowrap; }
 
     .editor-tabs {
@@ -193,7 +197,7 @@
         border-radius: 8px 8px 0 0; transition: color var(--transition), background var(--transition);
         display: inline-flex; align-items: center; gap: 6px;
     }
-    .editor-tab:hover { color: var(--color-text); background: rgba(48,86,224,0.05); }
+    .editor-tab:hover { color: var(--color-text); background: rgba(143,120,238,0.05); }
     .editor-tab.active { color: var(--color-primary); font-weight: 600; }
     .editor-tab.active::after {
         content: ''; position: absolute; left: 8px; right: 8px; bottom: -2px;
@@ -201,7 +205,7 @@
     }
     .editor-tab .tab-count {
         min-width: 17px; height: 17px; line-height: 17px; padding: 0 5px;
-        border-radius: 9px; background: #e8edf7; color: var(--color-text-secondary);
+        border-radius: 9px; background: #ececee; color: var(--color-text-secondary);
         font-size: 10.5px; font-family: var(--font-mono); text-align: center;
     }
     .editor-tab.active .tab-count { background: var(--color-primary); color: #fff; }
@@ -212,22 +216,22 @@
     /* ===== v2.4 左右两栏工作台:左=定义(页签) 右=常驻测试 ===== */
     .editor-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 16px; align-items: start; }
     .editor-left { min-width: 0; }
-    .editor-right { position: sticky; top: calc(var(--topbar-height) + 130px); }
+    .editor-right { position: sticky; top: calc(var(--topbar-height) + 168px); }
     @media (max-width: 1180px) {
         .editor-workspace { grid-template-columns: 1fr; }
         .editor-right { position: static; }
     }
     /* 右侧常驻测试面板 */
     .test-dock { border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); box-shadow: var(--shadow-sm); overflow: hidden; }
-    .test-dock-head { padding: 12px 14px; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; justify-content: space-between; background: linear-gradient(180deg, #fbfcfe, #f5f8fc); }
+    .test-dock-head { padding: 12px 14px; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; justify-content: space-between; background: linear-gradient(180deg, #f7f7f8, #f4f4f5); }
     .test-dock-head h3 { font-size: 14px; margin: 0; }
     .test-dock-body { padding: 12px 14px; }
     .test-dock-section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.4px; color: var(--color-text-secondary); margin: 0 0 6px; display: flex; align-items: center; justify-content: space-between; }
     .test-dock textarea { width: 100%; font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--color-border); border-radius: 8px; padding: 9px 11px; resize: vertical; }
     .test-dock-result { margin-top: 12px; }
-    .test-dock-result pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; font-size: 11.5px; line-height: 1.55; max-height: 320px; overflow: auto; margin: 0; white-space: pre-wrap; }
+    .test-dock-result pre { background: #1c1c1e; color: #e4e4e7; padding: 12px; border-radius: 8px; font-size: 11.5px; line-height: 1.55; max-height: 320px; overflow: auto; margin: 0; white-space: pre-wrap; }
     .test-dock-meta { font-size: 11.5px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
-    .test-dock-meta .m-ok { color: #16a34a; font-weight: 600; }
+    .test-dock-meta .m-ok { color: #4d7c0f; font-weight: 600; }
     .test-dock-meta .m-err { color: #dc2626; font-weight: 600; }
     .test-dock-empty { padding: 26px 10px; text-align: center; color: var(--color-text-muted); font-size: 12.5px; }
     @keyframes paneIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
@@ -239,21 +243,21 @@
     }
     .param-help-item {
         border: 1px solid var(--color-border); border-radius: var(--radius-sm);
-        padding: 10px 12px; background: #fbfcfe; font-size: 12px; line-height: 1.55;
+        padding: 10px 12px; background: #f7f7f8; font-size: 12px; line-height: 1.55;
         color: var(--color-text-secondary);
     }
     .param-help-item code {
-        font-family: var(--font-mono); background: #eef2ff; color: var(--color-primary);
+        font-family: var(--font-mono); background: #ece8fd; color: var(--color-primary);
         padding: 1px 5px; border-radius: 4px; font-size: 11.5px;
     }
     .param-help-item b { color: var(--color-text); display: block; margin-bottom: 2px; font-size: 12.5px; }
     .schema-summary { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
     .schema-chip {
         font-family: var(--font-mono); font-size: 10.5px;
-        background: #f0f4fc; border: 1px solid #dbe4f5; color: #3b5bd6;
+        background: #f4f4f5; border: 1px solid #e4e4e7; color: #8f78ee;
         padding: 1px 7px; border-radius: 10px; cursor: pointer; white-space: nowrap;
     }
-    .schema-chip:hover { background: #e3ebfa; }
+    .schema-chip:hover { background: #ececee; }
     .schema-chip .req { color: var(--color-danger); font-weight: 700; }
     .schema-cols {
         display: flex; gap: 8px; margin-bottom: 4px; padding: 0 2px;
@@ -272,22 +276,22 @@
     .sp-tab.active::after { content:''; position:absolute; left:8px; right:8px; bottom:-1px; height:2px;
         background:var(--color-primary); border-radius:2px; }
     .sp-pane { display:none; } .sp-pane.active { display:block; }
-    .sp-section-title { font-size:12px; color:#64748b; margin:12px 0 6px; font-weight:600; }
+    .sp-section-title { font-size:12px; color:#71717a; margin:12px 0 6px; font-weight:600; }
     .sp-section-title:first-child { margin-top:0; }
     .sp-tree { font-family:var(--font-mono); font-size:12px; line-height:1.9; }
-    .sp-tree .t-name { color:#1d4ed8; font-weight:600; }
-    .sp-tree .t-type { color:#0e7490; }
+    .sp-tree .t-name { color:#5b44c9; font-weight:600; }
+    .sp-tree .t-type { color:#5b44c9; }
     .sp-tree .t-req { color:var(--color-danger); font-weight:700; margin-left:2px; }
-    .sp-tree .t-desc { color:#94a3b8; margin-left:8px; font-family:inherit; }
-    .sp-tree .t-path { color:#a78bfa; font-size:11px; margin-left:8px; cursor:pointer; }
+    .sp-tree .t-desc { color:#a1a1aa; margin-left:8px; font-family:inherit; }
+    .sp-tree .t-path { color:#b7a7f5; font-size:11px; margin-left:8px; cursor:pointer; }
     .sp-tree .t-path:hover { text-decoration:underline; }
-    .sp-code { background:#0f172a; color:#e2e8f0; padding:12px 14px; border-radius:6px;
+    .sp-code { background:#1c1c1e; color:#e4e4e7; padding:12px 14px; border-radius:6px;
         font-size:12px; line-height:1.6; max-height:280px; overflow:auto; margin:0; white-space:pre-wrap;
         font-family:var(--font-mono); }
     .sp-bind-table { width:100%; border-collapse:collapse; font-size:12px; }
-    .sp-bind-table th { text-align:left; padding:5px 8px; color:#64748b; font-weight:600; border-bottom:1px solid #e2e8f0; font-size:11px; }
-    .sp-bind-table td { padding:5px 8px; border-bottom:1px solid #f1f5f9; font-family:var(--font-mono); vertical-align:top; }
-    .sp-note { font-size:11.5px; color:#94a3b8; margin-top:6px; }
+    .sp-bind-table th { text-align:left; padding:5px 8px; color:#71717a; font-weight:600; border-bottom:1px solid #e4e4e7; font-size:11px; }
+    .sp-bind-table td { padding:5px 8px; border-bottom:1px solid #f1f1f3; font-family:var(--font-mono); vertical-align:top; }
+    .sp-note { font-size:11.5px; color:#a1a1aa; margin-top:6px; }
 
 </style>
 {% endblock %}
@@ -312,8 +316,8 @@
             <div class="idbar-field">
                 <label>类型</label>
                 <select class="form-select" id="apiType" onchange="onApiTypeChange()">
-                    <option value="sql">数据 API</option>
-                    <option value="federated">多源 SQL API（跨数据源关联）</option>
+                    <option value="sql">SQL 查询</option>
+                    <option value="federated" hidden>SQL 查询</option>
                     <option value="html">静态页面 API</option>
                     <option value="plugin">Python API</option>
                     <option value="sync" id="apiTypeSyncOption">数据同步 API（仅超管）</option>
@@ -342,7 +346,7 @@
         </div>
         <div class="idbar-sub">
             <div class="call-url-box">
-                <span style="font-size:11px; color:#64748b; white-space:nowrap;">调用地址:</span>
+                <span style="font-size:11px; color:#71717a; white-space:nowrap;">调用地址:</span>
                 <code id="fullCallUrl">{{ gateway_prefix }}/{{ project_code | default(project_id) }}/api/users</code>
                 <button type="button" class="copy-btn" onclick="copyCallUrl()">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
@@ -350,14 +354,14 @@
                 </button>
             </div>
             <div class="call-url-box" id="ownerBox" style="display:none;">
-                <span style="font-size:11px; color:#64748b; white-space:nowrap;">责任人:</span>
-                <code id="ownerName" style="color:#0f766e;">-</code>
+                <span style="font-size:11px; color:#71717a; white-space:nowrap;">责任人:</span>
+                <code id="ownerName" style="color:#3d5a0a;">-</code>
                 <button type="button" class="copy-btn" onclick="openTransferDialog()" title="转交责任人">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
                     转交
                 </button>
             </div>
-            <span class="text-sm text-muted" id="apiTypeHint">通过 SQL/管线 把数据库查询发布为 RESTful API</span>
+            <span class="text-sm text-muted" id="apiTypeHint">写一条 SQL 即发布为接口，可用「选表生成 SQL」自动生成</span>
             <label class="idbar-enable">
                 <label class="switch"><input type="checkbox" id="apiEnabled" checked><span class="slider"></span></label>
                 启用
@@ -520,40 +524,39 @@
     <!-- ============ 页3: 执行逻辑(主工作区,原逻辑定义) ============ -->
     <div class="editor-pane" id="pane-logic">
 
-    <!-- 数据源选择 -->
-    <div class="card mb-16" data-mode="sql sync" id="datasourceCard">
+    <!-- 数据源选择：SQL 查询分「单个数据源 / 多个数据源」两种（后者即多源 SQL，v2.23 合并入口） -->
+    <div class="card mb-16" data-mode="sql federated sync" id="datasourceCard">
         <div class="card-header">
             <h3>数据源</h3>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="loadDatasources()">刷新</button>
+            <div style="display:flex; gap:8px; align-items:center; margin-left:auto;">
+                <div class="seg" data-mode="sql federated">
+                    <button type="button" class="btn btn-sm" id="dsModeSingle" onclick="setSqlSourceMode('sql')">单个数据源</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="dsModeMulti" onclick="setSqlSourceMode('federated')">多个数据源</button>
+                </div>
+            </div>
         </div>
         <div class="card-body">
-            <div class="form-group">
-                <label class="form-label">选择数据源</label>
-                <select class="form-select" id="apiDatasource">
-                    <option value="">-- 请选择数据源 --</option>
-                </select>
+            <div class="form-group" data-mode="sql sync" style="margin-bottom:0;">
+                <div style="display:flex; gap:8px;">
+                    <select class="form-select" id="apiDatasource" style="flex:1;">
+                        <option value="">-- 请选择数据源 --</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary" onclick="loadDatasources()">刷新</button>
+                </div>
                 <div class="form-hint"><a href="/admin/datasources" target="_blank">管理数据源</a></div>
             </div>
-        </div>
-    </div>
-
-    <!-- 多源 SQL（仅 api_type == federated 显示，v2.22） -->
-    <div class="card mb-16" id="federatedCard" data-mode="federated" style="display:none;">
-        <div class="card-header">
-            <h3>多源 SQL</h3>
-            <div style="display:flex; gap:8px; align-items:center; margin-left:auto;">
-                <button type="button" class="btn btn-ghost btn-sm" onclick="loadCatalogs()">刷新</button>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="explainFederated()">执行计划</button>
-            </div>
-        </div>
-        <div class="card-body">
-            <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                <div style="flex:1 1 260px; min-width:240px; max-height:320px; overflow:auto; border:1px solid #e2e8f0; border-radius:6px; padding:8px; font-size:12.5px;" id="catalogTree">
+            <div data-mode="federated" id="federatedCard">
+                <div class="fed-browser" id="catalogTree">
                     <div class="text-muted">加载中...</div>
                 </div>
-                <div style="flex:2 1 360px; min-width:280px;">
-                    <pre id="federatedPlan" style="display:none; max-height:320px; overflow:auto; background:#0f172a; color:#e2e8f0; padding:10px; border-radius:6px; font-size:12px; white-space:pre-wrap;"></pre>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                    <span class="text-sm text-muted">SQL 里用 <code class="code-chip">数据源.库.表</code> 引用不同数据源的表</span>
+                    <div style="display:flex; gap:8px;">
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="loadCatalogs()">刷新</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="explainFederated()">执行计划</button>
+                    </div>
                 </div>
+                <pre id="federatedPlan" style="display:none; margin-top:10px; max-height:320px; overflow:auto; background:#1c1c1e; color:#e4e4e7; padding:12px 14px; border-radius:14px; font-size:12px; white-space:pre-wrap;"></pre>
             </div>
         </div>
     </div>
@@ -563,7 +566,11 @@
         <div class="card-header">
             <h3>SQL 模板</h3>
             <div style="display:flex; gap:8px; align-items:center; margin-left:auto;">
-                <span class="text-sm text-muted" id="sqlModeHint">单数据源查询</span>
+                <span class="text-sm text-muted" id="sqlModeHint" style="display:none;">单数据源查询</span>
+                <button type="button" class="btn btn-lime btn-sm" onclick="openQueryWizard()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px;"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7M14 17.5h7"/></svg>
+                    选表生成 SQL
+                </button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="openStructurePreview('sql')">渲染预览</button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="openTutorial()">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px;"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -572,17 +579,14 @@
             </div>
         </div>
         <div class="card-body">
-            <div style="display:flex; justify-content:flex-end; gap:6px; margin-bottom:8px;">
-                <button type="button" class="btn btn-ghost btn-sm" style="color:#64748b;" onclick="previewRenderedSql()">预览渲染</button>
-            </div>
             <div id="sqlEditorMount"></div>
             <textarea id="apiSql" style="display:none;"></textarea>
             <div class="text-sm text-muted" style="margin-top:8px;">
                 支持
-                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">:param</code>
-                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">#{var}</code>
-                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">$if$</code>
-                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">$for$</code>
+                <code style="background:#f1f1f3;padding:1px 5px;border-radius:3px;font-size:11px;">:param</code>
+                <code style="background:#f1f1f3;padding:1px 5px;border-radius:3px;font-size:11px;">#{var}</code>
+                <code style="background:#f1f1f3;padding:1px 5px;border-radius:3px;font-size:11px;">$if$</code>
+                <code style="background:#f1f1f3;padding:1px 5px;border-radius:3px;font-size:11px;">$for$</code>
                 等语法 — 点右上角「使用教程」查看完整说明和示例。
             </div>
         </div>
@@ -602,21 +606,21 @@
         </div>
         <div class="card-body">
             <!-- 关闭状态提示 -->
-            <div id="pipelineDisabledHint" style="padding:20px; text-align:center; color:#94a3b8; font-size:13px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px;">
-                当前为<strong style="color:#475569;">单数据源</strong>模式，使用上方 SQL 模板。<br>
-                需要在一个 API 内查询<strong style="color:#475569;">多个数据库</strong>并做聚合/关联时，打开右上角开关。
+            <div id="pipelineDisabledHint" style="padding:20px; text-align:center; color:#a1a1aa; font-size:13px; background:#f7f7f8; border:1px dashed #d4d4d8; border-radius:8px;">
+                当前为<strong style="color:#52525b;">单数据源</strong>模式，使用上方 SQL 模板。<br>
+                需要在一个 API 内查询<strong style="color:#52525b;">多个数据库</strong>并做聚合/关联时，打开右上角开关。
             </div>
 
             <!-- 开启状态：可视化编排 + JSON 模式切换 -->
             <div id="pipelineEditor" style="display:none;">
                 <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-                    <div style="font-size:12.5px; color:#475569;">
+                    <div style="font-size:12.5px; color:#52525b;">
                         每步可查询不同数据源，用
-                        <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">${'$'}{步骤名.*.字段}</code>
+                        <code style="background:#f1f1f3;padding:1px 5px;border-radius:3px;font-size:11px;">${'$'}{步骤名.*.字段}</code>
                         引用前序步骤结果。
                         <button type="button" class="btn btn-ghost btn-sm" style="padding:1px 8px;" onclick="openTutorial('pipeline')">查看教程 →</button>
                     </div>
-                    <div class="seg-toggle" style="display:flex; border:1px solid #cbd5e1; border-radius:6px; overflow:hidden;">
+                    <div class="seg-toggle" style="display:flex; border:1px solid #d4d4d8; border-radius:6px; overflow:hidden;">
                         <button type="button" id="modeBtnVisual" class="pmode-btn pmode-active" onclick="switchPipelineMode('visual')">可视化编排</button>
                         <button type="button" id="modeBtnJson" class="pmode-btn" onclick="switchPipelineMode('json')">JSON 模式</button>
                     </div>
@@ -625,7 +629,7 @@
                 <!-- ===== 可视化编排 ===== -->
                 <div id="pipelineVisual">
                     <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
-                        <span style="font-size:12px;color:#64748b;align-self:center;">快速模板：</span>
+                        <span style="font-size:12px;color:#71717a;align-self:center;">快速模板：</span>
                         <button type="button" class="btn btn-ghost btn-sm" onclick="loadTemplate('compute')">两步求和</button>
                         <button type="button" class="btn btn-ghost btn-sm" onclick="loadTemplate('dynamic')">动态条件</button>
                         <button type="button" class="btn btn-ghost btn-sm" onclick="loadTemplate('join')">跨库关联</button>
@@ -666,14 +670,14 @@
                 </div>
                 <textarea id="apiHtml" class="form-textarea font-mono" rows="14"
                     placeholder='<h1>Hello OneData</h1>&#10;<div id="app"></div>'
-                    style="background:#282c34; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:2; white-space:pre; overflow:auto;"></textarea>
+                    style="background:#2a2a2d; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:2; white-space:pre; overflow:auto;"></textarea>
             </div>
             <div class="form-group">
                 <label class="form-label">CSS</label>
                 <div class="form-hint" style="margin-bottom:6px;">内联到 <code>&lt;head&gt;&lt;style&gt;</code> 中</div>
                 <textarea id="apiCss" class="form-textarea font-mono" rows="8"
                     placeholder="body { font-family: system-ui; padding: 24px; }"
-                    style="background:#282c34; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:2; white-space:pre; overflow:auto;"></textarea>
+                    style="background:#2a2a2d; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:2; white-space:pre; overflow:auto;"></textarea>
             </div>
             <div class="form-group">
                 <label class="form-label">JavaScript</label>
@@ -682,11 +686,11 @@
                 </div>
                 <textarea id="apiJs" class="form-textarea font-mono" rows="12"
                     placeholder="document.getElementById('app').innerText = JSON.stringify(window.__API_PARAMS__);"
-                    style="background:#282c34; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:2; white-space:pre; overflow:auto;"></textarea>
+                    style="background:#2a2a2d; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:2; white-space:pre; overflow:auto;"></textarea>
             </div>
             <div class="text-sm text-muted" style="margin-top:8px;">
                 调用方式：浏览器直接访问
-                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;" id="htmlCallHint">
+                <code style="background:#f1f1f3;padding:1px 5px;border-radius:3px;font-size:11px;" id="htmlCallHint">
                     {{ gateway_prefix }}/{{ project_code | default(project_id) }}/...
                 </code>
                 即可看到渲染后的页面。
@@ -728,7 +732,7 @@
 
             <div class="form-group">
                 <label class="form-label">调用示例</label>
-                <pre style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:6px;font-size:12px;line-height:1.6;overflow:auto;margin:0;" id="syncCurlDemo">POST &lt;上方的调用地址&gt;
+                <pre style="background:#1c1c1e;color:#e4e4e7;padding:12px;border-radius:6px;font-size:12px;line-height:1.6;overflow:auto;margin:0;" id="syncCurlDemo">POST &lt;上方的调用地址&gt;
 Header: xpftkey: &lt;项目或API的Key&gt;
 
 {
@@ -765,7 +769,7 @@ Header: xpftkey: &lt;项目或API的Key&gt;
                 </div>
                 <textarea id="apiPlugin" class="form-textarea font-mono" rows="18"
                     placeholder="def main(params, ctx):&#10;    # params: 调用参数 dict&#10;    # ctx.query(数据源名, sql, 参数) 查数据&#10;    # ctx.http 调外部 HTTP（requests）&#10;    # ctx.log(msg) 写日志&#10;    rows = ctx.query('my_db', 'SELECT id, name FROM users WHERE id = :id', {'id': params['id']})&#10;    return {'count': len(rows), 'items': rows}"
-                    style="background:#282c34; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:4; white-space:pre; overflow:auto;"></textarea>
+                    style="background:#2a2a2d; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:4; white-space:pre; overflow:auto;"></textarea>
             </div>
             <div class="text-sm text-muted" style="margin-top:4px; line-height:1.8;">
                 <strong>ctx 能力：</strong><br>
@@ -862,37 +866,39 @@ Header: xpftkey: &lt;项目或API的Key&gt;
 </form>
 
 <!-- ===== 使用教程弹窗 ===== -->
-<div id="tutorialModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(15,23,42,0.55); align-items:center; justify-content:center;">
-  <div style="background:#fff; width:min(860px,94vw); max-height:88vh; border-radius:14px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,0.3);">
-    <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:1px solid #e2e8f0;">
-      <h3 style="margin:0; font-size:17px; font-weight:700; color:#0f172a;">SQL 模板 & 多步骤管线 — 使用教程</h3>
-      <button type="button" onclick="closeTutorial()" style="border:none; background:none; font-size:22px; color:#64748b; cursor:pointer; line-height:1;">&times;</button>
+<div id="tutorialModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(28,28,30,0.55); align-items:center; justify-content:center;">
+  <div style="background:#fff; width:min(880px,94vw); max-height:88vh; border-radius:28px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 30px 80px rgba(28,28,30,0.35);">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:24px 26px 8px;">
+      <h3 style="margin:0; font-size:19px; font-weight:600; color:#1c1c1e;">SQL 使用教程</h3>
+      <button type="button" class="btn-icon" style="width:36px;height:36px;border-radius:50%;background:#f1f1f3;font-size:18px;" onclick="closeTutorial()">&times;</button>
     </div>
-    <div style="display:flex; gap:6px; padding:12px 22px 0; border-bottom:1px solid #e2e8f0; flex-wrap:wrap;">
+    <div class="tut-tabs">
       <button type="button" class="tut-tab" data-tab="basic"   onclick="switchTutTab('basic')">基础占位符</button>
       <button type="button" class="tut-tab" data-tab="cond"    onclick="switchTutTab('cond')">条件 & 循环</button>
       <button type="button" class="tut-tab" data-tab="like"    onclick="switchTutTab('like')">模糊 & 空值</button>
-      <button type="button" class="tut-tab" data-tab="pipeline" onclick="switchTutTab('pipeline')">多步骤管线</button>
-      <button type="button" class="tut-tab" data-tab="agg"     onclick="switchTutTab('agg')">聚合 & 关联</button>
+      <button type="button" class="tut-tab" data-tab="pipeline" id="tutTabPipeline" onclick="switchTutTab('pipeline')">多步骤管线</button>
+      <button type="button" class="tut-tab" data-tab="agg"     onclick="switchTutTab('agg')">汇总 & 关联</button>
     </div>
-    <div style="padding:20px 22px; overflow:auto;" id="tutBody"></div>
-    <div style="padding:12px 22px; border-top:1px solid #e2e8f0; text-align:right;">
+    <div style="padding:18px 26px; overflow:auto;" id="tutBody"></div>
+    <div style="padding:14px 26px 22px; text-align:right;">
       <button type="button" class="btn btn-secondary" onclick="closeTutorial()">关闭</button>
     </div>
   </div>
 </div>
 <style>
-  .tut-tab{border:none;background:none;padding:8px 14px;font-size:13px;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;font-weight:500;}
-  .tut-tab.active{color:#4f46e5;border-bottom-color:#4f46e5;}
-  #tutBody h4{margin:18px 0 8px;font-size:14px;color:#0f172a;}
+  .tut-tabs{display:inline-flex; gap:4px; margin:8px 26px 0; padding:4px; background:#f1f1f3; border-radius:999px; flex-wrap:wrap; align-self:flex-start;}
+  .tut-tab{border:none;background:none;padding:7px 16px;font-size:13px;color:#71717a;cursor:pointer;border-radius:999px;font-weight:500;}
+  .tut-tab:hover{color:#1c1c1e;}
+  .tut-tab.active{background:#1c1c1e;color:#fff;}
+  #tutBody h4{margin:18px 0 8px;font-size:14px;color:#1c1c1e;}
   #tutBody h4:first-child{margin-top:0;}
-  #tutBody p{margin:6px 0;font-size:13px;color:#475569;line-height:1.7;}
-  #tutBody pre{background:#0f172a;color:#e2e8f0;padding:13px 15px;border-radius:8px;font-size:12px;line-height:1.65;overflow:auto;margin:8px 0;font-family:'Fira Code','JetBrains Mono',monospace;}
-  #tutBody code{background:#f1f5f9;color:#be185d;padding:1px 5px;border-radius:3px;font-size:12px;}
+  #tutBody p{margin:6px 0;font-size:13px;color:#52525b;line-height:1.7;}
+  #tutBody pre{background:#2a2a2d;color:#e4e4e7;padding:14px 16px;border-radius:14px;font-size:12px;line-height:1.65;overflow:auto;margin:8px 0;font-family:'Fira Code','JetBrains Mono',monospace;}
+  #tutBody code{background:#ece8fd;color:#5b44c9;padding:1px 6px;border-radius:6px;font-size:12px;}
   #tutBody pre code{background:none;color:inherit;padding:0;}
   #tutBody table{width:100%;border-collapse:collapse;margin:8px 0;font-size:12.5px;}
-  #tutBody th,#tutBody td{border:1px solid #e2e8f0;padding:6px 10px;text-align:left;}
-  #tutBody th{background:#f8fafc;color:#334155;}
+  #tutBody th,#tutBody td{border:1px solid #e4e4e7;padding:6px 10px;text-align:left;}
+  #tutBody th{background:#f7f7f8;color:#3f3f46;}
 </style>
 {% endblock %}
 
@@ -1109,7 +1115,7 @@ $endif$</code></pre>
     </table>
     <p><strong>数据源</strong>填数据源名（如 <code>"biz_db"</code>）或 id 字符串。<strong>最终返回</strong>给某步加 <code>"is_return": true</code>，不指定则返回最后一步。</p>
   `,
-  agg: `
+  pipeline_ops: `
     <h4>transform 步骤的几种 op</h4>
     <table>
       <tr><th>op</th><th>作用</th></tr>
@@ -1159,10 +1165,48 @@ $endif$</code></pre>
   "select": ["id", "name", { "amount": "\${right.amount or 0}" }] }</code></pre>
     <p><code>join_type</code> 支持 <code>left</code>（默认，保留左表全部）和 <code>inner</code>（仅匹配）。</p>
   `,
+  agg: `
+    <h4>最简单：选表生成 SQL</h4>
+    <p>SQL 模板右上角点 <b>选表生成 SQL</b>，勾选表和字段、关联表、筛选条件、分组汇总，自动生成下面这样的 SQL 和参数。</p>
+
+    <h4>分组汇总</h4>
+    <pre><code>SELECT dept_id,
+       COUNT(*)    AS order_count,
+       SUM(amount) AS total_amount,
+       AVG(amount) AS avg_amount
+  FROM orders
+ WHERE status = :status
+ GROUP BY dept_id
+ ORDER BY total_amount DESC</code></pre>
+
+    <h4>跨数据源关联（数据源切到「多个数据源」）</h4>
+    <p>表名写成 <code>数据源.库.表</code>，不同数据源的表可以直接 JOIN。</p>
+    <pre><code>SELECT u.city_level, SUM(o.amount) AS gmv
+  FROM biz.biz.orders o
+  JOIN selectdb.crm.members u ON u.user_name = o.user_name
+ WHERE o.status = :status
+ GROUP BY u.city_level</code></pre>
+
+    <h4>多个查询结果相加 / 拼成一行</h4>
+    <pre><code>SELECT (SELECT COUNT(*) FROM biz.biz.orders WHERE status = 'paid')
+     + (SELECT COUNT(*) FROM mysql2.mall.orders WHERE status = 'paid') AS total_cnt,
+       (SELECT SUM(amount) FROM biz.biz.orders) AS income</code></pre>
+
+    <h4>可选条件</h4>
+    <pre><code>SELECT * FROM orders
+ WHERE 1 = 1
+   $if(vip != null)$AND vip = :vip$endif$</code></pre>
+    <p>调用时不传 <code>vip</code> 就不加这个条件。</p>
+  `,
 };
+TUTORIAL_CONTENT.pipeline += TUTORIAL_CONTENT.pipeline_ops;
 
 function openTutorial(tab) {
   document.getElementById('tutorialModal').style.display = 'flex';
+  // 多步骤管线只对已在用管线的老 API 展示
+  const pt = document.getElementById('tutTabPipeline');
+  if (pt) pt.style.display = window.__hasPipeline ? '' : 'none';
+  if (tab === 'pipeline' && !window.__hasPipeline) tab = 'agg';
   switchTutTab(tab || 'basic');
 }
 function closeTutorial() {
@@ -1240,7 +1284,7 @@ function validateSyncTables() {
     const n = Object.keys(obj).length;
     const total = Object.values(obj).reduce((s, a) => s + a.length, 0);
     hint.textContent = `格式正确：${n} 张表、共 ${total} 个字段`;
-    hint.style.color = '#0f766e';
+    hint.style.color = '#3d5a0a';
     return true;
 }
 
@@ -1279,6 +1323,15 @@ function onApiTypeChange() {
     const modes = (el.getAttribute('data-mode') || '').split(/\s+/).filter(Boolean);
     el.style.display = modes.includes(type) ? '' : 'none';
   });
+  // SQL 查询：单个 / 多个数据源 分段按钮跟随类型
+  const _single = document.getElementById('dsModeSingle'), _multi = document.getElementById('dsModeMulti');
+  if (_single && _multi) {
+    _single.className = type === 'federated' ? 'btn btn-ghost btn-sm' : 'btn btn-sm';
+    _multi.className = type === 'federated' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+  }
+  // 多步骤管线已由「多个数据源」SQL 取代：只对已经配置了管线的老 API 显示
+  const _pc = document.getElementById('pipelineCard');
+  if (_pc && !window.__hasPipeline) _pc.style.display = 'none';
   // 插件模式下"从 SQL 解析"无意义，隐藏
   const parseBtn = document.getElementById('parseSqlParamsBtn');
   if (parseBtn) parseBtn.style.display = (type === 'sql' || type === 'federated') ? '' : 'none';
@@ -1286,7 +1339,7 @@ function onApiTypeChange() {
   const _sqlHint = document.getElementById('sqlModeHint');
   if (type === 'federated') {
     if (typeof _setSqlEditorDisabled === 'function') _setSqlEditorDisabled(false);
-    if (_sqlHint) { _sqlHint.textContent = '多数据源 SQL'; _sqlHint.style.color = '#0f766e'; }
+    if (_sqlHint) { _sqlHint.textContent = '多数据源 SQL'; _sqlHint.style.color = '#3d5a0a'; }
     if (!window.__catalogsLoaded) loadCatalogs();
   } else if (type === 'sql' && _sqlHint && _sqlHint.textContent === '多数据源 SQL') {
     _sqlHint.textContent = '单数据源查询'; _sqlHint.style.color = '';
@@ -1301,7 +1354,7 @@ function onApiTypeChange() {
       ? '数据写入接口：按 tableName 把 data 写进数据源表（仅超管可建可调用）'
       : (type === 'federated')
       ? '一条 MySQL 语法的 SQL 关联多个数据源的表（数据源名.库名.表名）'
-      : '通过 SQL/管线 把数据库查询发布为 RESTful API';
+      : '写一条 SQL 即发布为接口，可用「选表生成 SQL」自动生成';
   }
   // HTML 类型 API 通常是公开页面，切到 HTML 时如果用户没显式开启过校验，自动建议关闭
   const reqKey = document.getElementById('requireApiKey');
@@ -1459,7 +1512,7 @@ async function openTransferDialog() {
       <div id="__transferModal" class="modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:9999;">
         <div style="background:#fff;border-radius:8px;padding:20px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
           <h3 style="margin:0 0 12px;font-size:16px;">转交责任人</h3>
-          <p style="font-size:12px;color:#64748b;margin:0 0 10px;">当前责任人：<b>${document.getElementById('ownerName').textContent}</b></p>
+          <p style="font-size:12px;color:#71717a;margin:0 0 10px;">当前责任人：<b>${document.getElementById('ownerName').textContent}</b></p>
           <select id="__newOwner" class="form-select" style="width:100%;margin-bottom:14px;">
             <option value="">选择新责任人…</option>${opts}
           </select>
@@ -1508,7 +1561,7 @@ function syncPrewarmAvailability() {
 async function previewPrewarmOverrides() {
     const tpl = document.getElementById('prewarmOverrides').value.trim();
     const el = document.getElementById('prewarmPreview');
-    if (!tpl) { el.textContent = '未配置覆盖（将直接用历史请求参数预热）'; el.style.color = '#64748b'; return; }
+    if (!tpl) { el.textContent = '未配置覆盖（将直接用历史请求参数预热）'; el.style.color = '#71717a'; return; }
     const res = await API.post(`/api/projects/${PROJECT_ID}/variables/preview-template`, { template: tpl });
     if (res && res.status) {
         const p = res.data.params;
@@ -1519,7 +1572,7 @@ async function previewPrewarmOverrides() {
         } else {
             el.textContent = '将覆盖这些字段: ' + JSON.stringify(p);
         }
-        el.style.color = '#0f766e';
+        el.style.color = '#3d5a0a';
     } else {
         el.textContent = (res && res.msg) || '预览失败';
         el.style.color = '#b91c1c';
@@ -1604,6 +1657,8 @@ async function loadApiData() {
     if (pipelineEditor) pipelineEditor.setValue(pipelineRaw);
     // 有管线配置则自动开启多步骤模式
     const hasPipeline = !!pipelineRaw.trim();
+    window.__hasPipeline = hasPipeline;
+    if (hasPipeline) onApiTypeChange();
     document.getElementById('pipelineEnabled').checked = hasPipeline;
     togglePipelineMode();
     // 把已有 JSON 解析进可视化编排器
@@ -1812,8 +1867,8 @@ async function spFetchSqlPreview() {
 
     const exprRows = (d.expressions || []).map(e => {
         const badge = e.kind === 'for'
-            ? `<span class="badge" style="background:#ecfccb;color:#4d7c0f;padding:1px 7px;border-radius:4px;font-size:10.5px;">loop × ${e.iter_count || 0}</span>`
-            : `<span class="badge" style="background:${e.value ? '#dcfce7' : '#fee2e2'};color:${e.value ? '#15803d' : '#b91c1c'};padding:1px 7px;border-radius:4px;font-size:10.5px;">${e.value ? 'keep' : 'drop'}</span>`;
+            ? `<span class="badge" style="background:#ecfccb;color:#4d7c0f;padding:1px 8px;border-radius:999px;font-size:10.5px;">loop × ${e.iter_count || 0}</span>`
+            : `<span class="badge" style="background:${e.value ? '#eaf8c4' : '#fee2e2'};color:${e.value ? '#3d5a0a' : '#b91c1c'};padding:1px 8px;border-radius:999px;font-size:10.5px;">${e.value ? 'keep' : 'drop'}</span>`;
         return `<tr><td><code style="font-size:11.5px;">${escapeHtml(e.expr)}</code></td><td style="text-align:center;">${badge}</td></tr>`;
     }).join('');
 
@@ -1826,8 +1881,8 @@ async function spFetchSqlPreview() {
         <table class="sp-bind-table"><thead><tr><th>表达式</th><th style="width:90px;text-align:center;">结果</th></tr></thead><tbody>${exprRows}</tbody></table>` : ''}
         ${bindRows ? `<div class="sp-section-title">:{表达式} 自动生成的绑定值(参数化,防注入)</div>
         <table class="sp-bind-table"><thead><tr><th style="width:140px;">占位符</th><th>值</th></tr></thead><tbody>${bindRows}</tbody></table>` : ''}
-        <div class="sp-section-title" style="color:#0f766e;">✦ 参数已填充的 SQL(可直接复制到数据库执行验证)</div>
-        <pre class="sp-code" style="background:#052e2b;color:#5eead4;">${escapeHtml(d.preview_sql || d.rendered_sql || '')}</pre>
+        <div class="sp-section-title" style="color:#3d5a0a;">✦ 参数已填充的 SQL(可直接复制到数据库执行验证)</div>
+        <pre class="sp-code" style="background:#1c1c1e;color:#d6f36a;">${escapeHtml(d.preview_sql || d.rendered_sql || '')}</pre>
         <div class="sp-section-title">模板 SQL(:占位符 将参数化提交到数据库)</div>
         <pre class="sp-code">${escapeHtml(d.rendered_sql || '')}</pre>
         <div class="sp-note">上方为参数填充后的样子,方便直接拿去数据库跑;真实执行走参数化绑定(防注入),结果一致。参数来自「在线测试」页的 JSON,为空时按参数定义示例生成。</div>`;
@@ -2440,7 +2495,7 @@ function renderStepCards() {
     // 渲染前销毁旧的步骤编辑器实例引用（DOM 将被重建）
     stepSqlEditors = {};
     if (pipelineState.length === 0) {
-        box.innerHTML = '<div style="padding:24px;text-align:center;color:#94a3b8;font-size:13px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;">还没有步骤。点下方按钮添加，或上方选一个快速模板。</div>';
+        box.innerHTML = '<div style="padding:24px;text-align:center;color:#a1a1aa;font-size:13px;background:#f7f7f8;border:1px dashed #d4d4d8;border-radius:8px;">还没有步骤。点下方按钮添加，或上方选一个快速模板。</div>';
         return;
     }
     box.innerHTML = pipelineState.map((s,i) => renderOneStep(s,i)).join('');
@@ -2859,7 +2914,7 @@ function togglePipelineMode() {
         // 否则会把 onApiTypeChange() 刚隐藏的 SQL 卡又显示出来。
         const _type = (document.getElementById('apiType')?.value) || 'sql';
         if(sqlCard) sqlCard.style.display = (_type === 'sql' || _type === 'federated') ? '' : 'none';
-        if(hint){ hint.textContent = _type === 'federated' ? '多数据源 SQL' : '单数据源查询'; hint.style.color = _type === 'federated' ? '#0f766e' : ''; }
+        if(hint){ hint.textContent = _type === 'federated' ? '多数据源 SQL' : '单数据源查询'; hint.style.color = _type === 'federated' ? '#3d5a0a' : ''; }
         _setSqlEditorDisabled(_type !== 'sql' && _type !== 'federated');
     }
 }
@@ -2953,7 +3008,7 @@ function showSqlPreviewModal(data) {
 
     const exprRows = (data.expressions || []).map(e => {
         const kindBadge = {
-            'if':     '<span style="display:inline-block; padding:1px 6px; background:#eef2ff; color:#3730a3; border-radius:3px; font-size:10px; margin-right:6px; font-family:var(--font-mono);">if</span>',
+            'if':     '<span style="display:inline-block; padding:1px 6px; background:#ece8fd; color:#5b44c9; border-radius:3px; font-size:10px; margin-right:6px; font-family:var(--font-mono);">if</span>',
             'elseif': '<span style="display:inline-block; padding:1px 6px; background:#fef3c7; color:#92400e; border-radius:3px; font-size:10px; margin-right:6px; font-family:var(--font-mono);">elseif</span>',
             'for':    '<span style="display:inline-block; padding:1px 6px; background:#ecfccb; color:#4d7c0f; border-radius:3px; font-size:10px; margin-right:6px; font-family:var(--font-mono);">for</span>',
         }[e.kind] || '';
@@ -2961,17 +3016,17 @@ function showSqlPreviewModal(data) {
         if (e.kind === 'for') {
             resultCell = `<span class="badge" style="background:#ecfccb; color:#4d7c0f; padding:2px 8px; border-radius:4px; font-size:11px;">loop × ${e.iter_count || 0}</span>`;
         } else {
-            resultCell = `<span class="badge" style="background:${e.value ? '#dcfce7' : '#fee2e2'}; color:${e.value ? '#15803d' : '#b91c1c'}; padding:2px 8px; border-radius:4px; font-size:11px;">${e.value ? 'keep' : 'drop'}</span>`;
+            resultCell = `<span class="badge" style="background:${e.value ? '#eaf8c4' : '#fee2e2'}; color:${e.value ? '#3d5a0a' : '#b91c1c'}; padding:2px 8px; border-radius:4px; font-size:11px;">${e.value ? 'keep' : 'drop'}</span>`;
         }
         return `<tr>
             <td>${kindBadge}<code style="font-size:11.5px;">${escapeHtml(e.expr)}</code></td>
             <td style="text-align:center;">${resultCell}</td>
         </tr>`;
-    }).join('') || '<tr><td colspan="2" style="color:#94a3b8; text-align:center; padding:8px;">（无控制块）</td></tr>';
+    }).join('') || '<tr><td colspan="2" style="color:#a1a1aa; text-align:center; padding:8px;">（无控制块）</td></tr>';
 
     const placeholders = (data.placeholders || []).map(p =>
-        `<code style="background:#eef2ff; color:#3730a3; padding:2px 7px; border-radius:4px; margin-right:4px; font-size:11.5px;">:${escapeHtml(p)}</code>`
-    ).join('') || '<span style="color:#94a3b8;">（无）</span>';
+        `<code style="background:#ece8fd; color:#5b44c9; padding:2px 7px; border-radius:4px; margin-right:4px; font-size:11.5px;">:${escapeHtml(p)}</code>`
+    ).join('') || '<span style="color:#a1a1aa;">（无）</span>';
 
     const html = `
         <div class="modal-overlay" id="__sqlPreviewModal" style="display:flex;">
@@ -2982,27 +3037,27 @@ function showSqlPreviewModal(data) {
                 </div>
                 <div class="modal-body">
                     <div style="margin-bottom: 14px;">
-                        <div style="font-size:12px; color:#64748b; margin-bottom:6px; font-weight:500;">条件块求值</div>
+                        <div style="font-size:12px; color:#71717a; margin-bottom:6px; font-weight:500;">条件块求值</div>
                         <table style="width:100%; border-collapse:collapse; font-size:12px;">
-                            <thead><tr style="border-bottom:1px solid #e2e8f0;">
-                                <th style="text-align:left; padding:6px 0; color:#64748b; font-weight:500;">表达式</th>
-                                <th style="text-align:center; padding:6px 0; width:80px; color:#64748b; font-weight:500;">结果</th>
+                            <thead><tr style="border-bottom:1px solid #e4e4e7;">
+                                <th style="text-align:left; padding:6px 0; color:#71717a; font-weight:500;">表达式</th>
+                                <th style="text-align:center; padding:6px 0; width:80px; color:#71717a; font-weight:500;">结果</th>
                             </tr></thead>
                             <tbody>${exprRows}</tbody>
                         </table>
                     </div>
                     <div style="margin-bottom: 14px;">
-                        <div style="font-size:12px; color:#64748b; margin-bottom:6px; font-weight:500;">渲染后占位符</div>
+                        <div style="font-size:12px; color:#71717a; margin-bottom:6px; font-weight:500;">渲染后占位符</div>
                         <div>${placeholders}</div>
                     </div>
                     <div style="margin-bottom:14px;">
-                        <div style="font-size:12px; color:#0f766e; margin-bottom:6px; font-weight:600;">✦ 参数已填充的 SQL（可直接复制到数据库执行验证）</div>
-                        <pre style="background:#052e2b; color:#5eead4; padding:14px; border-radius:6px; font-size:12px; line-height:1.6; max-height:300px; overflow:auto; margin:0; white-space:pre-wrap;">${escapeHtml(data.preview_sql || data.rendered_sql || '')}</pre>
-                        <div style="font-size:11px; color:#94a3b8; margin-top:5px;">注：这是把参数值填进去后的样子，方便你直接拿去数据库跑。真实执行走参数化绑定（防注入），结果一致。</div>
+                        <div style="font-size:12px; color:#3d5a0a; margin-bottom:6px; font-weight:600;">✦ 参数已填充的 SQL（可直接复制到数据库执行验证）</div>
+                        <pre style="background:#1c1c1e; color:#d6f36a; padding:14px; border-radius:6px; font-size:12px; line-height:1.6; max-height:300px; overflow:auto; margin:0; white-space:pre-wrap;">${escapeHtml(data.preview_sql || data.rendered_sql || '')}</pre>
+                        <div style="font-size:11px; color:#a1a1aa; margin-top:5px;">注：这是把参数值填进去后的样子，方便你直接拿去数据库跑。真实执行走参数化绑定（防注入），结果一致。</div>
                     </div>
                     <div>
-                        <div style="font-size:12px; color:#64748b; margin-bottom:6px; font-weight:500;">模板 SQL（含 :参数 占位符，真实提交形式）</div>
-                        <pre style="background:#0f172a; color:#e2e8f0; padding:14px; border-radius:6px; font-size:12px; line-height:1.6; max-height:220px; overflow:auto; margin:0; white-space:pre-wrap;">${escapeHtml(data.rendered_sql || '')}</pre>
+                        <div style="font-size:12px; color:#71717a; margin-bottom:6px; font-weight:500;">模板 SQL（含 :参数 占位符，真实提交形式）</div>
+                        <pre style="background:#1c1c1e; color:#e4e4e7; padding:14px; border-radius:6px; font-size:12px; line-height:1.6; max-height:220px; overflow:auto; margin:0; white-space:pre-wrap;">${escapeHtml(data.rendered_sql || '')}</pre>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -3153,6 +3208,445 @@ async function explainFederated() {
     } catch (e) {
         out.textContent = '无法生成执行计划：' + (e.message || e);
     }
+}
+
+// ========== 选表生成 SQL（查询向导，v2.23） ==========
+// 点选 数据源 → 库 → 表 → 字段，可关联多张表（可跨数据源）、加筛选条件、分组汇总、排序，
+// 自动生成 SQL 和参数定义。跨数据源时自动切到「多个数据源」模式。
+const WZ_OPS = [
+    ['eq', '等于'], ['ne', '不等于'], ['gt', '大于'], ['ge', '大于等于'], ['lt', '小于'], ['le', '小于等于'],
+    ['like', '包含'], ['prefix', '开头是'], ['in', '在列表中'], ['between', '介于'],
+];
+const WZ_AGGS = [['group', '分组'], ['count', '计数'], ['distinct', '去重计数'], ['sum', '求和'], ['avg', '平均'], ['max', '最大'], ['min', '最小']];
+const _wzCache = {};
+let WZ = null;
+
+function _wzNew() {
+    return { cats: [], tables: [], filters: [], groupOn: false, order: { ref: '', dir: 'DESC' }, limit: '' };
+}
+function _wzIsNum(type) { return /int|decimal|numeric|float|double|real|bit/i.test(type || ''); }
+function _wzEsc(v) { return escapeHtml(v == null ? '' : String(v)); }
+
+async function _wzGet(key, url) {
+    if (_wzCache[key]) return _wzCache[key];
+    const res = await API.get(url);
+    if (!res || res.status === false) throw new Error((res && res.msg) || '加载失败');
+    return (_wzCache[key] = res.data || []);
+}
+
+async function openQueryWizard() {
+    if (!WZ) WZ = _wzNew();
+    let ov = document.getElementById('__wizard');
+    if (!ov) {
+        ov = document.createElement('div');
+        ov.id = '__wizard';
+        ov.className = 'modal-overlay';
+        ov.innerHTML = `
+        <div class="modal wz-modal">
+            <div class="modal-header">
+                <h3>选表生成 SQL</h3>
+                <button type="button" class="btn-icon" onclick="closeQueryWizard()">&times;</button>
+            </div>
+            <div class="modal-body" id="wzBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="WZ = _wzNew(); _wzStart()">重新开始</button>
+                <span style="flex:1"></span>
+                <button type="button" class="btn btn-secondary" onclick="closeQueryWizard()">取消</button>
+                <button type="button" class="btn btn-primary" onclick="applyQueryWizard()">生成 SQL</button>
+            </div>
+        </div>`;
+        document.body.appendChild(ov);
+    }
+    ov.style.display = 'flex';
+    await _wzStart();
+}
+function closeQueryWizard() { const ov = document.getElementById('__wizard'); if (ov) ov.style.display = 'none'; }
+
+async function _wzStart() {
+    const body = document.getElementById('wzBody');
+    if (!WZ.cats.length) {
+        body.innerHTML = '<div class="empty-block">加载数据源...</div>';
+        try {
+            WZ.cats = await _wzGet('cats', `/api/sql/federated/catalogs?project_id=${PROJECT_ID}`);
+        } catch (e) {
+            body.innerHTML = `<div class="empty-block">${_wzEsc(e.message || e)}</div>`; return;
+        }
+        if (!WZ.cats.length) {
+            body.innerHTML = '<div class="empty-block">本项目还没有可用的 MySQL 协议数据源，请先到「数据源」添加并开放给本项目</div>'; return;
+        }
+    }
+    if (!WZ.tables.length) {
+        // 默认从当前选中的数据源开始
+        const dsId = String(document.getElementById('apiDatasource')?.value || '');
+        const cur = WZ.cats.find(c => String(c.id) === dsId) || WZ.cats[0];
+        await wzAddTable(cur.name);
+        return;
+    }
+    _wzRender();
+}
+
+async function wzAddTable(catName) {
+    const cat = catName || (WZ.tables.length ? WZ.tables[WZ.tables.length - 1].cat : WZ.cats[0].name);
+    WZ.tables.push({ cat, db: '', table: '', cols: [], picked: [], agg: {}, join: { type: 'inner', left: '', right: '' } });
+    await wzSetCat(WZ.tables.length - 1, cat);
+}
+function wzRemoveTable(i) {
+    const alias = 't' + (i + 1);
+    WZ.tables.splice(i, 1);
+    // 引用了被删表或其后表的筛选/排序/关联都清掉（别名会顺移）
+    WZ.filters = WZ.filters.filter(f => +f.ref.split('.')[0].slice(1) - 1 < i);
+    if (WZ.order.ref && +WZ.order.ref.split('.')[0].slice(1) - 1 >= i) WZ.order.ref = '';
+    WZ.tables.forEach((t, k) => { if (k >= i && t.join.left && +t.join.left.split('.')[0].slice(1) - 1 >= i) t.join.left = ''; });
+    _wzRender();
+}
+
+async function wzSetCat(i, cat) {
+    const t = WZ.tables[i];
+    Object.assign(t, { cat, db: '', table: '', cols: [], picked: [], agg: {} });
+    _wzRender();
+    try {
+        const dbs = await _wzGet(`db|${cat}`, `/api/sql/federated/databases?project_id=${PROJECT_ID}&catalog=${encodeURIComponent(cat)}`);
+        const def = (WZ.cats.find(c => c.name === cat) || {}).database;
+        await wzSetDb(i, dbs.includes(def) ? def : (dbs[0] || ''));
+    } catch (e) { Toast.error(e.message || String(e)); }
+}
+
+async function wzSetDb(i, db) {
+    const t = WZ.tables[i];
+    Object.assign(t, { db, table: '', cols: [], picked: [], agg: {} });
+    _wzRender();
+    if (!db) return;
+    try { await _wzGet(`tb|${t.cat}|${db}`, `/api/sql/federated/tables?project_id=${PROJECT_ID}&catalog=${encodeURIComponent(t.cat)}&database=${encodeURIComponent(db)}`); }
+    catch (e) { Toast.error(e.message || String(e)); }
+    _wzRender();
+}
+
+async function wzSetTable(i, table) {
+    const t = WZ.tables[i];
+    Object.assign(t, { table, cols: [], picked: [], agg: {} });
+    if (!table) { _wzRender(); return; }
+    try {
+        t.cols = await _wzGet(`col|${t.cat}|${t.db}|${table}`,
+            `/api/sql/federated/columns?project_id=${PROJECT_ID}&catalog=${encodeURIComponent(t.cat)}&database=${encodeURIComponent(t.db)}&table=${encodeURIComponent(table)}`);
+    } catch (e) { Toast.error(e.message || String(e)); }
+    t.picked = t.cols.map(c => c.name);
+    if (i > 0) _wzGuessJoin(i);
+    _wzRender();
+}
+
+// 自动猜关联字段：同名字段（id 除外）优先，其次 前表.xxx_id = 本表.id / 前表.id = 本表.xxx_id
+function _wzGuessJoin(i) {
+    const t = WZ.tables[i];
+    const names = t.cols.map(c => c.name.toLowerCase());
+    for (let k = 0; k < i; k++) {
+        const p = WZ.tables[k], pn = p.cols.map(c => c.name);
+        const same = pn.find(n => n.toLowerCase() !== 'id' && names.includes(n.toLowerCase()));
+        if (same) { t.join.left = `t${k + 1}.${same}`; t.join.right = t.cols[names.indexOf(same.toLowerCase())].name; return; }
+        const single = t.table.toLowerCase().replace(/s$/, '');
+        const fk = pn.find(n => n.toLowerCase() === single + '_id');
+        if (fk && names.includes('id')) { t.join.left = `t${k + 1}.${fk}`; t.join.right = t.cols[names.indexOf('id')].name; return; }
+        const pSingle = p.table.toLowerCase().replace(/s$/, '');
+        const back = t.cols.find(c => c.name.toLowerCase() === pSingle + '_id');
+        if (back && pn.some(n => n.toLowerCase() === 'id')) { t.join.left = `t${k + 1}.${pn.find(n => n.toLowerCase() === 'id')}`; t.join.right = back.name; return; }
+    }
+    t.join.left = ''; t.join.right = '';
+}
+
+function wzToggleCol(i, col, on) {
+    const t = WZ.tables[i];
+    t.picked = on ? [...new Set([...t.picked, col])] : t.picked.filter(c => c !== col);
+    _wzRender();
+}
+function wzPickAll(i, on) { const t = WZ.tables[i]; t.picked = on ? t.cols.map(c => c.name) : []; _wzRender(); }
+
+function _wzAllCols() {
+    const out = [];
+    WZ.tables.forEach((t, i) => t.cols.forEach(c => out.push({ ref: `t${i + 1}.${c.name}`, label: (WZ.tables.length > 1 ? `t${i + 1}.` : '') + c.name, type: c.type, col: c.name })));
+    return out;
+}
+function _wzColType(ref) { const c = _wzAllCols().find(x => x.ref === ref); return c ? c.type : ''; }
+
+function wzAddFilter() {
+    const first = _wzAllCols()[0];
+    if (!first) { Toast.info('先选择一张表'); return; }
+    WZ.filters.push({ ref: first.ref, op: 'eq', src: 'param', param: first.col, value: '', required: false });
+    _wzRender();
+}
+function wzSetFilter(k, key, val) {
+    const f = WZ.filters[k];
+    if (key === 'ref') {
+        const auto = !f.param || f.param === f.ref.split('.').slice(1).join('.');
+        f.ref = val; if (auto) f.param = val.split('.').slice(1).join('.');
+    } else f[key] = val;
+    _wzRender();
+}
+
+function _wzRender() {
+    const body = document.getElementById('wzBody');
+    if (!body) return;
+    const multiTables = WZ.tables.length > 1;
+    const cols = _wzAllCols();
+    const colOpts = (sel, withEmpty) => (withEmpty ? `<option value="">${withEmpty}</option>` : '') +
+        cols.map(c => `<option value="${_wzEsc(c.ref)}" ${c.ref === sel ? 'selected' : ''}>${_wzEsc(c.label)}</option>`).join('');
+
+    const tablesHtml = WZ.tables.map((t, i) => {
+        const dbs = _wzCache[`db|${t.cat}`] || [];
+        const tbs = _wzCache[`tb|${t.cat}|${t.db}`] || [];
+        let joinHtml = '';
+        if (i > 0) {
+            const prev = cols.filter(c => +c.ref.split('.')[0].slice(1) - 1 < i);
+            joinHtml = `<div class="wz-join">
+                <span class="wz-label">关联</span>
+                <select class="form-select form-select-sm" onchange="WZ.tables[${i}].join.type=this.value; _wzRender()">
+                    <option value="inner" ${t.join.type === 'inner' ? 'selected' : ''}>两边都有的数据</option>
+                    <option value="left" ${t.join.type === 'left' ? 'selected' : ''}>保留前面表的全部数据</option>
+                </select>
+                <select class="form-select form-select-sm" onchange="WZ.tables[${i}].join.left=this.value; _wzRender()">
+                    <option value="">选择前面表的字段</option>
+                    ${prev.map(c => `<option value="${_wzEsc(c.ref)}" ${c.ref === t.join.left ? 'selected' : ''}>${_wzEsc(c.label)}</option>`).join('')}
+                </select>
+                <span class="wz-eq">=</span>
+                <select class="form-select form-select-sm" onchange="WZ.tables[${i}].join.right=this.value; _wzRender()">
+                    <option value="">选择本表字段</option>
+                    ${t.cols.map(c => `<option value="${_wzEsc(c.name)}" ${c.name === t.join.right ? 'selected' : ''}>t${i + 1}.${_wzEsc(c.name)}</option>`).join('')}
+                </select>
+            </div>`;
+        }
+        const colsHtml = t.cols.length ? `<div class="wz-cols">
+                ${t.cols.map(c => `<label class="wz-col ${t.picked.includes(c.name) ? 'on' : ''}" title="${_wzEsc(c.type)}">
+                    <input type="checkbox" ${t.picked.includes(c.name) ? 'checked' : ''} onchange="wzToggleCol(${i}, this.dataset.c, this.checked)" data-c="${_wzEsc(c.name)}">${_wzEsc(c.name)}</label>`).join('')}
+                <span class="wz-col-ops"><a href="javascript:void(0)" onclick="wzPickAll(${i}, true)">全选</a> · <a href="javascript:void(0)" onclick="wzPickAll(${i}, false)">清空</a></span>
+            </div>` : (t.table ? '<div class="text-muted text-sm">加载字段...</div>' : '');
+        return `<div class="wz-table">
+            <div class="wz-table-head">
+                <span class="wz-alias">${multiTables ? 't' + (i + 1) : '表'}</span>
+                <select class="form-select form-select-sm" onchange="wzSetCat(${i}, this.value)">
+                    ${WZ.cats.map(c => `<option value="${_wzEsc(c.name)}" ${c.name === t.cat ? 'selected' : ''}>${_wzEsc(c.name)}</option>`).join('')}
+                </select>
+                <select class="form-select form-select-sm" onchange="wzSetDb(${i}, this.value)">
+                    ${dbs.map(d => `<option value="${_wzEsc(d)}" ${d === t.db ? 'selected' : ''}>${_wzEsc(d)}</option>`).join('')}
+                </select>
+                <select class="form-select form-select-sm wz-tsel" onchange="wzSetTable(${i}, this.value)">
+                    <option value="">选择表</option>
+                    ${tbs.map(x => `<option value="${_wzEsc(x)}" ${x === t.table ? 'selected' : ''}>${_wzEsc(x)}</option>`).join('')}
+                </select>
+                <span style="flex:1"></span>
+                ${i > 0 ? `<button type="button" class="btn btn-ghost btn-sm" onclick="wzRemoveTable(${i})">移除</button>` : ''}
+            </div>
+            ${joinHtml}
+            ${colsHtml}
+        </div>`;
+    }).join('');
+
+    const filtersHtml = WZ.filters.map((f, k) => `<div class="wz-filter">
+        <select class="form-select form-select-sm" onchange="wzSetFilter(${k}, 'ref', this.value)">${colOpts(f.ref)}</select>
+        <select class="form-select form-select-sm" onchange="wzSetFilter(${k}, 'op', this.value)">
+            ${WZ_OPS.map(([v, l]) => `<option value="${v}" ${v === f.op ? 'selected' : ''}>${l}</option>`).join('')}
+        </select>
+        <div class="seg">
+            <button type="button" class="btn btn-sm ${f.src === 'param' ? '' : 'btn-ghost'}" onclick="wzSetFilter(${k}, 'src', 'param')">调用时传入</button>
+            <button type="button" class="btn btn-sm ${f.src === 'fixed' ? '' : 'btn-ghost'}" onclick="wzSetFilter(${k}, 'src', 'fixed')">固定值</button>
+        </div>
+        ${f.src === 'param'
+            ? `<input class="form-input wz-in" value="${_wzEsc(f.param)}" placeholder="参数名" onchange="wzSetFilter(${k}, 'param', this.value.trim())">
+               <label class="wz-check"><input type="checkbox" ${f.required ? 'checked' : ''} onchange="wzSetFilter(${k}, 'required', this.checked)">必填</label>`
+            : `<input class="form-input wz-in" value="${_wzEsc(f.value)}" placeholder="${f.op === 'in' ? '多个用逗号分隔' : f.op === 'between' ? '如 1,100' : '值'}" onchange="wzSetFilter(${k}, 'value', this.value)">`}
+        <span style="flex:1"></span>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="WZ.filters.splice(${k}, 1); _wzRender()">删除</button>
+    </div>`).join('');
+
+    const picked = [];
+    WZ.tables.forEach((t, i) => t.picked.forEach(c => picked.push({ i, c, ref: `t${i + 1}.${c}`, type: (t.cols.find(x => x.name === c) || {}).type })));
+    const aggHtml = WZ.groupOn ? `<div class="wz-aggs">${picked.map(p => {
+        const cur = WZ.tables[p.i].agg[p.c] || (_wzIsNum(p.type) && !/(^|_)id$/i.test(p.c) ? 'sum' : 'group');
+        WZ.tables[p.i].agg[p.c] = cur;
+        return `<div class="wz-agg"><span>${_wzEsc((multiTables ? `t${p.i + 1}.` : '') + p.c)}</span>
+            <select class="form-select form-select-sm" onchange="WZ.tables[${p.i}].agg[this.dataset.c]=this.value; _wzRender()" data-c="${_wzEsc(p.c)}">
+                ${WZ_AGGS.map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`).join('')}
+            </select></div>`;
+    }).join('') || '<span class="text-muted text-sm">先勾选字段</span>'}</div>` : '';
+
+    const out = _wzBuild();
+    const orderOpts = WZ.groupOn
+        ? out.outputs.map(o => `<option value="${_wzEsc(o.ref)}" ${o.ref === WZ.order.ref ? 'selected' : ''}>${_wzEsc(o.label)}</option>`).join('')
+        : cols.map(c => `<option value="${_wzEsc(c.ref)}" ${c.ref === WZ.order.ref ? 'selected' : ''}>${_wzEsc(c.label)}</option>`).join('');
+
+    body.innerHTML = `
+        <div class="wz-step"><span class="wz-no">1</span><b>选表和字段</b>${new Set(WZ.tables.map(t => t.cat)).size > 1 ? '<span class="badge badge-lime">跨数据源</span>' : ''}</div>
+        ${tablesHtml}
+        <button type="button" class="btn btn-secondary btn-sm" onclick="wzAddTable()">+ 关联另一张表</button>
+
+        <div class="wz-step"><span class="wz-no">2</span><b>筛选条件</b></div>
+        ${filtersHtml}
+        <button type="button" class="btn btn-secondary btn-sm" onclick="wzAddFilter()">+ 添加条件</button>
+
+        <div class="wz-step"><span class="wz-no">3</span><b>汇总与排序</b></div>
+        <div class="wz-row">
+            <label class="wz-check"><input type="checkbox" ${WZ.groupOn ? 'checked' : ''} onchange="WZ.groupOn=this.checked; WZ.order.ref=''; _wzRender()">分组汇总</label>
+        </div>
+        ${aggHtml}
+        <div class="wz-row">
+            <span class="wz-label">排序</span>
+            <select class="form-select form-select-sm" onchange="WZ.order.ref=this.value; _wzRender()"><option value="">不排序</option>${orderOpts}</select>
+            <select class="form-select form-select-sm" onchange="WZ.order.dir=this.value; _wzRender()">
+                <option value="DESC" ${WZ.order.dir === 'DESC' ? 'selected' : ''}>从大到小</option>
+                <option value="ASC" ${WZ.order.dir === 'ASC' ? 'selected' : ''}>从小到大</option>
+            </select>
+            <span class="wz-label" style="margin-left:12px;">最多返回</span>
+            <input class="form-input wz-in" type="number" min="1" value="${_wzEsc(WZ.limit)}" placeholder="不限" onchange="WZ.limit=this.value; _wzRender()" style="width:100px;">
+            <span class="wz-label">行</span>
+        </div>
+
+        <div class="wz-step"><span class="wz-no">4</span><b>生成结果</b>${out.error ? `<span class="badge badge-warning">${_wzEsc(out.error)}</span>` : ''}</div>
+        <pre class="wz-sql">${_wzEsc(out.sql || '-- 先选择表')}</pre>
+        ${out.params.length ? `<div class="wz-params">参数：${out.params.map(p => `<span class="code-chip">${_wzEsc(p.name)}${p.required ? ' *' : ''}</span>`).join(' ')}</div>` : ''}
+    `;
+}
+
+function _wzIdent(n) { return /^[A-Za-z_][A-Za-z0-9_]*$/.test(n) ? n : '`' + String(n).replace(/`/g, '``') + '`'; }
+function _wzLit(v) {
+    v = String(v).trim();
+    return /^-?\d+(\.\d+)?$/.test(v) ? v : `'${v.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`;
+}
+
+// 生成 SQL：返回 { sql, params, outputs, multi, error }
+function _wzBuild() {
+    const res = { sql: '', params: [], outputs: [], multi: false, error: '' };
+    const tables = WZ.tables.filter(t => t.table);
+    if (!tables.length || tables.length !== WZ.tables.length) { if (WZ.tables.length) res.error = '还有表没选'; return res; }
+    const many = WZ.tables.length > 1;
+    res.multi = new Set(WZ.tables.map(t => t.cat)).size > 1;
+    const tref = t => (res.multi ? `${_wzIdent(t.cat)}.` : '') + `${_wzIdent(t.db)}.${_wzIdent(t.table)}`;
+    const cref = ref => { const [a, ...rest] = ref.split('.'); const c = rest.join('.'); return many ? `${a}.${_wzIdent(c)}` : _wzIdent(c); };
+
+    // SELECT
+    const all = [];
+    WZ.tables.forEach((t, i) => t.picked.forEach(c => all.push({ ref: `t${i + 1}.${c}`, c, agg: WZ.groupOn ? (t.agg[c] || 'group') : 'group' })));
+    const nameCount = {};
+    all.forEach(p => { nameCount[p.c.toLowerCase()] = (nameCount[p.c.toLowerCase()] || 0) + 1; });
+    const sel = [], groups = [];
+    const AGG_SQL = { count: e => `COUNT(${e})`, distinct: e => `COUNT(DISTINCT ${e})`, sum: e => `SUM(${e})`, avg: e => `AVG(${e})`, max: e => `MAX(${e})`, min: e => `MIN(${e})` };
+    all.forEach(p => {
+        const e = cref(p.ref);
+        const base = nameCount[p.c.toLowerCase()] > 1 ? `${p.ref.split('.')[0]}_${p.c}` : p.c;
+        if (p.agg === 'group') {
+            groups.push(e);
+            const alias = base !== p.c ? base : '';
+            sel.push(alias ? `${e} AS ${_wzIdent(alias)}` : e);
+            res.outputs.push({ ref: p.ref, expr: e, label: base, out: alias || p.c });
+        } else {
+            const alias = `${base}_${p.agg}`;
+            sel.push(`${AGG_SQL[p.agg](e)} AS ${_wzIdent(alias)}`);
+            res.outputs.push({ ref: 'agg:' + alias, expr: alias, label: `${base}（${(WZ_AGGS.find(a => a[0] === p.agg) || [])[1]}）`, out: alias });
+        }
+    });
+    if (!sel.length) {
+        if (many) { res.error = '至少勾选一个字段'; return res; }
+        sel.push('*');
+    }
+    let sql = `SELECT ${sel.join(',\n       ')}\n  FROM ${tref(WZ.tables[0])}${many ? ' t1' : ''}`;
+    for (let i = 1; i < WZ.tables.length; i++) {
+        const t = WZ.tables[i];
+        if (!t.join.left || !t.join.right) { res.error = `t${i + 1} 还没选关联字段`; }
+        sql += `\n  ${t.join.type === 'left' ? 'LEFT JOIN' : 'JOIN'} ${tref(t)} t${i + 1}` +
+            (t.join.left && t.join.right ? ` ON t${i + 1}.${_wzIdent(t.join.right)} = ${cref(t.join.left)}` : ' ON 1 = 1');
+    }
+
+    // WHERE
+    const conds = [];
+    const addParam = (name, type, required, desc) => {
+        if (!res.params.some(p => p.name === name)) res.params.push({ name, param_type: type, required, description: desc });
+    };
+    WZ.filters.forEach(f => {
+        const e = cref(f.ref);
+        const colType = _wzColType(f.ref);
+        const pType = _wzIsNum(colType) ? 'number' : 'string';
+        const OPS = { eq: '=', ne: '<>', gt: '>', ge: '>=', lt: '<', le: '<=' };
+        if (f.src === 'fixed') {
+            const v = String(f.value || '').trim();
+            if (!v) { res.error = '有条件没填值'; return; }
+            const parts = v.split(/[,，]/).map(x => x.trim()).filter(Boolean);
+            let c;
+            if (OPS[f.op]) c = `${e} ${OPS[f.op]} ${_wzLit(v)}`;
+            else if (f.op === 'like') c = `${e} LIKE ${_wzLit('%' + v + '%')}`;
+            else if (f.op === 'prefix') c = `${e} LIKE ${_wzLit(v + '%')}`;
+            else if (f.op === 'in') c = `${e} IN (${parts.map(_wzLit).join(', ')})`;
+            else if (f.op === 'between') {
+                if (parts.length !== 2) { res.error = '「介于」要填两个值，用逗号分隔'; return; }
+                c = `${e} BETWEEN ${_wzLit(parts[0])} AND ${_wzLit(parts[1])}`;
+            }
+            conds.push({ c });
+            return;
+        }
+        const p = (f.param || '').trim();
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(p)) { res.error = `参数名「${p}」只能用字母、数字、下划线`; return; }
+        let c, guard = p;
+        if (OPS[f.op]) { c = `${e} ${OPS[f.op]} :${p}`; addParam(p, pType, f.required, f.ref.split('.').slice(1).join('.')); }
+        else if (f.op === 'like') { c = `${e} LIKE :${p}|like`; addParam(p, 'string', f.required, '模糊匹配'); }
+        else if (f.op === 'prefix') { c = `${e} LIKE :${p}|like_right`; addParam(p, 'string', f.required, '前缀匹配'); }
+        else if (f.op === 'in') { c = `${e} IN (:${p})`; addParam(p, 'array', f.required, '多个值'); }
+        else if (f.op === 'between') {
+            c = `${e} BETWEEN :${p}_start AND :${p}_end`; guard = `${p}_start`;
+            addParam(`${p}_start`, pType, f.required, '起始值'); addParam(`${p}_end`, pType, f.required, '结束值');
+        }
+        conds.push(f.required ? { c } : { c, guard });
+    });
+    if (conds.length) {
+        const req = conds.filter(x => !x.guard), opt = conds.filter(x => x.guard);
+        sql += `\n WHERE ${req.length ? req.map(x => x.c).join('\n   AND ') : '1 = 1'}`;
+        opt.forEach(x => { sql += `\n   $if(${x.guard} != null)$AND ${x.c}$endif$`; });
+    }
+    // GROUP BY
+    if (WZ.groupOn && groups.length && groups.length < all.length) sql += `\n GROUP BY ${groups.join(', ')}`;
+    // ORDER BY
+    if (WZ.order.ref) {
+        const o = res.outputs.find(x => x.ref === WZ.order.ref);
+        const expr = o ? (o.ref.startsWith('agg:') ? _wzIdent(o.out) : o.expr) : cref(WZ.order.ref);
+        sql += `\n ORDER BY ${expr} ${WZ.order.dir}`;
+    }
+    const lim = parseInt(WZ.limit, 10);
+    if (lim > 0) sql += `\n LIMIT ${lim}`;
+    res.sql = sql;
+    return res;
+}
+
+function applyQueryWizard() {
+    const out = _wzBuild();
+    if (!out.sql) { Toast.error(out.error || '先选择表'); return; }
+    if (out.error) { Toast.error(out.error); return; }
+    const cur = (sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql').value) || '';
+    if (cur.trim() && cur.trim() !== out.sql.trim() && !confirm('用生成的 SQL 替换当前 SQL？')) return;
+    // 数据源模式：跨数据源 → 多个数据源；否则单个数据源并选中该数据源
+    const typeSel = document.getElementById('apiType');
+    if (out.multi) {
+        typeSel.value = 'federated';
+    } else {
+        typeSel.value = 'sql';
+        const c = WZ.cats.find(x => x.name === WZ.tables[0].cat);
+        const dsSel = document.getElementById('apiDatasource');
+        if (c && dsSel && [...dsSel.options].some(o => o.value === String(c.id))) dsSel.value = String(c.id);
+    }
+    onApiTypeChange();
+    document.getElementById('apiSql').value = out.sql;
+    if (sqlEditor) sqlEditor.setValue(out.sql);
+    // 参数：没有的补上，已有的不动
+    let added = 0;
+    out.params.forEach(p => {
+        if (params.some(x => x.name === p.name)) return;
+        params.push({ name: p.name, param_type: p.param_type, required: !!p.required, default_value: '', description: p.description || '', item_schema: '', sort_order: params.length });
+        added++;
+    });
+    renderParams();
+    closeQueryWizard();
+    Toast.success(added ? `已生成 SQL，并添加 ${added} 个参数` : '已生成 SQL');
+}
+
+// 「单个数据源 / 多个数据源」切换 = 在 sql 与 federated 两种类型之间切换
+function setSqlSourceMode(mode) {
+    const sel = document.getElementById('apiType');
+    if (!sel || sel.value === mode) return;
+    sel.value = mode;
+    onApiTypeChange();
 }
 
 // ========== 保存 API ==========
@@ -3493,7 +3987,7 @@ async function runTest() {
         document.getElementById('testMeta').innerHTML = `
             <span>类型: <strong>HTML 页面</strong></span> &nbsp;|&nbsp;
             <span>路径: <strong>${gatewayUrl}</strong></span> &nbsp;|&nbsp;
-            <span style="color:#22c55e;font-weight:600;">已在新标签打开预览</span>
+            <span style="color:#84cc16;font-weight:600;">已在新标签打开预览</span>
         `;
         const outputEl = document.getElementById('testOutput');
         outputEl.className = '';
@@ -3527,7 +4021,7 @@ async function runTest() {
 
     document.getElementById('testResult').style.display = 'block';
     const statusStr = result?.status === true
-        ? '<span style="color:#22c55e;font-weight:600;">成功</span>'
+        ? '<span style="color:#84cc16;font-weight:600;">成功</span>'
         : '<span style="color:#ef4444;font-weight:600;">失败</span>';
     const finalTrace = (result && result.trace_id) ? result.trace_id : traceId;
     document.getElementById('testMeta').innerHTML = `
