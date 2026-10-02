@@ -27,8 +27,8 @@
             <option value="gateway">网关调用</option>
             <option value="test">测试调用</option>
         </select>
-        <input type="date" class="form-input" id="logStartDate" onchange="loadLogs(1)" style="width: 150px;">
-        <input type="date" class="form-input" id="logEndDate" onchange="loadLogs(1)" style="width: 150px;">
+        <input type="date" class="form-input" id="logStartDate" onchange="loadLogs(1)" placeholder="开始日期" data-max-from="logEndDate" style="width: 160px;">
+        <input type="date" class="form-input" id="logEndDate" onchange="loadLogs(1)" placeholder="结束日期" data-min-from="logStartDate" style="width: 160px;">
     </div>
 </div>
 
