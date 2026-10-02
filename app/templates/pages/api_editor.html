@@ -375,9 +375,9 @@
     <div class="editor-workspace">
     <div class="editor-left">
     <div class="editor-tabs" role="tablist">
-        <button type="button" class="editor-tab active" id="tab-basic" onclick="switchEditorTab('basic')">基础信息</button>
+        <button type="button" class="editor-tab active" id="tab-logic" onclick="switchEditorTab('logic')">执行逻辑</button>
         <button type="button" class="editor-tab" id="tab-params" data-mode="sql plugin federated" onclick="switchEditorTab('params')">参数定义 <span class="tab-count" id="paramTabCount">0</span></button>
-        <button type="button" class="editor-tab" id="tab-logic" onclick="switchEditorTab('logic')">执行逻辑</button>
+        <button type="button" class="editor-tab" id="tab-basic" onclick="switchEditorTab('basic')">更多设置</button>
         <span class="tab-spacer"></span>
         <button type="button" class="btn btn-secondary btn-sm" onclick="openStructurePreview()" title="查看请求结构 / SQL 渲染中间态 / 响应结构">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -387,7 +387,7 @@
     </div>
 
     <!-- ============ 页1: 基础信息(描述 + 高级配置) ============ -->
-    <div class="editor-pane active" id="pane-basic">
+    <div class="editor-pane" id="pane-basic">
         <div class="card mb-16">
             <div class="card-header"><h3>基础配置</h3></div>
             <div class="card-body">
@@ -524,7 +524,7 @@
     </div>
 
     <!-- ============ 页3: 执行逻辑(主工作区,原逻辑定义) ============ -->
-    <div class="editor-pane" id="pane-logic">
+    <div class="editor-pane active" id="pane-logic">
 
     <!-- 数据源选择：SQL 查询分「单个数据源 / 多个数据源」两种（后者即多源 SQL，v2.23 合并入口） -->
     <div class="card mb-16" data-mode="sql federated sync" id="datasourceCard">
@@ -573,7 +573,7 @@
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px;"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7M14 17.5h7"/></svg>
                     选表生成 SQL
                 </button>
-                <button type="button" class="btn btn-ghost btn-sm" id="usePipelineBtn" onclick="usePipeline()">多步骤管线</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="usePipelineBtn" onclick="askPipeline()">多步骤管线</button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="openStructurePreview('sql')">渲染预览</button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="openTutorial()">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px;"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -608,6 +608,7 @@
             </div>
         </div>
         <div class="card-body">
+            <div class="note note-lime" style="margin-bottom:12px;"><span>多步骤管线仅为兼容已有接口保留，新需求推荐用「多个数据源」写一条 SQL，或 <a href="javascript:void(0)" onclick="openQueryWizard()">选表生成 SQL</a>。</span></div>
             <!-- 关闭状态提示 -->
             <div id="pipelineDisabledHint" style="padding:20px; text-align:center; color:#a1a1aa; font-size:13px; background:#f7f7f8; border:1px dashed #d4d4d8; border-radius:8px;">
                 当前为<strong style="color:#52525b;">单数据源</strong>模式，使用上方 SQL 模板。<br>
@@ -1975,7 +1976,7 @@ function switchEditorTab(name) {
 
 function ensureActiveTabVisible() {
     const active = document.querySelector('.editor-tab.active');
-    if (active && active.style.display === 'none') switchEditorTab('basic');
+    if (active && active.style.display === 'none') switchEditorTab('logic');
 }
 
 function updateParamTabCount() {
@@ -2322,6 +2323,23 @@ function addParam() {
 function removeParam(index) {
     params.splice(index, 1);
     renderParamTree();
+}
+
+// SQL 里用到但还没定义的 :参数 自动补上（字符串、非必填），返回新增的参数名
+function syncParamsFromSql(sql) {
+    const text = String(sql || '')
+        .replace(/--[^\n]*/g, ' ')
+        .replace(/\/\*[\s\S]*?\*\//g, ' ')
+        .replace(/'(?:''|[^'\\]|\\.)*'/g, "''")
+        .replace(/"(?:[^"\\]|\\.)*"/g, '""');
+    const names = [];
+    const re = /(^|[^:\w]):([A-Za-z_]\w*)/g;
+    let m;
+    while ((m = re.exec(text))) if (!names.includes(m[2])) names.push(m[2]);
+    const added = names.filter(n => !params.some(p => p.name === n));
+    added.forEach(name => params.push({ name, param_type: 'string', required: false, default_value: '', description: '', item_schema: '', sort_order: params.length }));
+    if (added.length) renderParams();
+    return added;
 }
 
 function parseSqlParams() {
@@ -3642,8 +3660,47 @@ function applyQueryWizard() {
         added++;
     });
     renderParams();
+    const nameEl = document.getElementById('apiName'), pathEl = document.getElementById('apiPath');
+    if (nameEl && !nameEl.value.trim()) nameEl.value = WZ.tables.map(t => t.table).join('_');
+    if (pathEl && !pathEl.value.trim()) {
+        pathEl.value = '/' + WZ.tables.map(t => t.table).join('-').toLowerCase().replace(/[^a-z0-9_\-]/g, '');
+        if (typeof updateCallUrlPreview === 'function') updateCallUrlPreview();
+    }
     closeQueryWizard();
     Toast.success(added ? `已生成 SQL，并添加 ${added} 个参数` : '已生成 SQL');
+}
+
+// 「多步骤管线」入口：新需求推荐用「多个数据源」（Catalog 模式），仍可继续用管线
+function askPipeline() {
+    let ov = document.getElementById('__pipeAsk');
+    if (!ov) {
+        ov = document.createElement('div');
+        ov.id = '__pipeAsk';
+        ov.className = 'modal-overlay';
+        ov.innerHTML = `
+        <div class="modal" style="max-width:520px;">
+            <div class="modal-header">
+                <h3>推荐使用「多个数据源」</h3>
+                <button type="button" class="btn-icon" onclick="this.closest('.modal-overlay').style.display='none'">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="pipe-alt">
+                    <div><b>跨库关联</b><span>JOIN 不同数据源的表</span></div>
+                    <div><b>多个查询相加</b><span>(SELECT …) + (SELECT …)</span></div>
+                    <div><b>分组汇总</b><span>GROUP BY / SUM / COUNT</span></div>
+                </div>
+                <p class="text-sm text-muted" style="margin-top:14px;">以上管线能做的，用「多个数据源」写一条 SQL 即可，也可以点选生成。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="this.closest('.modal-overlay').style.display='none'; usePipeline()">仍使用多步骤管线</button>
+                <span style="flex:1"></span>
+                <button type="button" class="btn btn-secondary" onclick="this.closest('.modal-overlay').style.display='none'; setSqlSourceMode('federated')">切到多个数据源</button>
+                <button type="button" class="btn btn-primary" onclick="this.closest('.modal-overlay').style.display='none'; openQueryWizard()">选表生成 SQL</button>
+            </div>
+        </div>`;
+        document.body.appendChild(ov);
+    }
+    ov.style.display = 'flex';
 }
 
 // 打开多步骤管线（新 API 默认不显示管线卡片）
@@ -3699,6 +3756,10 @@ async function saveApi(e) {
         }
     }
     const pipelineVal = pipelineOn ? (document.getElementById('pipelineSteps').value || '') : '';
+    if ((apiType === 'sql' || apiType === 'federated') && !pipelineOn) {
+        const added = syncParamsFromSql((sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql').value) || '');
+        if (added.length) Toast.info(`已自动添加参数：${added.join('、')}`);
+    }
 
     const body = {
         name: document.getElementById('apiName').value.trim(),
