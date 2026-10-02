@@ -147,30 +147,26 @@ async def get_call_trend(
 
     since = cst_days_ago(days)
 
-    if period == "hour":
-        result = await db.execute(
-            select(
-                func.strftime('%Y-%m-%d %H:00', CallLog.created_at).label("time_bucket"),
-                func.count().label("call_count"),
-                func.sum(case((CallLog.response_status == "error", 1), else_=0)).label("error_count"),
-                func.avg(CallLog.response_time_ms).label("avg_time"),
-            )
-            .where(CallLog.created_at >= since)
-            .group_by(func.strftime('%Y-%m-%d %H:00', CallLog.created_at))
-            .order_by(func.strftime('%Y-%m-%d %H:00', CallLog.created_at))
-        )
+    # 按小时 / 按天分桶。原来固定用 SQLite 的 strftime，系统库是 MySQL 时报 FUNCTION strftime does not exist
+    fmt = "%Y-%m-%d %H:00" if period == "hour" else "%Y-%m-%d"
+    dialect = db.get_bind().dialect.name
+    if dialect == "sqlite":
+        bucket = func.strftime(fmt, CallLog.created_at)
+    elif dialect == "postgresql":
+        bucket = func.to_char(CallLog.created_at, "YYYY-MM-DD HH24:00" if period == "hour" else "YYYY-MM-DD")
     else:
-        result = await db.execute(
-            select(
-                func.strftime('%Y-%m-%d', CallLog.created_at).label("time_bucket"),
-                func.count().label("call_count"),
-                func.sum(case((CallLog.response_status == "error", 1), else_=0)).label("error_count"),
-                func.avg(CallLog.response_time_ms).label("avg_time"),
-            )
-            .where(CallLog.created_at >= since)
-            .group_by(func.strftime('%Y-%m-%d', CallLog.created_at))
-            .order_by(func.strftime('%Y-%m-%d', CallLog.created_at))
+        bucket = func.date_format(CallLog.created_at, fmt)
+    result = await db.execute(
+        select(
+            bucket.label("time_bucket"),
+            func.count().label("call_count"),
+            func.sum(case((CallLog.response_status == "error", 1), else_=0)).label("error_count"),
+            func.avg(CallLog.response_time_ms).label("avg_time"),
         )
+        .where(CallLog.created_at >= since)
+        .group_by(bucket)
+        .order_by(bucket)
+    )
 
     rows = result.all()
     items = [

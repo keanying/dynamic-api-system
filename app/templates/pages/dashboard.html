@@ -6,160 +6,396 @@
 <span class="current">仪表盘</span>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+.dash-grid { display: grid; grid-template-columns: 1.05fr 1fr 1fr; grid-template-rows: auto auto 1fr; gap: 16px; margin-bottom: 16px; }
+.dash-card { padding: 20px 22px; display: flex; flex-direction: column; }
+.dash-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.dash-more { color: var(--ui-muted); font-size: 18px; line-height: 1; letter-spacing: 1px; }
+#cardToday { grid-column: 1; grid-row: 1 / span 3; }
+#cardLatency { grid-column: 2; grid-row: 1; }
+#cardApis { grid-column: 2; grid-row: 2; }
+#cardWeek { grid-column: 3; grid-row: 1 / span 2; }
+#cardTrend { grid-column: 2 / span 2; grid-row: 3; }
+.kpi-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+.kpi-side { text-align: right; font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; }
+.kpi-side b { display: block; color: var(--ui-ink); font-weight: 500; font-size: 13px; }
+
+/* 气泡 */
+.bubbles { position: relative; height: 230px; margin: 18px 0 10px; }
+.bubble { position: absolute; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 10px; transition: transform .2s; }
+.bubble:hover { transform: scale(1.03); }
+.bubble b { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; line-height: 1.1; }
+.bubble span { font-size: 11px; opacity: .75; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bubble.b1 { background: var(--ui-violet); color: var(--ui-ink); }
+.bubble.b2 { background: var(--ui-ink); color: #fff; }
+.bubble.b3 { background: var(--ui-lime); color: var(--ui-ink); border: 4px solid #fff; }
+.bubble.b3 b { font-size: 22px; }
+.bubbles-cap { font-size: 12px; color: var(--ui-muted); }
+
+/* 进度条 */
+.meter { margin-top: 14px; }
+.meter-top { display: flex; align-items: baseline; justify-content: space-between; }
+.meter-top .v { font-size: 26px; font-weight: 600; letter-spacing: -0.5px; }
+.meter-top .v small { font-size: 12px; color: var(--ui-muted); font-weight: 400; margin-left: 2px; }
+.meter-top .l { font-size: 12px; color: var(--color-text-secondary); display: inline-flex; align-items: center; gap: 6px; }
+.meter-top .l i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.meter-bar { height: 12px; border-radius: 999px; background: #f1f1f3; margin-top: 6px; overflow: hidden; }
+.meter-bar > div { height: 100%; border-radius: 999px; transition: width .6s ease; }
+
+/* 点阵 */
+.dots { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px 4px; margin-top: auto; padding-top: 16px; }
+.dots .col { display: flex; flex-direction: column-reverse; align-items: center; gap: 6px; }
+.dots .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--ui-violet-soft); }
+.dots .dot.on { background: var(--ui-violet); }
+.dots .col.today .dot.on { background: var(--ui-violet-deep); }
+.dots .lbl { font-size: 11px; color: var(--ui-muted); margin-top: 2px; }
+
+/* 深色趋势卡 */
+.trend-stats { display: flex; gap: 40px; margin: 6px 0 14px; }
+.trend-stat { display: flex; gap: 10px; align-items: stretch; }
+.trend-stat .mark { width: 8px; border-radius: 999px; }
+.trend-stat .big-num { font-size: 32px; }
+.trend-stat .muted { font-size: 12px; margin-top: 2px; }
+.bars { display: flex; align-items: flex-end; justify-content: space-between; gap: 6px; height: 150px; margin-top: auto; }
+.bar-grp { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; height: 100%; }
+.bar-pair { flex: 1; display: flex; align-items: flex-end; gap: 4px; width: 100%; justify-content: center; }
+.bar-pair .bar { width: 42%; max-width: 26px; border-radius: 999px; min-height: 6px;
+    background: repeating-linear-gradient(135deg, rgba(255,255,255,.22) 0 2px, transparent 2px 6px);
+    border: 1px solid rgba(255,255,255,.12); transition: height .5s ease; }
+.bar-grp.hot .bar.a { background: var(--ui-lime); border-color: var(--ui-lime); }
+.bar-grp.hot .bar.b { background: var(--ui-violet); border-color: var(--ui-violet); }
+.bar-grp .x { font-size: 11px; color: #a1a1a8; white-space: nowrap; }
+.bar-grp.hot .x { color: #fff; font-weight: 600; }
+.dash-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.rank-no { width: 24px; height: 24px; border-radius: 50%; background: #f1f1f3; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+tr:nth-child(1) .rank-no { background: var(--ui-lime); }
+tr:nth-child(2) .rank-no { background: var(--ui-violet); }
+tr:nth-child(3) .rank-no { background: var(--ui-ink); color: #fff; }
+@media (max-width: 1200px) {
+    .dash-grid { grid-template-columns: 1fr 1fr; }
+    #cardToday { grid-column: 1; grid-row: 1 / span 2; }
+    #cardLatency { grid-column: 2; grid-row: 1; }
+    #cardApis { grid-column: 2; grid-row: 2; }
+    #cardWeek { grid-column: 1; grid-row: 3; }
+    #cardTrend { grid-column: 2; grid-row: 3; }
+}
+@media (max-width: 860px) {
+    .dash-grid, .dash-tables { grid-template-columns: 1fr; }
+    #cardToday, #cardLatency, #cardApis, #cardWeek, #cardTrend { grid-column: 1; grid-row: auto; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<!-- 统计卡片 -->
-<div class="stats-grid" id="statsGrid">
-    <div class="stat-card">
-        <div class="stat-label">总 API 数</div>
-        <div class="stat-value" id="statApis">-</div>
+<div class="page-hero">
+    <div>
+        <h1>数据总览</h1>
+        <div class="hero-sub">接口调用、耗时与稳定性一览</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-label">总调用次数</div>
-        <div class="stat-value" id="statCalls">-</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-label">今日调用</div>
-        <div class="stat-value" id="statToday">-</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-label">平均耗时</div>
-        <div class="stat-value" id="statAvgTime">-</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-label">失败率</div>
-        <div class="stat-value" id="statFailRate">-</div>
+    <div class="hero-actions">
+        <span class="hero-date" id="heroDate"></span>
+        <button type="button" class="pill-select" onclick="loadAll()">
+            刷新
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+        </button>
     </div>
 </div>
 
-<!-- 今日调用分布 (v2.4) -->
-<div class="card" style="margin-bottom:16px;">
-    <div class="card-header">
-        <h3>今日调用分布 <span class="text-sm text-muted" style="font-weight:400" id="hourlyMeta"></span></h3>
-        <div class="text-sm text-muted" id="hourlyLegend" style="display:flex;gap:14px;align-items:center;">
-            <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:16px;height:2px;border-radius:2px;background:var(--color-primary);display:inline-block;"></span>调用量</span>
-            <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:16px;height:0;border-top:2px dashed #f43f5e;display:inline-block;"></span>失败</span>
+<div class="dash-grid">
+    <!-- 今日调用 -->
+    <div class="card dash-card" id="cardToday">
+        <div class="dash-head">
+            <div class="card-title"><span class="icon-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>今日调用</div>
+            <span class="dash-more">···</span>
+        </div>
+        <div><span class="big-num" id="todayNum">-</span> <span id="todayChg"></span></div>
+        <div class="bubbles" id="bubbles"></div>
+        <div class="bubbles-cap">调用最多的接口</div>
+        <div id="meters"></div>
+    </div>
+
+    <!-- 平均耗时 -->
+    <div class="card dash-card" id="cardLatency">
+        <div class="dash-head">
+            <div class="card-title"><span class="icon-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>平均耗时</div>
+            <span class="dash-more">···</span>
+        </div>
+        <div class="kpi-row">
+            <div class="big-num" id="avgTime">-</div>
+            <div class="kpi-side">失败率<b id="failRate">-</b></div>
         </div>
     </div>
-    <div class="card-body">
-        <div id="hourlyChart" style="width:100%;height:200px;"></div>
-        <div id="hourlyEmpty" class="empty-state" style="display:none; padding:24px;"><p>今日暂无调用</p></div>
+
+    <!-- 接口总数 -->
+    <div class="card dash-card" id="cardApis">
+        <div class="dash-head">
+            <div class="card-title"><span class="icon-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>接口总数</div>
+            <span class="dash-more">···</span>
+        </div>
+        <div class="kpi-row">
+            <div class="big-num" id="apiCount">-</div>
+            <div class="kpi-side">累计调用<b id="totalCalls">-</b></div>
+        </div>
+    </div>
+
+    <!-- 近 7 天 -->
+    <div class="card dash-card" id="cardWeek">
+        <div class="dash-head">
+            <div class="card-title"><span class="icon-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>近 7 天调用</div>
+            <span class="dash-more">···</span>
+        </div>
+        <div><span class="big-num" id="weekNum">-</span> <span id="weekChg"></span></div>
+        <div class="dots" id="weekDots"></div>
+    </div>
+
+    <!-- 调用趋势（深色） -->
+    <div class="card card-dark dash-card" id="cardTrend">
+        <div class="dash-head">
+            <div class="card-title"><span class="icon-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>调用趋势</div>
+            <select class="pill-select" id="trendMode" onchange="renderTrend()">
+                <option value="today">今日</option>
+                <option value="week">近 7 天</option>
+            </select>
+        </div>
+        <div class="trend-stats">
+            <div class="trend-stat"><span class="mark" style="background:var(--ui-lime)"></span><div><div class="big-num" id="trendA">-</div><div class="muted" id="trendALabel">调用量峰值</div></div></div>
+            <div class="trend-stat"><span class="mark" style="background:var(--ui-violet)"></span><div><div class="big-num" id="trendB">-</div><div class="muted" id="trendBLabel">平均耗时</div></div></div>
+        </div>
+        <div class="bars" id="trendBars"></div>
     </div>
 </div>
 
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
-    <!-- 耗时排行 -->
+<div class="dash-tables">
     <div class="card">
-        <div class="card-header">
-            <h3>API 耗时排行</h3>
-        </div>
+        <div class="card-header"><div class="card-title"><span class="icon-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>耗时排行</div></div>
         <div class="card-body">
             <div class="table-wrapper">
                 <table>
-                    <thead>
-                        <tr><th>#</th><th>API 名称</th><th>平均耗时</th><th>调用次数</th></tr>
-                    </thead>
+                    <thead><tr><th>#</th><th>API 名称</th><th>平均耗时</th><th>调用次数</th></tr></thead>
                     <tbody id="latencyRank"></tbody>
                 </table>
             </div>
-            <div id="latencyEmpty" class="empty-state" style="display:none; padding: 30px;">
-                <p>暂无数据</p>
-            </div>
+            <div id="latencyEmpty" class="empty-state" style="display:none; padding: 30px;"><p>暂无数据</p></div>
         </div>
     </div>
-
-    <!-- 调用排行 -->
     <div class="card">
-        <div class="card-header">
-            <h3>API 调用次数排行</h3>
-        </div>
+        <div class="card-header"><div class="card-title"><span class="icon-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>调用次数排行</div></div>
         <div class="card-body">
             <div class="table-wrapper">
                 <table>
-                    <thead>
-                        <tr><th>#</th><th>API 名称</th><th>调用次数</th><th>平均耗时</th></tr>
-                    </thead>
+                    <thead><tr><th>#</th><th>API 名称</th><th>调用次数</th><th>平均耗时</th></tr></thead>
                     <tbody id="callRank"></tbody>
                 </table>
             </div>
-            <div id="callEmpty" class="empty-state" style="display:none; padding: 30px;">
-                <p>暂无数据</p>
-            </div>
+            <div id="callEmpty" class="empty-state" style="display:none; padding: 30px;"><p>暂无数据</p></div>
         </div>
     </div>
 </div>
 
-<!-- 最近调用日志 -->
 <div class="card">
     <div class="card-header">
-        <h3>最近调用日志</h3>
-        <a href="/admin/logs" class="btn btn-ghost btn-sm">查看全部</a>
+        <div class="card-title"><span class="icon-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>最近调用</div>
+        <a href="/admin/logs" class="btn btn-secondary btn-sm">查看全部</a>
     </div>
     <div class="card-body">
         <div class="table-wrapper">
             <table>
-                <thead>
-                    <tr><th>时间</th><th>API 名称</th><th>方法</th><th>耗时</th><th>状态</th><th>IP</th></tr>
-                </thead>
+                <thead><tr><th>时间</th><th>API 名称</th><th>方法</th><th>耗时</th><th>状态</th><th>IP</th></tr></thead>
                 <tbody id="recentLogs"></tbody>
             </table>
         </div>
-        <div id="logsEmpty" class="empty-state" style="display:none; padding: 30px;">
-            <p>暂无调用日志</p>
-        </div>
+        <div id="logsEmpty" class="empty-state" style="display:none; padding: 30px;"><p>暂无调用日志</p></div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-async function loadDashboard() {
-    // 统计数据
-    const stats = await API.get('/api/monitor/dashboard');
-    if (stats && stats.data) {
-        document.getElementById('statApis').textContent = stats.data.total_apis;
-        document.getElementById('statCalls').textContent = stats.data.total_calls.toLocaleString();
-        document.getElementById('statToday').textContent = stats.data.today_calls.toLocaleString();
-        document.getElementById('statAvgTime').textContent = formatMs(stats.data.avg_response_time);
-        document.getElementById('statFailRate').textContent = stats.data.failure_rate + '%';
+// 大数字按中文单位缩写：12,345 → 1.2万
+function compact(n) {
+    n = Number(n) || 0;
+    if (n >= 1e8) return [(n / 1e8).toFixed(n >= 1e9 ? 0 : 1).replace(/\.0$/, ''), '亿'];
+    if (n >= 1e4) return [(n / 1e4).toFixed(n >= 1e5 ? 0 : 1).replace(/\.0$/, ''), '万'];
+    return [n.toLocaleString(), ''];
+}
+function bigNum(n, unit) {
+    const [v, u] = compact(n);
+    return `${v}<small>${u}${unit || ''}</small>`;
+}
+function changeChip(cur, prev) {
+    if (!prev) return '';
+    const pct = Math.round((cur - prev) / prev * 100);
+    if (!isFinite(pct)) return '';
+    return pct >= 0 ? `<span class="chip-up">+${pct}%</span>` : `<span class="chip-down">${pct}%</span>`;
+}
+const WEEKDAY = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const DASH = { hourly: [], days: [], stats: {} };
+
+async function loadAll() {
+    const now = new Date();
+    document.getElementById('heroDate').textContent = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+    // 各卡片的数据各自返回后立即渲染（排行类统计在大表上较慢，不让它拖住整页）
+    const pStats = API.get('/api/monitor/dashboard');
+    const pHourly = API.get('/api/monitor/today-hourly');
+    const pTrend = API.get('/api/monitor/call-trend?period=day&days=14');
+    const pRank = API.get('/api/monitor/api-call-rank?limit=10');
+    const pLatency = API.get('/api/monitor/api-latency-rank?limit=10');
+    API.get('/api/monitor/logs?page_size=10').then(r => renderLogs((r && r.data && r.data.items) || []));
+    const [stats, hourly, trend] = await Promise.all([pStats, pHourly, pTrend]);
+    DASH.stats = (stats && stats.data) || {};
+    DASH.hourly = (hourly && hourly.data && hourly.data.items) || [];
+    DASH.days = (trend && trend.data) || [];
+    renderKpis();
+    renderToday();
+    renderWeek();
+    renderTrend();
+    pRank.then(r => { const d = (r && r.data) || []; renderBubbles(d); renderRank('callRank', 'callEmpty', d, it => [it.call_count, formatMs(it.avg_time)]); });
+    pLatency.then(r => renderRank('latencyRank', 'latencyEmpty', (r && r.data) || [], it => [formatMs(it.value), it.call_count]));
+}
+
+function dayKey(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function lastDays(n) {   // 最近 n 天（含今天），缺的天补 0
+    const map = Object.fromEntries(DASH.days.map(x => [x.time, x]));
+    const out = [];
+    for (let i = n - 1; i >= 0; i--) {
+        const d = new Date(); d.setDate(d.getDate() - i);
+        const k = dayKey(d);
+        out.push({ date: d, key: k, ...(map[k] || { call_count: 0, error_count: 0, avg_time: 0 }) });
+    }
+    return out;
+}
+
+function renderKpis() {
+    const s = DASH.stats;
+    document.getElementById('avgTime').innerHTML = s.avg_response_time != null ? `${Math.round(s.avg_response_time)}<small>ms</small>` : '-';
+    document.getElementById('failRate').textContent = s.failure_rate != null ? `${s.failure_rate}%` : '-';
+    document.getElementById('apiCount').innerHTML = s.total_apis != null ? `${s.total_apis}<small>个</small>` : '-';
+    const [v, u] = compact(s.total_calls || 0);
+    document.getElementById('totalCalls').textContent = `${v}${u} 次`;
+}
+
+function renderToday() {
+    const s = DASH.stats;
+    const today = s.today_calls || 0;
+    document.getElementById('todayNum').innerHTML = bigNum(today, '次');
+    const days = lastDays(2);
+    document.getElementById('todayChg').innerHTML = changeChip(days[1].call_count, days[0].call_count);
+
+    renderMeters(today);
+}
+
+function renderBubbles(rank) {
+    // 气泡：调用最多的 3 个接口，面积按调用量
+    const top = rank.slice(0, 3);
+    const box = document.getElementById('bubbles');
+    if (!top.length) { box.innerHTML = '<div class="text-muted" style="padding-top:90px;text-align:center;">暂无调用</div>'; }
+    else {
+        const max = Math.max(...top.map(x => x.call_count || 0), 1);
+        // 按卡片宽度定基准大小，面积随调用量；第三个（柠檬绿）压在前两个下方正中、置于最前
+        const base = Math.min(box.clientWidth * 0.56, 200);
+        const d = top.map((x, i) => Math.round(base * Math.max(i === 2 ? 0.42 : 0.55, Math.sqrt((x.call_count || 0) / max)) * (i === 2 ? 0.62 : 1)));
+        const pos = [
+            `left:0;top:0`,
+            `right:0;top:${Math.round(base * 0.16)}px`,
+            `left:calc(50% - ${Math.round((d[2] || 0) / 2)}px);top:${Math.round(base * 0.6)}px`,
+        ];
+        box.style.height = Math.round(Math.max(d[0], base * 0.16 + (d[1] || 0), base * 0.6 + (d[2] || 0))) + 'px';
+        box.innerHTML = top.map((x, i) => {
+            const [v, u] = compact(x.call_count);
+            return `<div class="bubble b${i + 1}" style="width:${d[i]}px;height:${d[i]}px;${pos[i]};z-index:${i + 1}" title="${escapeHtml(x.api_name || '')}：${(x.call_count || 0).toLocaleString()} 次">
+                <b>${v}${u}</b><span>${escapeHtml(x.api_name || '已删除的接口')}</span></div>`;
+        }).join('');
     }
 
-    // 耗时排行
-    const latency = await API.get('/api/monitor/api-latency-rank?limit=10');
-    const latencyBody = document.getElementById('latencyRank');
-    if (latency && latency.data && latency.data.length > 0) {
-        latencyBody.innerHTML = latency.data.map((item, i) => `
-            <tr>
-                <td>${i + 1}</td>
-                <td>${escapeHtml(item.api_name)}</td>
-                <td>${formatMs(item.value)}</td>
-                <td>${item.call_count}</td>
-            </tr>
-        `).join('');
-    } else {
-        document.getElementById('latencyEmpty').style.display = 'block';
-    }
+}
 
-    // 调用排行
-    const calls = await API.get('/api/monitor/api-call-rank?limit=10');
-    const callBody = document.getElementById('callRank');
-    if (calls && calls.data && calls.data.length > 0) {
-        callBody.innerHTML = calls.data.map((item, i) => `
-            <tr>
-                <td>${i + 1}</td>
-                <td>${escapeHtml(item.api_name)}</td>
-                <td>${item.call_count}</td>
-                <td>${formatMs(item.avg_time)}</td>
-            </tr>
-        `).join('');
-    } else {
-        document.getElementById('callEmpty').style.display = 'block';
-    }
+function renderMeters(today) {
+    // 进度条：成功率 / 失败率 / 今日占近 7 天
+    const fail = Number(DASH.stats.failure_rate || 0);
+    const week = lastDays(7).reduce((a, x) => a + x.call_count, 0);
+    const share = week ? Math.min(100, Math.round(today / week * 100)) : 0;
+    const meters = [
+        { v: Math.max(0, 100 - fail).toFixed(1).replace(/\.0$/, ''), l: '成功率', c: 'var(--ui-violet)' },
+        { v: fail.toFixed(1).replace(/\.0$/, ''), l: '失败率', c: 'var(--ui-ink)' },
+        { v: share, l: '今日占近 7 天', c: 'var(--ui-lime)' },
+    ];
+    document.getElementById('meters').innerHTML = meters.map(m => `
+        <div class="meter">
+            <div class="meter-top"><span class="v">${m.v}<small>%</small></span><span class="l">${m.l}<i style="background:${m.c}"></i></span></div>
+            <div class="meter-bar"><div style="width:${Math.min(100, Number(m.v))}%;background:${m.c}"></div></div>
+        </div>`).join('');
+}
 
-    // 最近日志
-    const logs = await API.get('/api/monitor/logs?page_size=10');
-    const logsBody = document.getElementById('recentLogs');
-    if (logs && logs.data && logs.data.items && logs.data.items.length > 0) {
-        logsBody.innerHTML = logs.data.items.map(log => `
+function renderWeek() {
+    const days = lastDays(14);
+    const cur = days.slice(7), prev = days.slice(0, 7);
+    const total = cur.reduce((a, x) => a + x.call_count, 0);
+    const prevTotal = prev.reduce((a, x) => a + x.call_count, 0);
+    document.getElementById('weekNum').innerHTML = bigNum(total, '次');
+    document.getElementById('weekChg').innerHTML = changeChip(total, prevTotal);
+    const max = Math.max(...cur.map(x => x.call_count), 1);
+    const ROWS = 8;
+    document.getElementById('weekDots').innerHTML = cur.map((x, i) => {
+        const on = x.call_count ? Math.max(1, Math.round(ROWS * x.call_count / max)) : 0;
+        const dots = Array.from({ length: ROWS }, (_, r) => `<span class="dot ${r < on ? 'on' : ''}"></span>`).join('');
+        const label = i === cur.length - 1 ? '今天' : WEEKDAY[x.date.getDay()];
+        return `<div class="col ${i === cur.length - 1 ? 'today' : ''}" title="${x.key}：${x.call_count.toLocaleString()} 次">
+            <span class="lbl">${label}</span>${dots}</div>`;
+    }).join('');
+}
+
+function renderTrend() {
+    const mode = document.getElementById('trendMode').value;
+    let groups;
+    if (mode === 'week') {
+        groups = lastDays(7).map((x, i, arr) => ({ x: i === arr.length - 1 ? '今天' : WEEKDAY[x.date.getDay()],
+            calls: x.call_count, avg: x.avg_time, tip: x.key }));
+    } else {   // 今日：每 2 小时一组
+        groups = [];
+        for (let h = 0; h < 24; h += 2) {
+            const items = DASH.hourly.filter(it => it.hour === h || it.hour === h + 1);
+            const calls = items.reduce((a, it) => a + it.call_count, 0);
+            const sumT = items.reduce((a, it) => a + it.avg_time * it.call_count, 0);
+            groups.push({ x: `${String(h).padStart(2, '0')}时`, calls, avg: calls ? sumT / calls : 0,
+                tip: `${String(h).padStart(2, '0')}:00-${String(h + 1).padStart(2, '0')}:59` });
+        }
+    }
+    const maxC = Math.max(...groups.map(g => g.calls), 1);
+    const maxT = Math.max(...groups.map(g => g.avg), 1);
+    const hot = groups.reduce((bi, g, i) => g.calls > groups[bi].calls ? i : bi, 0);
+    const peak = groups[hot];
+    const [pv, pu] = compact(peak.calls);
+    document.getElementById('trendA').innerHTML = `${pv}<small>${pu}次</small>`;
+    document.getElementById('trendALabel').textContent = `调用量峰值 · ${peak.tip}`;
+    const avgAll = groups.reduce((a, g) => a + g.avg * g.calls, 0) / (groups.reduce((a, g) => a + g.calls, 0) || 1);
+    document.getElementById('trendB').innerHTML = `${Math.round(avgAll)}<small>ms</small>`;
+    document.getElementById('trendBLabel').textContent = mode === 'week' ? '近 7 天平均耗时' : '今日平均耗时';
+    document.getElementById('trendBars').innerHTML = groups.map((g, i) => `
+        <div class="bar-grp ${i === hot ? 'hot' : ''}" title="${g.tip}：调用 ${g.calls.toLocaleString()} 次，平均耗时 ${Math.round(g.avg)} ms">
+            <div class="bar-pair">
+                <div class="bar a" style="height:${Math.max(4, Math.round(100 * g.calls / maxC))}%"></div>
+                <div class="bar b" style="height:${Math.max(4, Math.round(100 * g.avg / maxT))}%"></div>
+            </div>
+            <span class="x">${g.x}${i === hot ? ' ↗' : ''}</span>
+        </div>`).join('');
+}
+
+function renderRank(bodyId, emptyId, items, cols) {
+    const body = document.getElementById(bodyId);
+    if (items.length) {
+        body.innerHTML = items.map((it, i) => `<tr><td><span class="rank-no">${i + 1}</span></td><td>${escapeHtml(it.api_name)}</td>`
+            + cols(it).map(c => `<td>${c}</td>`).join('') + '</tr>').join('');
+        document.getElementById(emptyId).style.display = 'none';
+    } else { body.innerHTML = ''; document.getElementById(emptyId).style.display = 'block'; }
+}
+
+function renderLogs(logs) {
+    const tb = document.getElementById('recentLogs');
+    if (logs.length) {
+        tb.innerHTML = logs.map(log => `
             <tr>
                 <td>${formatDate(log.created_at)}</td>
                 <td>${escapeHtml(log.api_name)}</td>
@@ -167,146 +403,11 @@ async function loadDashboard() {
                 <td>${formatMs(log.response_time_ms)}</td>
                 <td>${statusBadge(log.response_status)}</td>
                 <td class="font-mono text-sm">${escapeHtml(log.client_ip)}</td>
-            </tr>
-        `).join('');
-    } else {
-        document.getElementById('logsEmpty').style.display = 'block';
-    }
+            </tr>`).join('');
+        document.getElementById('logsEmpty').style.display = 'none';
+    } else { tb.innerHTML = ''; document.getElementById('logsEmpty').style.display = 'block'; }
 }
 
-loadDashboard();
-
-// ===== 今日调用分布 (v2.4) =====
-async function loadHourly() {
-    const res = await API.get('/api/monitor/today-hourly');
-    if (!res || res.status !== true) return;
-    const d = res.data || {};
-    const items = d.items || [];
-    const chart = document.getElementById('hourlyChart');
-    const empty = document.getElementById('hourlyEmpty');
-    const meta = document.getElementById('hourlyMeta');
-
-    meta.textContent = d.total ? `今日共 ${d.total.toLocaleString()} 次` + (d.peak_hour !== null ? ` · 峰值 ${String(d.peak_hour).padStart(2,'0')}:00` : '') : '';
-
-    if (!d.total) { chart.style.display = 'none'; empty.style.display = 'block'; return; }
-    chart.style.display = ''; empty.style.display = 'none';
-
-    const W = chart.clientWidth || 900, H = 210;
-    const padL = 34, padR = 12, padT = 12, padB = 24;
-    const plotW = W - padL - padR, plotH = H - padT - padB;
-    const maxV = Math.max(1, ...items.map(x => x.call_count));
-    const niceMax = Math.ceil(maxV / 4) * 4 || 4;
-    // 每个整点的 x 坐标（曲线用点，非柱）
-    const X = i => padL + (plotW / 23) * i;
-    const Y = v => padT + plotH - (v / niceMax) * plotH;
-
-    // y 轴网格
-    let ygrid = '';
-    for (let g = 0; g <= 4; g++) {
-        const v = niceMax / 4 * g;
-        const y = Y(v);
-        ygrid += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--color-border)" stroke-width="1" ${g?'stroke-dasharray="3 3"':''}/>`;
-        ygrid += `<text x="${padL-6}" y="${y+3}" text-anchor="end" font-size="10" fill="var(--color-text-muted)">${Math.round(v)}</text>`;
-    }
-    // x 轴标签
-    let xlabels = '';
-    items.forEach((it, i) => {
-        if (i % 3 === 0) xlabels += `<text x="${X(i)}" y="${H-8}" text-anchor="middle" font-size="10" fill="var(--color-text-muted)">${String(it.hour).padStart(2,'0')}</text>`;
-    });
-
-    // 平滑曲线路径（Catmull-Rom -> 三次贝塞尔）
-    const pts = items.map((it, i) => [X(i), Y(it.call_count)]);
-    function smoothPath(p) {
-        if (p.length < 2) return '';
-        let dd = `M ${p[0][0]},${p[0][1]}`;
-        for (let i = 0; i < p.length - 1; i++) {
-            const p0 = p[i - 1] || p[i], p1 = p[i], p2 = p[i + 1], p3 = p[i + 2] || p2;
-            const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
-            const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
-            dd += ` C ${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
-        }
-        return dd;
-    }
-    const linePath = smoothPath(pts);
-    const areaPath = linePath + ` L ${X(23)},${Y(0)} L ${X(0)},${Y(0)} Z`;
-
-    // 失败曲线（叠加，红色，通常很低）
-    const errPts = items.map((it, i) => [X(i), Y(it.error_count)]);
-    const errPath = smoothPath(errPts);
-    const hasErr = items.some(it => it.error_count > 0);
-
-    // 数据点圆点
-    let dots = '';
-    items.forEach((it, i) => {
-        dots += `<circle cx="${X(i)}" cy="${Y(it.call_count)}" r="2.5" fill="var(--color-primary)" class="hr-dot" data-i="${i}"/>`;
-    });
-
-    chart.innerHTML = `
-        <div class="hourly-wrap" style="position:relative;">
-            <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="overflow:visible; display:block;">
-                <defs>
-                    <linearGradient id="hrArea" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="var(--color-primary)" stop-opacity="0.22"/>
-                        <stop offset="100%" stop-color="var(--color-primary)" stop-opacity="0.01"/>
-                    </linearGradient>
-                </defs>
-                ${ygrid}
-                <path d="${areaPath}" fill="url(#hrArea)" stroke="none"/>
-                <path d="${linePath}" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-                ${hasErr ? `<path d="${errPath}" fill="none" stroke="#f43f5e" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="4 3"/>` : ''}
-                ${dots}
-                <line id="hrCursor" x1="0" y1="${padT}" x2="0" y2="${padT+plotH}" stroke="var(--color-primary)" stroke-width="1" stroke-dasharray="3 3" style="display:none;"/>
-                <circle id="hrFocus" r="4.5" fill="#fff" stroke="var(--color-primary)" stroke-width="2.5" style="display:none;"/>
-                <rect id="hrHit" x="${padL}" y="${padT}" width="${plotW}" height="${plotH}" fill="transparent" style="cursor:crosshair;"/>
-            </svg>
-            <div id="hrTooltip" class="hr-tooltip" style="display:none;"></div>
-        </div>`;
-
-    // ---- 交互:hover 显示每小时值 ----
-    const svg = chart.querySelector('svg');
-    const hit = chart.querySelector('#hrHit');
-    const cursor = chart.querySelector('#hrCursor');
-    const focus = chart.querySelector('#hrFocus');
-    const tip = chart.querySelector('#hrTooltip');
-    const wrap = chart.querySelector('.hourly-wrap');
-
-    function nearestIndex(svgX) {
-        // svgX 为 viewBox 坐标；反推最近整点
-        let i = Math.round((svgX - padL) / (plotW / 23));
-        return Math.max(0, Math.min(23, i));
-    }
-    hit.addEventListener('mousemove', (e) => {
-        const rect = svg.getBoundingClientRect();
-        const scale = W / rect.width;                 // viewBox 与实际像素比
-        const svgX = (e.clientX - rect.left) * scale;
-        const i = nearestIndex(svgX);
-        const it = items[i];
-        const cx = X(i), cy = Y(it.call_count);
-        cursor.setAttribute('x1', cx); cursor.setAttribute('x2', cx); cursor.style.display = '';
-        focus.setAttribute('cx', cx); focus.setAttribute('cy', cy); focus.style.display = '';
-        tip.style.display = 'block';
-        tip.innerHTML = `
-            <div class="hr-tip-time">${String(it.hour).padStart(2,'0')}:00 - ${String(it.hour).padStart(2,'0')}:59</div>
-            <div class="hr-tip-row"><span class="hr-dot-ok"></span>调用 <b>${it.call_count.toLocaleString()}</b></div>
-            <div class="hr-tip-row"><span class="hr-dot-suc"></span>成功 <b>${it.success_count.toLocaleString()}</b></div>
-            <div class="hr-tip-row"><span class="hr-dot-err"></span>失败 <b>${it.error_count.toLocaleString()}</b></div>
-            <div class="hr-tip-row hr-tip-avg">平均耗时 <b>${it.avg_time} ms</b></div>`;
-        // 定位 tooltip（跟随光标，靠近数据点，超右边界翻到左侧）
-        const px = (cx / scale);                       // 实际像素 x
-        const py = (cy / scale);
-        const tw = tip.offsetWidth || 150;
-        let left = px + 14;
-        if (left + tw > rect.width) left = px - tw - 14;
-        tip.style.left = Math.max(0, left) + 'px';
-        tip.style.top = Math.max(0, py - 10) + 'px';
-    });
-    hit.addEventListener('mouseleave', () => {
-        cursor.style.display = 'none';
-        focus.style.display = 'none';
-        tip.style.display = 'none';
-    });
-}
-loadHourly();
-window.addEventListener('resize', () => { clearTimeout(window.__hrz); window.__hrz = setTimeout(loadHourly, 300); });
+loadAll();
 </script>
 {% endblock %}
