@@ -14,6 +14,7 @@ from app.schemas.schemas import (
     ApiConfigCreate, ApiConfigUpdate, ApiConfigOut, ApiParameterOut,
 )
 from app.api.auth import get_current_user
+from app.core.permissions import prod_write_denied
 
 log = get_logger("api_configs")
 
@@ -171,7 +172,9 @@ async def list_apis(
         ))
 
     log.debug(f"API 列表查询完成 | project_id={project_id} | total={total} | 返回={len(items)}条")
+    from app.core.permissions import prod_readonly
     return R_ok(data={
+        "prod_readonly": await prod_readonly(db, _user, project_id),
         "items": [i.model_dump() for i in items],
         "total": total,
         "page": page,
@@ -260,7 +263,8 @@ async def get_api(
     )
 
     log.debug(f"API 详情查询完成 | api_id={api_id} | name={api.name} | url_path={api.url_path}")
-    return R_ok(data=out.model_dump())
+    from app.core.permissions import prod_readonly
+    return R_ok(data={**out.model_dump(), "prod_readonly": await prod_readonly(db, _user, project_id)})
 
 
 @router.post("")
@@ -277,6 +281,9 @@ async def create_api(
     # 权限：项目管理员/研发/超管（v2.20：原来任何登录用户都能往任意项目里建 API）
     if not await can_edit_project_resources(db, _user, project_id):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="无权在该项目中创建 API")
+    _denied = await prod_write_denied(db, _user, project_id)
+    if _denied:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=_denied)
     if ((req.api_type or "sql").lower() == "plugin" or (getattr(req, "plugin_code", "") or "").strip()) \
             and plugin_edit_denied(_user):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="插件类 API 只能由超级管理员创建")
@@ -378,6 +385,9 @@ async def update_api(
     # 权限：必须是项目可编辑成员（manager/developer/超管）
     if not await can_edit_project_resources(db, _user, project_id):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="无权编辑该项目的 API")
+    _denied = await prod_write_denied(db, _user, project_id)
+    if _denied:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=_denied)
 
     result = await db.execute(
         select(ApiConfig).where(ApiConfig.id == api_id, ApiConfig.project_id == project_id)
@@ -501,6 +511,9 @@ async def delete_api(
     # 责任人制：项目成员即可发起（能否直接删由责任人判定决定；非成员无关人员拒绝）
     if not await is_project_member(db, _user, project_id):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="你不是该项目成员，无权操作该项目的 API")
+    _denied = await prod_write_denied(db, _user, project_id)
+    if _denied:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=_denied)
 
     result = await db.execute(
         select(ApiConfig).where(ApiConfig.id == api_id, ApiConfig.project_id == project_id)
@@ -554,6 +567,9 @@ async def copy_api(
     # 绕过审批）、照抄 API Key、重复复制时路径冲突
     if not await can_edit_project_resources(db, _user, project_id):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="无权复制该项目的 API")
+    _denied = await prod_write_denied(db, _user, project_id)
+    if _denied:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=_denied)
 
     result = await db.execute(
         select(ApiConfig).where(ApiConfig.id == api_id, ApiConfig.project_id == project_id)
@@ -642,6 +658,9 @@ async def generate_api_key(
     # v2.20：原来无权限校验，任何登录用户都能操作任意项目的 API
     if not await can_edit_project_resources(db, _user, project_id):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="无权操作该项目的 API")
+    _denied = await prod_write_denied(db, _user, project_id)
+    if _denied:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=_denied)
 
     log.info(f"生成独立 API Key | project_id={project_id} | api_id={api_id}")
 
@@ -670,6 +689,9 @@ async def toggle_api(
     # v2.20：原来无权限校验，任何登录用户都能操作任意项目的 API
     if not await can_edit_project_resources(db, _user, project_id):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="无权操作该项目的 API")
+    _denied = await prod_write_denied(db, _user, project_id)
+    if _denied:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=_denied)
     log.info(f"切换 API 状态 | project_id={project_id} | api_id={api_id}")
 
     result = await db.execute(
@@ -722,6 +744,9 @@ async def _set_lock(project_id, api_id, locked, db, _user):
     allowed = is_creator or is_super_admin(_user) or await is_project_manager(db, _user, project_id)
     if not allowed:
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="仅创建者本人、项目管理员或超管可锁定/解锁")
+    _denied = await prod_write_denied(db, _user, project_id)
+    if _denied:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=_denied)
 
     api.is_locked = bool(locked)
     await db.flush()
@@ -752,6 +777,10 @@ async def publish_api(
     api = result.scalar_one_or_none()
     if not api:
         return R_fail(ErrCode.API_NOT_FOUND)
+
+    _denied = await prod_write_denied(db, _user, project_id)
+    if _denied:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=_denied)
 
     if getattr(api, "status", "draft") != STATUS_APPROVED:
         label = STATUS_LABELS.get(getattr(api, "status", "draft"), api.status)
@@ -802,6 +831,9 @@ async def offline_api(
     from app.core.permissions import is_project_member
     if not await is_project_member(db, _user, project_id):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="你不是该项目成员，无权操作该项目的 API")
+    _denied = await prod_write_denied(db, _user, project_id)
+    if _denied:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=_denied)
     if not await can_act_directly(db, _user, api):
         appr = await create_request(db, _user, api, "offline")
         return R_ok(data={"pending_approval": True, "approval_id": appr.id},
@@ -815,6 +847,52 @@ async def offline_api(
     await db.commit()   # 显式提交,确保下线状态在响应返回前已落库
     log.info(f"API 已下线 | api_id={api_id} | name={api.name} | 新状态={api.status}")
     return R_ok(data={"status": api.status}, msg="API 已下线，已回到可编辑状态")
+
+
+@router.post("/{api_id}/go-online")
+async def go_online_in_prod(
+    project_id: int,
+    api_id: int,
+    db: AsyncSession = Depends(get_db, scope="function"),
+    _user=Depends(get_current_user),
+):
+    """生产环境直接上线 (v2.24)：项目管理员 / 超管把草稿、已下线的 API 直接上线，并锁定。
+
+    生产只有管理员能改动 API，上线审批里审批人就是他们自己，所以生产不再走「提交 → 审批 → 上线」。
+    """
+    from app.core.runtime_env import IS_PROD
+    from app.core.permissions import is_project_manager
+    from app.services.api_lifecycle import STATUS_DRAFT, STATUS_OFFLINE, STATUS_ONLINE, STATUS_LABELS
+    from app.models.models import ApiApproval
+    from app.services.audit import audit
+    if not IS_PROD:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="只有生产环境可以直接上线，预发请走上线审批")
+    if not await is_project_manager(db, _user, project_id):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="生产环境只有项目管理员或超级管理员可以上线")
+    api = (await db.execute(
+        select(ApiConfig).where(ApiConfig.id == api_id, ApiConfig.project_id == project_id)
+    )).scalar_one_or_none()
+    if not api:
+        return R_fail(ErrCode.API_NOT_FOUND)
+    cur = getattr(api, "status", STATUS_DRAFT) or STATUS_DRAFT
+    if cur not in (STATUS_DRAFT, STATUS_OFFLINE):
+        return R_fail(ErrCode.API_UPDATE_FAILED, msg=f"当前状态「{STATUS_LABELS.get(cur, cur)}」不能上线")
+    for o in (await db.execute(
+        select(ApiApproval).where(ApiApproval.api_id == api_id, ApiApproval.overall_status == "pending")
+    )).scalars().all():
+        o.overall_status = "withdrawn"
+    api.status = STATUS_ONLINE
+    api.is_locked = True
+    try:
+        from app.services.engine import _clear_api_cache, _clear_prewarm_params
+        await _clear_api_cache(api_id)
+        await _clear_prewarm_params(api_id)
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"上线后清缓存失败（不影响上线）| api_id={api_id} | error={e}")
+    await audit(db, _user, "api.go_online", "api", api_id, "生产直接上线并锁定")
+    await db.commit()
+    log.info(f"生产直接上线 | api_id={api_id} | name={api.name} | by={_user.username}")
+    return R_ok(data={"status": api.status, "is_locked": True}, msg="已上线并锁定")
 
 
 @router.post("/{api_id}/clear-cache")

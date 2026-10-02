@@ -495,3 +495,27 @@ class SsoTicket(Base):
     expires_at = Column(Integer, nullable=False)      # unix 秒
     used_at = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=_cst_now)
+
+
+class EnvSyncBase(Base):
+    """预发 ↔ 生产的同步基线 (v2.24)：预发、生产共用（不加 _pre 后缀）。
+
+    记录某个 API（按 项目编码 + 方法 + 路径 对应）最近一次「两边一致」时的配置快照，
+    相当于 git 里两个分支的共同祖先。发布到生产审核通过、预发拉取生产时更新。
+    有了基线就能分清差异来自哪边：
+        生产 = 基线、预发 ≠ 基线 → 预发有新改动，待发布到生产
+        生产 ≠ 基线、预发 = 基线 → 生产有变更，可拉取到预发
+        两边都 ≠ 基线             → 两边都改过，需要人工核对
+    """
+    __tablename__ = "src_dop_env_sync_bases"
+    __table_args__ = (Index("uk_env_sync_api", "project_code", "method", "url_path", unique=True),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_code = Column(String(64), nullable=False)
+    method = Column(String(16), nullable=False)
+    url_path = Column(String(256), nullable=False)
+    snapshot = Column(_BigText, nullable=False, default="")    # 基线配置（JSON）
+    prod_version = Column(Integer, nullable=True)              # 当时的生产版本号
+    source = Column(String(16), nullable=False, default="")    # release：发布到生产；pull：预发拉取生产
+    username = Column(String(64), default="")
+    updated_at = Column(DateTime, default=_cst_now, onupdate=_cst_now)

@@ -77,6 +77,10 @@ async def submit_for_approval(
     """提交 API 上线审批。研发/管理员可提交。"""
     if not await can_edit_project_resources(db, user, project_id):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="无权提交该项目的 API")
+    from app.core.permissions import prod_write_denied
+    _denied = await prod_write_denied(db, user, project_id)
+    if _denied:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=_denied)
 
     api = (await db.execute(
         select(ApiConfig).where(ApiConfig.id == api_id, ApiConfig.project_id == project_id)

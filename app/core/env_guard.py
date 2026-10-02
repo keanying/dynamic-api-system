@@ -5,6 +5,8 @@
 
 生产环境下，管理后台的写操作（/api/** 的 POST/PUT/PATCH/DELETE）只允许
 管理员（超级管理员 / 管理员）执行；其他人只能查看。
+例外 (v2.24)：项目管理员可以操作自己项目里的 API（编辑、上线、下线、锁定等），
+具体由各接口按「项目管理员 / 超管」再校验一次（permissions.prod_write_denied）。
 正常的改动路径是：预发环境修改并验证 → 发布到生产 → 生产管理员核对差异后审核。
 
 不受影响：
@@ -37,7 +39,11 @@ _ALLOW_PATTERNS = [
     re.compile(r"^/api/datasources/\d+/test$"),                    # 数据源连接测试
 ]
 
-READONLY_MSG = "生产环境仅管理员可操作。请在预发环境修改并验证后「发布到生产」，由生产管理员审核上线"
+# 项目内 API 相关的写操作：项目管理员也可以执行 (v2.24)
+_PROJECT_API_PATTERN = re.compile(r"^/api/projects/(\d+)/(apis|approvals)(/|$)")
+_TRANSFER_PATH = "/api/owner-approvals/transfer"   # 请求体里才有 api_id，交给接口自己校验
+
+READONLY_MSG = "生产环境只有项目管理员或超级管理员可以操作。请在预发环境修改并验证后「发布到生产」，由生产管理员审核上线"
 
 
 def _deny(status: int, code: ErrCode, msg: str) -> JSONResponse:
@@ -71,16 +77,22 @@ async def _check_admin(scope) -> Optional[JSONResponse]:
         # 未登录/过期仍返回 401，前端据此跳登录页
         return _deny(401, ErrCode.AUTH_TOKEN_INVALID, "未登录或登录已过期")
 
+    from app.api.auth import token_revoked
+    from app.core.permissions import is_project_manager
     async with async_session() as db:
         user = (await db.execute(select(User).where(User.id == payload.get("user_id")))).scalar_one_or_none()
-
-    from app.api.auth import token_revoked
-    if not user or not user.is_active or token_revoked(payload, user):
-        return _deny(401, ErrCode.AUTH_TOKEN_INVALID, "未登录或登录已过期")
-    if not is_admin_or_above(user):
-        log.warning(f"生产写保护拦截 | user={user.username} | {request.method} {request.url.path}")
-        return _deny(403, ErrCode.AUTH_PERMISSION_DENIED, READONLY_MSG)
-    return None
+        if not user or not user.is_active or token_revoked(payload, user):
+            return _deny(401, ErrCode.AUTH_TOKEN_INVALID, "未登录或登录已过期")
+        if is_admin_or_above(user):
+            return None
+        path = request.url.path
+        if path == _TRANSFER_PATH:
+            return None
+        m = _PROJECT_API_PATTERN.match(path)
+        if m and await is_project_manager(db, user, int(m.group(1))):
+            return None
+    log.warning(f"生产写保护拦截 | user={user.username} | {request.method} {request.url.path}")
+    return _deny(403, ErrCode.AUTH_PERMISSION_DENIED, READONLY_MSG)
 
 
 class AdminWriteMiddleware:

@@ -98,7 +98,7 @@ async def get_project(
     _user=Depends(get_current_user),
 ):
     """获取项目详情（非成员无权访问）"""
-    from app.core.permissions import is_super_admin, is_project_member
+    from app.core.permissions import is_super_admin, is_project_member, get_project_role, prod_readonly
     log.debug(f"查询项目详情 | project_id={project_id}")
 
     result = await db.execute(select(Project).where(Project.id == project_id))
@@ -131,6 +131,8 @@ async def get_project(
             created_at=project.created_at, updated_at=project.updated_at,
         ).model_dump(),
         "avg_response_time": round(avg_time, 2),
+        "my_role": await get_project_role(db, _user, project_id),
+        "prod_readonly": await prod_readonly(db, _user, project_id),
     })
 
 

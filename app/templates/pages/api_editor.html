@@ -515,9 +515,9 @@
                 </div>
             </div>
             <div class="form-group">
-                <label class="form-label">独立 API Key</label>
+                <label class="form-label">API Key</label>
                 <div class="form-inline">
-                    <input type="text" class="form-input" id="apiKey" placeholder="留空则自动使用项目 API Key" oninput="renderKeyInfo()">
+                    <input type="text" class="form-input font-mono" id="apiKey" placeholder="留空则使用项目 Key" oninput="renderKeyInfo()">
                     <button type="button" class="btn btn-secondary btn-sm" onclick="generateApiKey()">生成</button>
                 </div>
                 <div class="key-effective" id="keyEffective"></div>
@@ -1621,6 +1621,11 @@ async function loadProjectCode() {
     const data = await API.get(`/api/projects/${PROJECT_ID}`);
     if (!data || !data.data) return;
     PROJECT_API_KEY = data.data.api_key || '';
+    window.__PROD_RO = !!data.data.prod_readonly;
+    applyProdReadonly();
+    // 新建 API (v2.24)：API Key 默认填入项目 Key；不想用项目 Key 时点「生成」换一个
+    const _ki = document.getElementById('apiKey');
+    if (!API_ID && _ki && !_ki.value && PROJECT_API_KEY) _ki.value = PROJECT_API_KEY;
     if (!PROJECT_CODE && data.data.code) {
         PROJECT_CODE = data.data.code;
         updateCallUrlPreview();
@@ -1649,15 +1654,26 @@ function renderKeyInfo() {
     const input = document.getElementById('apiKey');
     if (!el || !input) return;
     const own = input.value.trim();
-    input.placeholder = PROJECT_API_KEY ? `留空则自动使用项目 Key（${_maskKey(PROJECT_API_KEY)}）` : '留空则自动使用项目 API Key';
-    if (own) {
-        el.innerHTML = '<span class="badge badge-violet">独立 Key</span><span>本 API 使用上面填写的独立 Key，覆盖项目 Key</span>';
+    input.placeholder = PROJECT_API_KEY ? `留空则使用项目 Key（${_maskKey(PROJECT_API_KEY)}）` : '留空则不校验 Key';
+    if (own && own === PROJECT_API_KEY) {
+        el.innerHTML = '<span class="badge badge-lime">项目 Key</span>';
+    } else if (own) {
+        el.innerHTML = '<span class="badge badge-violet">独立 Key</span>';
     } else if (PROJECT_API_KEY) {
-        el.innerHTML = `<span class="badge badge-lime">已关联项目 Key</span><code>${escapeHtml(_maskKey(PROJECT_API_KEY))}</code>
-            <button type="button" class="btn btn-ghost btn-xs" onclick="copyKey(PROJECT_API_KEY)">复制</button>`;
+        el.innerHTML = '';
     } else {
-        el.innerHTML = `<span class="badge badge-warning">项目未设置 Key</span><span>当前调用不校验 Key，任何人都能访问</span>
+        el.innerHTML = `<span class="badge badge-warning">项目未设置 Key</span>
             <button type="button" class="btn btn-secondary btn-xs" onclick="generateProjectKey()">为项目生成 Key</button>`;
+    }
+}
+
+// 生产只读 (v2.24)：非项目管理员 / 超管在生产只能查看
+function applyProdReadonly() {
+    if (!window.__PROD_RO) return;
+    document.querySelectorAll('#saveBtn, [onclick="saveAndTest()"]').forEach(b => b.style.display = 'none');
+    const bar = document.querySelector('.idbar-actions');
+    if (bar && !document.getElementById('__prodRo')) {
+        bar.insertAdjacentHTML('afterbegin', '<span id="__prodRo" class="badge badge-gray" title="生产环境只有项目管理员或超级管理员可以修改；研发请在预发修改后发布到生产">生产只读</span>');
     }
 }
 
