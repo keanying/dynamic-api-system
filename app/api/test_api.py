@@ -28,7 +28,7 @@ async def test_api_execution(
     api_id: int,
     req: TestApiRequest,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """在线测试 API 执行"""

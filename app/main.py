@@ -28,6 +28,12 @@ setup_logging(
 
 log = get_logger("main")
 
+# uvicorn 访问日志（log.access_log，默认关）：与网关日志、call_logs 重复，高并发下白白消耗 CPU。
+# 在这里关而不是靠启动参数，`python main.py` 和直接 `uvicorn ...` 启动都生效
+if not settings.log.access_log:
+    import logging as _std_logging
+    _std_logging.getLogger("uvicorn.access").disabled = True
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -56,6 +62,8 @@ async def lifespan(app: FastAPI):
     import asyncio
     from app.core.database import ensure_perf_indexes
     _index_task = asyncio.create_task(ensure_perf_indexes())
+    from app.core.database import check_connection_budget
+    await check_connection_budget(1 if settings.app.debug else settings.app.workers)
 
     # 启动任务：备份正式核心数据 +（pre 环境）从正式表同步到空的 pre 表
     from app.core.backup import run_startup_tasks

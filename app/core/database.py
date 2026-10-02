@@ -33,7 +33,14 @@ class Base(DeclarativeBase):
 
 
 async def get_db():
-    """FastAPI 依赖注入：获取数据库会话"""
+    """FastAPI 依赖注入：获取数据库会话
+
+    v2.20: 所有地方都以 Depends(get_db, scope="function") 使用。FastAPI 默认（request 作用域）
+    会在「响应发送完之后」才执行这里 yield 之后的 commit：客户端先收到成功，事务才提交——
+    紧接着的查询可能读不到刚写的数据（前端多处用 setTimeout 延迟刷新来绕开），
+    更严重的是 commit 失败时客户端已经收到了「成功」。function 作用域在响应发出前提交，
+    提交失败会正常返回错误。
+    """
     async with async_session() as session:
         try:
             yield session
@@ -594,3 +601,28 @@ async def ensure_perf_indexes():
         except Exception as e:  # noqa: BLE001
             # 多 worker 同时补建会有一个报「索引已存在」，忽略即可
             log.warning(f"补建性能索引跳过 | {table}.{name} | {e}")
+
+
+async def check_connection_budget(workers: int):
+    """启动自检 (v2.20)：多进程时系统库连接池总上限是否会超过 MySQL max_connections。
+
+    每个进程各有一套连接池：上限 = pool_size + max_overflow。高并发下连接池被打满后
+    MySQL 返回 1040 Too many connections，请求直接失败（压测中实际出现过）。
+    """
+    if "mysql" not in settings.database.url:
+        return
+    try:
+        async with engine.connect() as conn:
+            row = (await conn.execute(text("SHOW VARIABLES LIKE 'max_connections'"))).first()
+        max_conn = int(row[1]) if row else 0
+        per_worker = settings.database.pool_size + settings.database.max_overflow
+        total = per_worker * max(1, workers)
+        if max_conn and total > max_conn * 0.7:
+            log.warning(
+                f"连接数预算偏高 | 系统库连接池上限 {per_worker}/进程 × {workers} 进程 = {total}，"
+                f"MySQL max_connections={max_conn}（业务数据源若在同一实例上还要另算）。"
+                f"高并发时可能出现 Too many connections，建议调小 database.pool_size/max_overflow "
+                f"或调大 MySQL max_connections"
+            )
+    except Exception as e:  # noqa: BLE001
+        log.debug(f"连接数预算检查跳过 | {e}")

@@ -24,7 +24,7 @@ async def list_users(
     keyword: str = Query("", description="搜索关键字"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """获取用户列表"""
@@ -69,7 +69,7 @@ async def list_users(
 @router.post("")
 async def create_user(
     req: UserCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """创建用户"""
@@ -109,7 +109,7 @@ async def create_user(
 @router.get("/{user_id}")
 async def get_user(
     user_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """获取单个用户详情"""
@@ -136,7 +136,7 @@ async def get_user(
 async def update_user(
     user_id: int,
     req: UserUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """更新用户"""
@@ -200,7 +200,7 @@ async def update_user(
 @router.delete("/{user_id}")
 async def delete_user(
     user_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user=Depends(get_current_user),
 ):
     """删除用户"""
@@ -233,7 +233,7 @@ async def delete_user(
 @router.put("/{user_id}/toggle")
 async def toggle_user_status(
     user_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user=Depends(get_current_user),
 ):
     """切换用户启用/禁用状态"""

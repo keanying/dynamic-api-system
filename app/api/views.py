@@ -97,7 +97,7 @@ async def projects_page(request: Request):
 
 
 @router.get("/admin/projects/{project_id}", response_class=HTMLResponse)
-async def project_detail_page(request: Request, project_id: int, db: AsyncSession = Depends(get_db)):
+async def project_detail_page(request: Request, project_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     log.debug(f"渲染项目详情页面 | project_id={project_id}")
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
@@ -111,7 +111,7 @@ async def project_detail_page(request: Request, project_id: int, db: AsyncSessio
 
 
 @router.get("/admin/projects/{project_id}/approvals", response_class=HTMLResponse)
-async def project_approvals_page(request: Request, project_id: int, db: AsyncSession = Depends(get_db)):
+async def project_approvals_page(request: Request, project_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     log.debug(f"渲染审批中心页面 | project_id={project_id}")
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
@@ -123,7 +123,7 @@ async def project_approvals_page(request: Request, project_id: int, db: AsyncSes
 
 
 @router.get("/admin/projects/{project_id}/members", response_class=HTMLResponse)
-async def project_members_page(request: Request, project_id: int, db: AsyncSession = Depends(get_db)):
+async def project_members_page(request: Request, project_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     log.debug(f"渲染项目成员页面 | project_id={project_id}")
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
@@ -135,7 +135,7 @@ async def project_members_page(request: Request, project_id: int, db: AsyncSessi
 
 
 @router.get("/admin/projects/{project_id}/apis/new", response_class=HTMLResponse)
-async def api_create_page(request: Request, project_id: int, db: AsyncSession = Depends(get_db)):
+async def api_create_page(request: Request, project_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     log.debug(f"渲染 API 创建页面 | project_id={project_id}")
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
@@ -151,7 +151,7 @@ async def api_create_page(request: Request, project_id: int, db: AsyncSession = 
 
 
 @router.get("/admin/projects/{project_id}/apis/{api_id}", response_class=HTMLResponse)
-async def api_edit_page(request: Request, project_id: int, api_id: int, db: AsyncSession = Depends(get_db)):
+async def api_edit_page(request: Request, project_id: int, api_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     log.debug(f"渲染 API 编辑页面 | project_id={project_id} | api_id={api_id}")
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()

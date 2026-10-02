@@ -27,7 +27,7 @@ async def list_apis(
     status: str = Query("all", description="状态筛选: all/enabled/disabled"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """获取项目下的 API 列表（非成员无权）"""
@@ -161,7 +161,7 @@ async def list_apis(
 async def get_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """获取 API 详情"""
@@ -242,7 +242,7 @@ async def get_api(
 async def create_api(
     project_id: int,
     req: ApiConfigCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """创建 API"""
@@ -330,7 +330,7 @@ async def update_api(
     project_id: int,
     api_id: int,
     req: ApiConfigUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """更新 API"""
@@ -443,7 +443,7 @@ async def update_api(
 async def delete_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """删除 API"""
@@ -490,7 +490,7 @@ async def delete_api(
 async def copy_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """复制 API"""
@@ -558,7 +558,7 @@ async def copy_api(
 async def generate_api_key(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """生成独立 API Key（始终生成全新的独立 Key）"""
@@ -583,7 +583,7 @@ async def generate_api_key(
 async def toggle_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """启用/禁用 API"""
@@ -607,7 +607,7 @@ async def toggle_api(
 async def lock_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """锁定 API（锁定后不可编辑/提交上线）。创建者本人 / 项目管理员 / 超管可操作。"""
@@ -618,7 +618,7 @@ async def lock_api(
 async def unlock_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """解锁 API。创建者本人 / 项目管理员 / 超管可操作。"""
@@ -650,7 +650,7 @@ async def _set_lock(project_id, api_id, locked, db, _user):
 async def publish_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """提交者确认上线（approved -> online）。
@@ -700,7 +700,7 @@ async def publish_api(
 async def offline_api(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """下线 API（online -> offline，回到可编辑状态）。责任人/管理员可直接下线，其他人走申请。"""
@@ -735,7 +735,7 @@ async def offline_api(
 async def clear_api_cache(
     project_id: int,
     api_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """清除该 API 的所有缓存 (v2.13+)。

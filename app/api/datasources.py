@@ -28,7 +28,7 @@ async def list_datasources(
     ds_type: str = Query("all", description="类型筛选: all/mysql/redis/postgresql"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """获取数据源列表"""
@@ -85,7 +85,7 @@ async def list_datasources(
 @router.get("/{ds_id}")
 async def get_datasource(
     ds_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """获取数据源详情"""
@@ -114,7 +114,7 @@ async def get_datasource(
 @router.post("")
 async def create_datasource(
     req: DataSourceCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """创建数据源"""
@@ -142,7 +142,7 @@ async def create_datasource(
 async def update_datasource(
     ds_id: int,
     req: DataSourceUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """更新数据源"""
@@ -181,7 +181,7 @@ async def update_datasource(
 @router.delete("/{ds_id}")
 async def delete_datasource(
     ds_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """删除数据源。
@@ -244,7 +244,7 @@ async def delete_datasource(
 @router.post("/{ds_id}/test")
 async def test_datasource(
     ds_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """测试数据源连接"""
@@ -320,7 +320,7 @@ class _DSDelDecisionReq(_BaseModel):
 @router.get("/{ds_id}/usage")
 async def datasource_usage(
     ds_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(_gcu),
 ):
     """查看数据源被哪些项目 / API 引用。"""
@@ -350,7 +350,7 @@ async def datasource_usage(
 @router.get("/deletion-requests/list")
 async def list_ds_deletion_requests(
     status: str = "pending",
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(_gcu),
 ):
     """删除数据源申请列表（管理员/超管可见）。"""
@@ -379,7 +379,7 @@ async def list_ds_deletion_requests(
 async def decide_ds_deletion(
     request_id: int,
     req: _DSDelDecisionReq,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(_gcu),
 ):
     """审批删除数据源申请。审批人：管理员/超管，且不能是发起人。"""
@@ -425,7 +425,7 @@ async def decide_ds_deletion(
 @router.post("/deletion-requests/{request_id}/cancel")
 async def cancel_ds_deletion(
     request_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(_gcu),
 ):
     """发起人撤销删除申请。"""

@@ -19,7 +19,7 @@ log = get_logger("auth")
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
 
-async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_db, scope="function")) -> User:
     """从请求中提取并验证当前用户"""
     token = request.cookies.get("token") or request.headers.get("Authorization", "").replace("Bearer ", "")
     if not token:
@@ -48,7 +48,7 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
 
 
 @router.post("/login")
-async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(req: LoginRequest, db: AsyncSession = Depends(get_db, scope="function")):
     """用户登录"""
     log.info(f"登录请求 | username={req.username}")
 
@@ -77,7 +77,7 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/me")
-async def get_me(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_me(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db, scope="function")):
     """获取当前用户信息（含全局角色 + 所在项目及项目角色）"""
     from app.models.models import ProjectMember, Project
     log.debug(f"获取当前用户信息 | user_id={user.id} | username={user.username}")

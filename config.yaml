@@ -68,6 +68,8 @@ query:
   default_max_rows: 10000
   # 默认超时时间 (秒)
   default_timeout: 30
+  # 业务数据源 MySQL 驱动 (v2.20+)：asyncmy（默认，C 扩展，解析结果集快 4~6 倍）/ aiomysql
+  mysql_driver: "asyncmy"
   # 慢查询阈值 (毫秒)
   slow_query_threshold: 500
   # 慢查询告警阈值 (毫秒)
@@ -106,6 +108,11 @@ cache:
   #               自身 TTL 影响。
   #   near_expiry 只在缓存快过期时才刷，省数据库资源，但两次刷新之间缓存是旧的。
   prewarm_strategy: "always"
+  # 进程内热点缓存 (v2.20+)：命中过的结果在本进程内存里再留几秒，热门 key 不必每次访问 Redis。
+  # 不超过该 key 在 Redis 里的剩余寿命；手动「清除缓存」后其它进程最多延迟这么多秒。0 = 关闭
+  local_ttl: 5
+  # 热点缓存每个进程最多占用的内存（MB，大结果按压缩后大小计）
+  local_max_mb: 256
 
 log:
   # 日志目录
@@ -117,6 +124,11 @@ log:
   # 全量日志文件 / 网关日志文件的级别，留空同 level (v2.19+)。
   # 之前固定为 DEBUG，每个请求写二十来条，排查问题时可临时改成 "DEBUG"
   file_level: ""
+  # uvicorn 访问日志（每请求一行，与网关日志、call_logs 重复）(v2.20+)，默认关闭
+  access_log: false
+  # 网关每请求一条 INFO 日志 (v2.20+)。call_logs 表里有同样明细；
+  # 高并发追求极限吞吐时可设为 false（实测单行查询吞吐 +45%）
+  gateway_info: true
   # 异步日志队列大小
   queue_size: 10000
 
@@ -138,4 +150,7 @@ gateway:
   # 接口配置进程内缓存秒数 (v2.19+)：网关不必每个请求都查 项目/API/参数/数据源。
   # 本进程内修改配置立即生效；多 worker 时其它进程最多延迟这么多秒。0 = 关闭
   config_cache_ttl: 5
+  # 响应体超过这么多字节、且客户端请求头带 Accept-Encoding: gzip 时压缩返回 (v2.20+)。
+  # 缓存的结果是预压缩好的，命中时几乎没有额外开销；JSON 通常压到 1/10 左右。0 = 不压缩
+  gzip_min_bytes: 8192
 

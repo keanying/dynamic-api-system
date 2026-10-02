@@ -7,7 +7,7 @@
 import json
 import time
 from fastapi import APIRouter, Request, Depends
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, func
 
@@ -17,11 +17,13 @@ from app.core.errors import ErrCode, get_err_msg
 from app.core.logging import get_logger
 from app.models.models import ApiConfig, Project, CallLog, ApiParameter
 from app.services.engine import execute_api
-from app.services import call_log_writer, gateway_cache
-from app.core.fast_json import FastJSONResponse, dumps_preview
+from app.services import call_log_writer, gateway_cache, result_cache
 from app.core.logging import is_debug
 
 log = get_logger("gateway")
+
+# 每请求一条的网关 INFO 日志开关（log.gateway_info）
+_GATEWAY_INFO = settings.log.gateway_info
 
 # 使用配置的网关前缀
 GATEWAY_PREFIX = settings.gateway.prefix.rstrip("/")
@@ -223,7 +225,7 @@ async def gateway_handler(
     project_code: str,
     path: str,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """动态网关入口 - 所有请求（含失败）都记录日志"""
     start_time = time.time()
@@ -256,13 +258,7 @@ async def gateway_handler(
         return result
 
     # 2~3. 查找项目与 API（v2.19: 命中配置缓存时不查库，见 gateway_cache）
-    cached_cfg = gateway_cache.get(project_code, method, url_path)
-    if cached_cfg is not None:
-        project, api_config, api_params, datasource = cached_cfg
-    else:
-        api_params = datasource = None
-        project = await gateway_cache.load_project(db, project_code)
-        api_config = None
+    project, api_config, api_params, datasource = await gateway_cache.resolve(db, project_code, method, url_path)
     if not project or not project.is_active:
         elapsed = (time.time() - start_time) * 1000
         error_msg = get_err_msg(ErrCode.GW_PROJECT_DISABLED)
@@ -282,12 +278,6 @@ async def gateway_handler(
     # 3. 匹配 API
     #    兼容性说明 (v2.0.2 修正): 只要 is_enabled=True 且 status 不是明确的 'offline'
     #    即可对外调用；url_path 容忍首尾空格/尾部斜杠。具体规则见 gateway_cache.load_api。
-    if api_config is None:
-        api_config = await gateway_cache.load_api(db, project.id, method, url_path)
-        if api_config is not None:
-            api_params, datasource = await gateway_cache.load_extras(db, api_config)
-            gateway_cache.put(project_code, method, url_path, project, api_config, api_params, datasource)
-
     if not api_config:
         elapsed = (time.time() - start_time) * 1000
         error_msg = f"未找到匹配的 API: {method} /{project_code}{url_path}"
@@ -397,24 +387,26 @@ async def gateway_handler(
     _tok = set_trace(tctx)
     try:
         result = await execute_api(api_config, params, client_ip, db, trace_id=trace_id,
-                                   api_params=api_params, datasource=datasource)
+                                   api_params=api_params, datasource=datasource, raw_result=True)
     finally:
         reset_trace(_tok)
 
-    # 6. 记录响应日志
-    #    v2.19: 结果只做「够用的前缀」序列化（dumps_preview），不再为了截取几千字符
-    #    把上万行结果整体 json.dumps 两遍；每请求只打这一条 INFO。
+    # 6. 记录响应日志（每请求只打这一条 INFO）
     elapsed = (time.time() - start_time) * 1000
     ok = bool(result.get("status"))
     data = result.get("data")
-    response_data = dumps_preview(data, 5000) if ok else ""
-    log.info(
-        f"网关响应 | api_id={api_config.id} | api_name={api_config.name} | {method} {full_url} | "
-        f"状态={'成功' if ok else '失败'} | elapsed={elapsed:.1f}ms | rows={tctx.row_count} | "
-        f"cache={'hit' if tctx.cache_hit else 'miss'} | client_ip={client_ip} | "
-        f"params={request_params_json[:500]} | msg={result.get('msg', '')} | "
-        f"data_preview={(response_data[:500] if data else 'null')}"
-    )
+    # v2.20: 结果统一成「序列化好的 JSON 字节」（开了缓存的 API 由引擎直接给出，
+    # 命中缓存时无需解析；未开缓存的在这里序列化一次），日志预览也从这份字节里截取
+    entry = data if isinstance(data, result_cache.CachedResult) else result_cache.CachedResult.from_data(data, compress=False)
+    response_data = entry.preview(5000) if ok else ""
+    if _GATEWAY_INFO:
+        log.info(
+            f"网关响应 | api_id={api_config.id} | api_name={api_config.name} | {method} {full_url} | "
+            f"状态={'成功' if ok else '失败'} | elapsed={elapsed:.1f}ms | rows={tctx.row_count} | "
+            f"cache={'hit' if tctx.cache_hit else 'miss'} | client_ip={client_ip} | "
+            f"params={request_params_json[:500]} | msg={result.get('msg', '')} | "
+            f"data_preview={(response_data[:500] if data else 'null')}"
+        )
 
     # 6.5 建档 + 回填：登记一条完整的调用日志（含关键节点），由后台批量落库
     try:
@@ -447,5 +439,15 @@ async def gateway_handler(
         result["code"] = ErrCode.GW_SQL_EXECUTE_FAILED.value
     result["trace_id"] = trace_id
 
-    # 直接序列化返回，跳过 FastAPI 的 jsonable_encoder 逐值预处理（输出完全一致）
-    return FastJSONResponse(result)
+    # 拼装响应：data 部分直接用序列化好的字节；客户端支持 gzip 且数据较大时，
+    # 用预压缩块拼出 gzip 流（大结果传输量通常降到 1/10 左右）
+    gzip_min = int(getattr(settings.gateway, "gzip_min_bytes", 0) or 0)
+    gzip_ok = (
+        gzip_min > 0 and entry.length >= gzip_min
+        and "gzip" in request.headers.get("accept-encoding", "").lower()
+    )
+    body, gz = result_cache.build_response_body(result, entry, gzip_ok)
+    headers = {"Vary": "Accept-Encoding"}
+    if gz:
+        headers["Content-Encoding"] = "gzip"
+    return Response(content=body, media_type="application/json", headers=headers)

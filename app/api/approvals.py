@@ -69,7 +69,7 @@ async def submit_for_approval(
     req: SubmitReq,
     project_id: int = Path(...),
     api_id: int = Path(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     """提交 API 上线审批。研发/管理员可提交。"""
@@ -170,7 +170,7 @@ async def manager_decide(
     req: DecisionReq,
     project_id: int = Path(...),
     approval_id: int = Path(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     """项目管理员审批。"""
@@ -206,7 +206,7 @@ async def reviewer_decide(
     req: DecisionReq,
     project_id: int = Path(...),
     approval_id: int = Path(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     """指定会审研发审核。"""
@@ -236,7 +236,7 @@ async def reviewer_decide(
 async def withdraw_approval(
     project_id: int = Path(...),
     approval_id: int = Path(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     """提交人撤回审批，API 回到草稿。"""
@@ -261,7 +261,7 @@ async def withdraw_approval(
 async def list_approvals(
     project_id: int = Path(...),
     status: str = "pending",
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User = Depends(get_current_user),
 ):
     """列出项目的审批单（默认进行中）。项目成员可见。"""

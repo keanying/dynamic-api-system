@@ -24,7 +24,7 @@ async def list_projects(
     keyword: str = Query("", description="搜索关键字"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """获取项目列表（非超管仅返回自己所属的项目）"""
@@ -94,7 +94,7 @@ async def list_projects(
 @router.get("/{project_id}")
 async def get_project(
     project_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """获取项目详情（非成员无权访问）"""
@@ -137,7 +137,7 @@ async def get_project(
 @router.post("")
 async def create_project(
     req: ProjectCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """创建项目"""
@@ -167,7 +167,7 @@ async def create_project(
 async def update_project(
     project_id: int,
     req: ProjectUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """更新项目（超管或本项目管理员可改）"""
@@ -203,7 +203,7 @@ async def update_project(
 @router.delete("/{project_id}")
 async def delete_project(
     project_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """删除项目。
@@ -258,7 +258,7 @@ async def delete_project(
 @router.get("/{project_id}/export")
 async def export_project(
     project_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """导出项目配置为 JSON（非成员无权）"""
@@ -337,7 +337,7 @@ class _DeletionDecisionReq(_BaseModel):
 @router.get("/deletion-requests/list")
 async def list_deletion_requests(
     status: str = "pending",
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """列出删除项目申请。
@@ -377,7 +377,7 @@ async def list_deletion_requests(
 async def decide_deletion_request(
     request_id: int,
     req: _DeletionDecisionReq,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """审批删除项目申请。审批人：超管 或 该项目的另一名管理员（不能是发起人）。"""
@@ -425,7 +425,7 @@ async def decide_deletion_request(
 @router.post("/deletion-requests/{request_id}/cancel")
 async def cancel_deletion_request(
     request_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """发起人撤销自己的删除申请。"""

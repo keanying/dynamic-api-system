@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api/monitor", tags=["监控统计"])
 
 @router.get("/dashboard")
 async def get_dashboard(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """获取仪表盘统计数据"""
@@ -63,7 +63,7 @@ async def get_dashboard(
 @router.get("/api-latency-rank")
 async def get_api_latency_rank(
     limit: int = Query(10, ge=1, le=50),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """API 耗时排行榜"""
@@ -100,7 +100,7 @@ async def get_api_latency_rank(
 @router.get("/api-call-rank")
 async def get_api_call_rank(
     limit: int = Query(10, ge=1, le=50),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """API 调用次数排行榜"""
@@ -139,7 +139,7 @@ async def get_api_call_rank(
 async def get_call_trend(
     period: str = Query("hour", description="统计周期: hour/day"),
     days: int = Query(7, ge=1, le=90),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """调用趋势图数据"""
@@ -188,7 +188,7 @@ async def get_call_trend(
 
 @router.get("/today-hourly")
 async def get_today_hourly(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """今日调用分布（按小时，0-23 点补齐，没有调用的整点为 0）。"""
@@ -244,7 +244,7 @@ async def get_today_hourly(
 async def get_slow_queries(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """慢查询列表"""
@@ -273,7 +273,7 @@ async def get_call_logs(
     end_date: str = Query("", description="结束日期 YYYY-MM-DD"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """调用日志列表"""
@@ -317,7 +317,7 @@ async def get_call_logs(
 @router.get("/logs/{log_id}")
 async def get_log_detail(
     log_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """日志详情"""
@@ -335,7 +335,7 @@ async def get_log_detail(
 @router.delete("/logs/cleanup")
 async def cleanup_logs(
     days: int = Query(30, ge=1, description="清理多少天前的日志"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     _user=Depends(get_current_user),
 ):
     """清理过期日志"""

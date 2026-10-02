@@ -47,7 +47,7 @@ async def _user_name_map(db, ids):
 
 
 @router.get("/pending")
-async def pending_for_me(db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def pending_for_me(db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     """待我审批：我是责任人的 API 的申请，或我是管理员的项目的申请。"""
     # 我作为责任人的 API
     owned = await db.execute(select(ApiConfig.id).where(ApiConfig.owner_id == user.id))
@@ -91,7 +91,7 @@ async def pending_for_me(db: AsyncSession = Depends(get_db), user=Depends(get_cu
 
 
 @router.get("/mine")
-async def my_requests(db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def my_requests(db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     r = await db.execute(select(ApiOwnerApproval).where(
         ApiOwnerApproval.requester_id == user.id).order_by(ApiOwnerApproval.created_at.desc()))
     rows = r.scalars().all()
@@ -116,7 +116,7 @@ async def _load_pending(db, approval_id):
 
 
 @router.post("/{approval_id}/approve")
-async def approve(approval_id: int, body: DecisionBody, db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def approve(approval_id: int, body: DecisionBody, db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     """审批通过 -> 执行对应操作（删除/上线/下线）。"""
     appr = await _load_pending(db, approval_id)
     if not appr:
@@ -154,7 +154,7 @@ async def approve(approval_id: int, body: DecisionBody, db: AsyncSession = Depen
 
 
 @router.post("/{approval_id}/reject")
-async def reject(approval_id: int, body: DecisionBody, db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def reject(approval_id: int, body: DecisionBody, db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     appr = await _load_pending(db, approval_id)
     if not appr:
         return R_fail(ErrCode.API_NOT_FOUND, msg="申请单不存在")
@@ -173,7 +173,7 @@ async def reject(approval_id: int, body: DecisionBody, db: AsyncSession = Depend
 
 
 @router.post("/{approval_id}/cancel")
-async def cancel(approval_id: int, db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def cancel(approval_id: int, db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     appr = await _load_pending(db, approval_id)
     if not appr:
         return R_fail(ErrCode.API_NOT_FOUND, msg="申请单不存在")
@@ -187,7 +187,7 @@ async def cancel(approval_id: int, db: AsyncSession = Depends(get_db), user=Depe
 
 
 @router.post("/transfer")
-async def transfer(body: TransferBody, db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def transfer(body: TransferBody, db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     ar = await db.execute(select(ApiConfig).where(ApiConfig.id == body.api_id))
     api = ar.scalar_one_or_none()
     if not api:
@@ -212,7 +212,7 @@ async def _project_name_map(db, pids):
 
 
 @router.get("/center/pending")
-async def center_pending(db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def center_pending(db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     """待我审批：合并「上线单(我是会审研发/管理员/超管)」+「责任人操作单(我是责任人/管理员)」。"""
     is_super = await is_global_admin(user)
     # 我管理的项目
@@ -288,7 +288,7 @@ async def center_pending(db: AsyncSession = Depends(get_db), user=Depends(get_cu
 
 
 @router.get("/center/mine")
-async def center_mine(db: AsyncSession = Depends(get_db), user=Depends(get_current_user)):
+async def center_mine(db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     """我发起的：合并「我提交的上线单」+「我发起的责任人操作单」。"""
     result = []
     # 上线单

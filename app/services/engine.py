@@ -14,6 +14,7 @@
 
 import re
 import json
+import orjson as _orjson
 import time
 import hashlib
 import asyncio
@@ -143,16 +144,32 @@ def _build_cache_key(api_id: int, params: dict) -> str:
     return f"{settings.redis.key_prefix}api:{api_id}:{param_hash}"
 
 
-async def _get_cache(key: str) -> Optional[Any]:
-    """获取缓存"""
+async def _get_cache(key: str):
+    """读缓存，返回 CachedResult 或 None。
+
+    v2.20: 先查进程内热点缓存(L1)，再查 Redis；Redis 的 GET 与 PTTL 合并为一次往返，
+    放进 L1 的寿命不超过 Redis 里的剩余寿命。
+    """
+    from app.services import result_cache as rc
+    hit = rc.l1_get(key)
+    if hit is not None:
+        return hit
     if settings.redis.enabled:
         try:
             r = _get_redis()
-            val = await r.get(key)
-            if val:
-                log.debug(f"Redis 缓存命中 | key={key}")
-                return json.loads(val)
-            log.debug(f"Redis 缓存未命中 | key={key}")
+            pipe = r.pipeline(transaction=False)
+            pipe.get(key)
+            pipe.pttl(key)
+            val, pttl = await pipe.execute()
+            if not val:
+                return None
+            entry = rc.CachedResult.decode(val)
+            if entry is None:
+                # 升级前写入的旧格式缓存（JSON 文本），兼容读取
+                entry = rc.CachedResult.from_legacy(val)
+            if pttl and pttl > 0:
+                rc.l1_put(key, entry, pttl / 1000.0)
+            return entry
         except Exception as e:
             log.error(f"Redis 缓存读取失败 | key={key} | error={str(e)}")
     else:
@@ -160,39 +177,37 @@ async def _get_cache(key: str) -> Optional[Any]:
         if key in _memory_cache:
             data, expire_at = _memory_cache[key]
             if time.time() < expire_at:
-                log.debug(f"内存缓存命中 | key={key}")
                 return data
-            else:
-                del _memory_cache[key]
-                log.debug(f"内存缓存已过期 | key={key}")
+            del _memory_cache[key]
     return None
 
 
-async def _set_cache(key: str, value: Any, ttl: int):
-    """设置缓存"""
+async def _set_cache(key: str, entry, ttl: int):
+    """写缓存。entry 为 CachedResult（序列化/压缩已在构造时完成，这里不再重复序列化）。"""
     import random
+    from app.services import result_cache as rc
     jitter = random.randint(0, settings.cache.ttl_jitter)
     actual_ttl = ttl + jitter
 
     if settings.redis.enabled:
         try:
             r = _get_redis()
-            # 与网关响应相同的类型转换规则（Decimal -> 数字等），保证命中缓存与直查返回一致；
-            # 之前用 default=str，DECIMAL 列命中缓存时会从数字变成字符串
-            from app.core.fast_json import json_default
-            await r.setex(key, actual_ttl, json.dumps(value, default=json_default, ensure_ascii=False))
-            log.debug(f"Redis 缓存已设置 | key={key} | ttl={actual_ttl}s")
+            await r.setex(key, actual_ttl, entry.encode())
+            rc.l1_put(key, entry, actual_ttl)
+            log.debug(f"Redis 缓存已设置 | key={key} | ttl={actual_ttl}s | bytes={entry.size()}")
         except Exception as e:
             log.error(f"Redis 缓存写入失败 | key={key} | error={str(e)}")
     else:
         _evict_memory_cache_if_needed()
-        _memory_cache[key] = (value, time.time() + actual_ttl)
+        _memory_cache[key] = (entry, time.time() + actual_ttl)
         log.debug(f"内存缓存已设置 | key={key} | ttl={actual_ttl}s")
 
 
 async def _clear_api_cache(api_id: int):
     """清除指定 API 的缓存"""
     prefix = f"{settings.redis.key_prefix}api:{api_id}:"
+    from app.services import result_cache as _rc
+    _rc.l1_clear_prefix(prefix)
     if settings.redis.enabled:
         try:
             r = _get_redis()
@@ -836,6 +851,7 @@ async def execute_api(
     trace_id: str = "",
     api_params=None,
     datasource=None,
+    raw_result: bool = False,
 ) -> dict:
     """
     执行动态 API 调用
@@ -843,7 +859,10 @@ async def execute_api(
 
     api_params / datasource: 调用方已查好时直接传入（网关的接口配置缓存），
     省掉每次请求各一次系统库查询；不传则照旧在这里查。
+    raw_result: 为 True 时，开了缓存的 API 的 data 返回 CachedResult（已序列化好的 JSON
+    字节），由网关直接拼进响应，不再解析/重新序列化（v2.20）。
     """
+    from app.services import result_cache as rc
     start_time = time.time()
 
     # 预热由后台调度器触发，日志加统一前缀与正常调用区分开，
@@ -860,6 +879,8 @@ async def execute_api(
     from app.services.trace_context import get_trace
     tctx = get_trace()
 
+    cache_key = None
+    flight = None   # 本请求作为「领头人」去查库时的 single-flight 句柄
     try:
         # 0. HTML(静态页面) 类型：直接返回渲染后的页面，不走 SQL/数据源/DDL 检查。
         #    静态页面 API 本就没有 sql_template，若继续往下会因 sql_template 为空/None 报错。
@@ -886,8 +907,9 @@ async def execute_api(
         #    cache_key 只在这里按「原始入参」算一次，读缓存和写缓存共用。
         #    之前写缓存时重新计算，而那时 params 已被 _coerce_param_types 原地转换过
         #    （GET 查询参数 "7" -> 7），读写 key 对不上，GET 请求的缓存永远不命中。
-        cache_key = None
-        if api_config.cache_enabled:
+        # 数据同步（写入类）API 不走缓存
+        _is_sync = (getattr(api_config, "api_type", "sql") or "sql").lower() == "sync"
+        if api_config.cache_enabled and not _is_sync:
             cache_key = _build_cache_key(api_config.id, params)
             # 开了自动预热的 API：记下这次的参数组合，供后台调度器定期回填缓存。
             # 放在缓存命中判断之前，保证命中时也会刷新 last_seen（表示这个参数还活跃）。
@@ -913,8 +935,18 @@ async def execute_api(
                 log.debug(f"缓存命中，直接返回 | api_id={api_config.id} | elapsed={elapsed:.2f}ms")
                 if tctx:
                     tctx.set_cache_hit(True)
-                    tctx.set_row_count(len(cached) if isinstance(cached, list) else 0)
-                return {"status": True, "data": cached, "msg": "from cache"}
+                    tctx.set_row_count(cached.rows)
+                return {"status": True, "data": cached if raw_result else cached.to_python(), "msg": "from cache"}
+
+            # 3.5 并发未命中合并 (v2.20)：同一 key 已有请求在查库，就等它的结果，不再重复查
+            if call_source != "prewarm":
+                waiting = rc.flight_get(cache_key)
+                if waiting is not None:
+                    entry = await asyncio.shield(waiting)
+                    if tctx:
+                        tctx.set_row_count(entry.rows)
+                    return {"status": True, "data": entry if raw_result else entry.to_python(), "msg": ""}
+                flight = rc.flight_start(cache_key)
 
         # 4. 获取数据源
         #    插件模式可以不依赖主数据源（纯计算 / 只调外部 HTTP / 自行 ctx.query 指定源），
@@ -1004,12 +1036,18 @@ async def execute_api(
             )
 
         # 9. 写入缓存（沿用第 3 步按原始入参算出的 key）
+        #    v2.20: 结果在这里序列化（并按需预压缩）一次，缓存和响应共用
+        entry = None
         if cache_key:
+            entry = rc.CachedResult.from_data(data)
             ttl = api_config.cache_ttl or settings.cache.default_ttl
             if data is None or (isinstance(data, list) and len(data) == 0):
-                await _set_cache(cache_key, data, settings.cache.null_ttl)
+                await _set_cache(cache_key, entry, settings.cache.null_ttl)
             else:
-                await _set_cache(cache_key, data, ttl)
+                await _set_cache(cache_key, entry, ttl)
+            if flight is not None:
+                rc.flight_finish(cache_key, flight, entry)
+                flight = None
 
         elapsed = (time.time() - start_time) * 1000
         if tctx:
@@ -1019,15 +1057,23 @@ async def execute_api(
             log.warning(f"{_tag}慢查询 | api_id={api_config.id} | name={api_config.name} | elapsed={elapsed:.2f}ms | threshold={settings.query.slow_query_threshold}ms")
 
         log.debug(f"{_tag}API 执行成功 | api_id={api_config.id} | name={api_config.name} | elapsed={elapsed:.2f}ms | 返回行数={len(data) if isinstance(data, list) else 'N/A'}")
-        return {"status": True, "data": data, "msg": ""}
+        return {"status": True, "data": entry if (raw_result and entry is not None) else data, "msg": ""}
 
     except Exception as e:
         elapsed = (time.time() - start_time) * 1000
+        if flight is not None:
+            # 等着这次结果的并发请求一起收到同样的错误
+            rc.flight_finish(cache_key, flight, error=e)
+            flight = None
         if tctx:
             import traceback
             tctx.set_error_stack(traceback.format_exc())
         log.error(f"{_tag}API 执行失败 | api_id={api_config.id} | name={api_config.name} | elapsed={elapsed:.2f}ms | error={str(e)}")
         return {"status": False, "data": None, "msg": str(e)}
+    finally:
+        # 被取消等非 Exception 的退出：也要通知等待者，不能让它们一直挂着
+        if flight is not None:
+            rc.flight_finish(cache_key, flight, error=RuntimeError("查询已取消，请重试"))
 
 
 # ========== 业务数据源连接池 (v2.15+) ==========
@@ -1039,6 +1085,27 @@ async def execute_api(
 # 这里改为按数据源缓存连接池：连接建一次反复用，池大小取数据源配置的 pool_size。
 _mysql_pools: dict = {}
 _pool_lock = asyncio.Lock()
+
+
+def _resolve_mysql_driver() -> str:
+    """业务数据源 MySQL 驱动 (v2.20)：默认 asyncmy（C 扩展，解析结果集比纯 Python 的
+    aiomysql 快 4~6 倍，返回值类型、参数转义、报错信息经逐项比对一致）；
+    未安装或配置 query.mysql_driver: aiomysql 时使用 aiomysql。"""
+    want = (getattr(settings.query, "mysql_driver", "asyncmy") or "asyncmy").lower()
+    if want == "asyncmy":
+        try:
+            import asyncmy  # noqa: F401
+            return "asyncmy"
+        except ImportError:
+            log.warning("未安装 asyncmy，业务数据源改用 aiomysql")
+    return "aiomysql"
+
+
+MYSQL_DRIVER = _resolve_mysql_driver()
+
+
+def _pool_alive(pool) -> bool:
+    return pool is not None and not getattr(pool, "_closed", False)
 
 
 def _pool_key(datasource: DataSource) -> str:
@@ -1053,27 +1120,30 @@ def _pool_key(datasource: DataSource) -> str:
 
 async def _get_mysql_pool(datasource: DataSource, password: str):
     """取得(或创建)某数据源的连接池。"""
-    import aiomysql
-
     key = _pool_key(datasource)
     pool = _mysql_pools.get(key)
-    if pool is not None and not pool._closed:  # noqa: SLF001
+    if _pool_alive(pool):
         return pool
 
     async with _pool_lock:
         # 双重检查：可能在等锁期间已被别的协程创建
         pool = _mysql_pools.get(key)
-        if pool is not None and not pool._closed:  # noqa: SLF001
+        if _pool_alive(pool):
             return pool
 
         size = int(getattr(datasource, "pool_size", 10) or 10)
+        if MYSQL_DRIVER == "asyncmy":
+            import asyncmy as _driver
+        else:
+            import aiomysql as _driver
         # minsize 保持较小，避免空闲时占着一堆连接；maxsize 才是并发上限
-        pool = await aiomysql.create_pool(
+        db_kw = {"database" if MYSQL_DRIVER == "asyncmy" else "db": datasource.database_name}
+        pool = await _driver.create_pool(
             host=datasource.host,
             port=datasource.port,
             user=datasource.username,
             password=password,
-            db=datasource.database_name,
+            **db_kw,
             charset="utf8mb4",
             minsize=1,
             maxsize=max(2, size),
@@ -1084,7 +1154,7 @@ async def _get_mysql_pool(datasource: DataSource, password: str):
         _mysql_pools[key] = pool
         log.info(
             f"业务数据源连接池已创建 | ds={datasource.name} | "
-            f"{datasource.host}:{datasource.port}/{datasource.database_name} | maxsize={max(2, size)}"
+            f"{datasource.host}:{datasource.port}/{datasource.database_name} | maxsize={max(2, size)} | driver={MYSQL_DRIVER}"
         )
         return pool
 
@@ -1129,7 +1199,14 @@ async def _execute_mysql(
 
     # 从池里借一条连接。池满时 acquire 会等待，这里同样受 timeout 约束，
     # 避免并发打满后无限期挂住。
-    conn = await asyncio.wait_for(pool.acquire(), timeout=timeout)
+    try:
+        conn = await asyncio.wait_for(pool.acquire(), timeout=timeout)
+    except asyncio.TimeoutError:
+        # 原来这里抛出的 TimeoutError 消息为空，日志和接口返回里只有一个空 error
+        raise Exception(
+            f"等待数据源连接超时（{timeout}s）：数据源「{datasource.name}」连接池已满"
+            f"（上限 {pool.maxsize}），请调大该数据源的连接池或降低并发"
+        )
 
     # 将 :param 风格转为 %(param)s 风格 (MySQL 参数化)
     # v1.5: 字面量感知转换，见 _to_pyformat 说明
@@ -1138,45 +1215,129 @@ async def _execute_mysql(
         log.debug(f"MySQL SQL | sql={mysql_sql} | params={params}")
 
     async def _run():
-        cur = await conn.cursor(aiomysql.SSDictCursor)
-        await cur.execute(mysql_sql, params)
+        if MYSQL_DRIVER == "asyncmy":
+            from asyncmy.cursors import SSCursor
+            # asyncmy 的 SSDictCursor.fetchmany 返回的是元组（库的缺陷），
+            # 这里用 SSCursor 取元组，再按 aiomysql DictCursor 的规则命名列
+            cur = conn.cursor(SSCursor)
+            await cur.execute(mysql_sql, params)
+            names = _dict_column_names(getattr(cur._result, "fields", None) or [])  # noqa: SLF001
+        else:
+            cur = await conn.cursor(aiomysql.SSCursor)
+            await cur.execute(mysql_sql, params)
+            names = _dict_column_names(getattr(cur._result, "fields", None) or [])  # noqa: SLF001
         rows = await cur.fetchmany(max_rows)
         # 再探一行判断是否还有剩余；有剩余说明被 max_rows 截断
         truncated = (await cur.fetchone()) is not None if len(rows) >= max_rows else False
         if not truncated:
             await cur.close()
-        return rows, truncated
+        return names, rows, truncated
 
     discard = True
     try:
-        rows, truncated = await asyncio.wait_for(_run(), timeout=timeout)
+        try:
+            names, rows, truncated = await asyncio.wait_for(_run(), timeout=timeout)
+        except asyncio.TimeoutError:
+            raise Exception(f"查询超时（超过 {timeout}s）")
         # 截断时连接上还有没读完的行，直接丢弃这条连接，比把剩余行读完快得多
         discard = truncated
     finally:
         if discard:
-            conn.close()
+            _discard_conn(conn)
         pool.release(conn)
-        if discard:
+        if discard and MYSQL_DRIVER == "aiomysql":
             # aiomysql 归还已关闭的连接时不会唤醒排队等连接的协程，这里补一次
+            # （asyncmy 的 release 在任何情况下都会唤醒）
             asyncio.ensure_future(pool._wakeup())  # noqa: SLF001
 
-    # 将结果中的特殊类型转为可序列化格式
-    result = []
-    for row in rows:
-        clean_row = {}
-        for k, v in row.items():
-            v = format_as_json(v)
-            if isinstance(v, (datetime.datetime, datetime.date)):
-                clean_row[k] = v.isoformat()
-            elif isinstance(v, bytes):
-                clean_row[k] = v.decode('utf-8', errors='replace')
-            else:
-                clean_row[k] = v
-        result.append(clean_row)
+    # 组装成字典并把特殊类型转为可序列化格式（一次完成，不再先建一遍 dict 再复制）
+    result = [{k: _clean_value(v) for k, v in zip(names, row)} for row in rows]
 
     if _is_debug():
         log.debug(f"MySQL 查询结果 | rows={len(result)} | max_rows={max_rows} | truncated={truncated}")
     return result
+
+def _discard_conn(conn) -> None:
+    """关闭一条处在协议中途的连接，使连接池不再复用它。"""
+    if MYSQL_DRIVER == "asyncmy":
+        # asyncmy 的 close() 只关 socket、不把 connected 置为 False，连接池会把这条已关闭的
+        # 连接当成可用连接收回，下一个请求拿到就报 2006 MySQL server has gone away（压测中实际出现）。
+        # _close_on_cancel 是它为「读取中途被取消」准备的方法：关闭并标记为已断开。
+        closer = getattr(conn, "_close_on_cancel", None)
+        if closer is not None:
+            closer()
+            return
+    conn.close()
+
+
+def _dict_column_names(fields) -> list:
+    """与 aiomysql/pymysql DictCursor 一致的列名：重名列从第二个起用「表名.列名」。"""
+    names, seen = [], set()
+    for f in fields:
+        name = f.name
+        if name in seen:
+            name = f"{f.table_name}.{name}"
+        seen.add(f.name)
+        names.append(name)
+    return names
+
+
+# 原样返回的类型（format_as_json 对它们本来就不做处理），跳过函数调用
+_PASSTHROUGH_TYPES = (int, float, bool, type(None), __import__("decimal").Decimal)
+_DATE_TYPES = (datetime.datetime, datetime.date)
+
+
+def _clean_value(v):
+    """单元格转可序列化值（规则同 v1.5：JSON 文本解析成结构、日期转 isoformat、bytes 解码）。
+    最常见的几种类型内联处理，结果与 format_as_json + 类型转换完全一致。"""
+    t = type(v)
+    if t in _PASSTHROUGH_TYPES:
+        return v
+    if t is str:
+        stripped = v.lstrip(" \t\n\r")
+        if not stripped or stripped[0] not in _JSON_FIRST_CHARS:
+            return v
+        return _loads_json_text(v)
+    if t in _DATE_TYPES:
+        return v.isoformat()
+    v = format_as_json(v)
+    if isinstance(v, _DATE_TYPES):
+        return v.isoformat()
+    if isinstance(v, bytes):
+        return v.decode('utf-8', errors='replace')
+    return v
+
+
+# orjson 与标准库 json.loads 在几类边界写法上结果不同：NaN/Infinity（orjson 报错）、
+# 超过 64 位的整数（orjson 会变成浮点数丢精度）、超大/超小指数（溢出处理不同）。
+# 文本里出现这些写法的特征时直接用标准库，保证解析结果与原来逐值一致。
+_STDLIB_JSON_HINT = re.compile(r"[NI]|\d{19}|[eE][+-]?\d{3}")
+
+
+# orjson 解析失败、而标准库可能成功的只剩「反斜杠转义（如单独的代理对 \\ud800）」和
+# 字符串本身含代理字符这两类；其余情况 orjson 失败即可判定不是 JSON
+_STDLIB_RETRY_HINT = re.compile("[\\\\\ud800-\udfff]")
+
+# 以字母开头的合法 JSON 只可能是这几个字面量（标准库 json.loads 的结果）
+_JSON_LITERALS = {"true": True, "false": False, "null": None, "NaN": float("nan"), "Infinity": float("inf")}
+
+
+def _loads_json_text(text):
+    """解析 JSON 文本；不是合法 JSON 时原样返回（语义同原 format_as_json）。"""
+    body = text.strip(" \t\n\r")
+    if body[:1] in ("t", "f", "n", "N", "I"):
+        return _JSON_LITERALS.get(body, text)
+    if _STDLIB_JSON_HINT.search(text) is None:
+        try:
+            return _orjson.loads(text)
+        except Exception:
+            if _STDLIB_RETRY_HINT.search(text) is None:
+                return text
+    try:
+        return json.loads(text)
+    except Exception:
+        return text
+
 
 _JSON_FIRST_CHARS = frozenset('{["-0123456789tfnNI')
 
@@ -1199,10 +1360,7 @@ def format_as_json(data):
         stripped = data.lstrip(" \t\n\r")
         if not stripped or stripped[0] not in _JSON_FIRST_CHARS:
             return data
-        try:
-            return json.loads(data)
-        except Exception:
-            return data
+        return _loads_json_text(data)
     if isinstance(data, (bytes, bytearray)):
         try:
             return json.loads(data)

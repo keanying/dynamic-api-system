@@ -230,6 +230,16 @@ $endif$
 | `monitor.call_log_retention_days` | 如 30 | 自动清理旧调用日志，避免表无限增长 |
 | `gateway.config_cache_ttl` | 5（默认） | 网关接口配置缓存秒数，0 关闭 |
 
+### v2.20 高并发与大结果
+
+- **缓存命中不再解析/重新序列化**：缓存里存的是序列化好的 JSON（较大的结果预压缩），命中时直接拼进响应。
+  2MB 的结果原来每次命中要 ~90ms CPU，现在 <1ms。升级前写入的旧格式缓存可以正常读取。
+- **gzip**：客户端带 `Accept-Encoding: gzip` 且响应超过 `gateway.gzip_min_bytes` 时压缩返回，大结果传输量降到约 1/10。
+- **进程内热点缓存**（`cache.local_ttl`）与**并发未命中合并**：同一 key 缓存失效瞬间只查一次库。
+- **业务数据源驱动默认 asyncmy**（`query.mysql_driver`），返回值类型、参数转义、报错信息与 aiomysql 逐项比对一致。
+- 极限吞吐可设 `log.gateway_info: false`（调用明细仍完整写入 call_logs）。
+- 同一数据源上的大查询会占满该数据源的连接池、让小查询排队；报表类重查询建议单独建一个数据源（独立连接池）。
+
 ## 技术栈
 
 | 组件 | 技术 |

@@ -101,7 +101,7 @@ def require_project_member():
     async def _dep(
         project_id: int = Path(...),
         user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db),
+        db: AsyncSession = Depends(get_db, scope="function"),
     ) -> User:
         if not await is_project_member(db, user, project_id):
             _forbid("你不是该项目成员，无权访问")
@@ -116,7 +116,7 @@ def require_project_editor():
     async def _dep(
         project_id: int = Path(...),
         user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db),
+        db: AsyncSession = Depends(get_db, scope="function"),
     ) -> User:
         if not await can_edit_project_resources(db, user, project_id):
             _forbid("无权编辑该项目资源")
@@ -131,7 +131,7 @@ def require_project_manager():
     async def _dep(
         project_id: int = Path(...),
         user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db),
+        db: AsyncSession = Depends(get_db, scope="function"),
     ) -> User:
         if not await is_project_manager(db, user, project_id):
             _forbid("需要项目管理员权限")
