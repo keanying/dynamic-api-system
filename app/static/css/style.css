@@ -1356,19 +1356,19 @@ body {
 }
 a { color: var(--ui-violet-deep); }
 
-/* ---------- 框架：深色圆角外框，左侧导航，右侧浅灰内容区 ---------- */
+/* ---------- 框架：深色底铺满窗口并固定，左侧导航，右侧浅灰内容区在内部滚动 ---------- */
+body { background: var(--ui-frame); }
 .app-layout {
-    margin: 14px;
-    min-height: calc(100vh - 28px);
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
     background: var(--ui-frame);
-    border-radius: 32px;
     padding: 12px 12px 12px 0;
-    align-items: flex-start;
 }
 .sidebar {
-    position: sticky;
-    top: 14px;
-    height: calc(100vh - 52px);
+    position: relative;
+    top: 0;
+    height: 100%;
     background: transparent;
     border-right: none;
     box-shadow: none;
@@ -1409,14 +1409,23 @@ a { color: var(--ui-violet-deep); }
     margin-left: 0 !important;
     background: var(--ui-panel);
     border-radius: var(--ui-radius-lg);
-    min-height: calc(100vh - 52px);
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #c4c4c8 transparent;
 }
+.main-content::-webkit-scrollbar { width: 8px; }
+.main-content::-webkit-scrollbar-thumb { background: #c4c4c8; border-radius: 999px; border: 2px solid var(--ui-panel); }
+/* 顶栏在内容区内吸顶（API 编辑页的信息条、测试面板按顶栏高度吸顶） */
 .topbar {
-    background: transparent !important;
+    background: var(--ui-panel) !important;
     backdrop-filter: none;
     border-bottom: none;
     padding: 0 28px;
-    position: static;
+    position: sticky;
+    top: 0;
+    z-index: 50;
 }
 .breadcrumb { font-size: 13px; }
 .breadcrumb .current { font-weight: 600; }
@@ -1543,7 +1552,7 @@ table tbody tr:hover > td, tr:hover td { background: #f7f7f8; }
 .card-dark .pill-select { background: rgba(255, 255, 255, 0.1); color: #fff; }
 
 @media (max-width: 900px) {
-    .app-layout { margin: 0; border-radius: 0; padding: 8px; }
+    .app-layout { padding: 8px 8px 8px 0; }
     .page-hero h1 { font-size: 28px; }
 }
 
