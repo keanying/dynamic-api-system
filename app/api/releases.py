@@ -134,7 +134,7 @@ async def create_release(req: ReleaseCreate, db: AsyncSession = Depends(get_db, 
         return R_fail(ErrCode.API_UPDATE_FAILED,
                       msg=f"当前状态「{label}」不能发布到生产：请先在预发走完审批并上线验证")
     if (api.api_type or "sql") == "sync" and not is_super_admin(user):
-        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="数据同步类 API 只能由超级管理员发布")
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="远端同步类 API 只能由超级管理员发布")
 
     project = (await db.execute(select(Project).where(Project.id == req.project_id))).scalar_one_or_none()
     if not project:

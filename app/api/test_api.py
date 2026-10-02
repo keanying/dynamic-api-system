@@ -46,7 +46,7 @@ async def test_api_execution(
     if not await is_project_member(db, _user, api_config.project_id):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="你不是该项目成员，无权测试该 API")
     if (api_config.api_type or "sql").lower() == "sync" and not is_super_admin(_user):
-        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="数据同步类 API 只能由超级管理员测试")
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="远端同步类 API 只能由超级管理员测试")
 
     log.debug(f"在线测试 API 详情 | name={api_config.name} | url_path={api_config.url_path} | method={api_config.method}")
 

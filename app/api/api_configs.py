@@ -286,7 +286,7 @@ async def create_api(
         from app.core.permissions import is_super_admin
         if not is_super_admin(_user):
             return R_fail(ErrCode.AUTH_PERMISSION_DENIED,
-                          msg="数据同步类 API 只能由超级管理员创建")
+                          msg="远端同步类 API 只能由超级管理员创建")
         from app.services.data_sync import parse_whitelist, SyncError
         try:
             parse_whitelist(getattr(req, "sync_tables", "") or "")
@@ -439,7 +439,7 @@ async def update_api(
     from app.core.permissions import is_super_admin as _is_sa
     if _touch_sync and not _is_sa(_user):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED,
-                      msg="数据同步类 API 只能由超级管理员修改")
+                      msg="远端同步类 API 只能由超级管理员修改")
     # 插件类 API (v2.20)：判定方式同上面的 sync
     _plugin_submitted = (update_fields.get("plugin_code") or "").strip()
     _touch_plugin = (_old_type == "plugin") or (_new_type == "plugin") or bool(_plugin_submitted)
@@ -559,7 +559,7 @@ async def copy_api(
 
     _src_type = (api.api_type or "sql").lower()
     if _src_type == "sync" and not is_super_admin(_user):
-        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="数据同步类 API 只能由超级管理员复制")
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="远端同步类 API 只能由超级管理员复制")
     if (_src_type == "plugin" or (getattr(api, "plugin_code", "") or "").strip()) and plugin_edit_denied(_user):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="插件类 API 只能由超级管理员复制")
 

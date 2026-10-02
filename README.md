@@ -5,12 +5,13 @@ OneData Portal 是一个轻量级的数据 API 开放平台，支持通过可视
 ## 功能特性
 
 - **项目管理**：多项目隔离，每个项目独立管理 API 和密钥
-- **API 配置**：可视化配置 SQL 模板、参数、缓存、限流等
+- **API 配置**：可视化配置 SQL 模板、参数、缓存、限流等；API 类型分 **SQL / HTML / 插件 / 远端同步** 四种
+- **选表生成 SQL（v2.23）**：点选数据源、表、字段、关联、筛选条件即可生成 SQL 和参数，不用手写，见下文
 - **数据源管理**：支持 MySQL / **StarRocks** / **SelectDB** / **Apache Doris** / PostgreSQL / Redis 多种数据源，密码加密存储
 - **动态调用引擎**：SQL 参数化执行、DDL 拦截、行数限制、超时控制
 - **多源 SQL（v2.22）**：一条 MySQL 语法的 SQL 关联多个数据源（MySQL / SelectDB / Doris / StarRocks）的表，见下文
 - **SQL 动态模板**：`$if(条件)$ ... $endif$` 条件块，根据入参动态拼装 SQL，配合 `:param IN` 自动展开数组
-- **API 网关**：统一入口 `/gw/{project_id}/...`，支持 API Key 认证和 IP 白名单
+- **API 网关**：统一入口 `/v1/data/{项目编码}/{路径}`（前缀由 `gateway.prefix` 配置），支持 API Key 认证和 IP 白名单
 - **在线测试**：内置 API 测试工具，实时查看请求和响应
 - **监控统计**：仪表盘展示调用量、耗时、失败率等指标
 - **调用日志**：完整记录每次调用，支持慢查询分析和日志清理
@@ -98,7 +99,11 @@ $endif$
 在 API 编辑器右上角点 **预览渲染** 可以用当前测试参数预先看到最终 SQL，每个控制块的求值结果（keep/drop/loop×N）都会列出来，便于调试。
 错误提示带行号、列号和上下文片段，例如 `[行 5:3] $if$ 缺少配对的 $endif$  ↳ $if(x > 0)$`。
 
-## 多步骤数据管线
+## 多步骤数据管线（历史保留）
+
+> **新需求请使用「多源 SQL（Catalog 模式）」**：跨库关联、多个查询结果相加、分组汇总，用一条 SQL 即可完成，
+> 也可以用「选表生成 SQL」点选生成，学习成本低得多。多步骤管线仅为兼容线上已有接口保留，已有管线接口照常编辑和运行。
+> 新建接口时点 SQL 卡片上的「多步骤管线」，会先提示改用多个数据源，确需管线时可选「仍使用多步骤管线」。
 
 当一个 API 需要查询**多个数据源**，或者基于前一步结果继续查询、再做内存聚合时，可以用多步骤管线。
 在 API 编辑器的「多步骤管线」卡片填入 JSON 数组，配置后会覆盖单 SQL 模板，按步骤串行执行。
@@ -189,7 +194,7 @@ $endif$
 
 ## 多源 SQL（catalog 模式，v2.22）
 
-API 类型选「多源 SQL API」，用**一条标准 MySQL 语法的 SQL** 关联多个数据源的表，表名写成 `数据源名.库名.表名`
+API 类型选「SQL」，在「数据源」卡片切到 **多个数据源**，用**一条标准 MySQL 语法的 SQL** 关联多个数据源的表，表名写成 `数据源名.库名.表名`
 （数据源名即「数据源管理」中登记的名称；也可写 `数据源名.表名`，库取数据源配置的默认库）：
 
 ```sql
@@ -202,8 +207,8 @@ SELECT m.category, u.city_level, COUNT(*) AS orders, SUM(o.amount) AS gmv
  GROUP BY m.category, u.city_level ORDER BY gmv DESC
 ```
 
-参数、`$if$` / `$for$` / `#{}` 等模板语法与数据 API 完全相同；缓存、预热、限流、审批、预发→生产发布照常使用。
-现有的数据 API（单 SQL / 多步骤管线）、插件等类型**不受任何影响**。
+参数、`$if$` / `$for$` / `#{}` 等模板语法与单数据源 SQL 完全相同；缓存、预热、限流、审批、预发→生产发布照常使用。
+（后端类型仍为 `federated`，单个数据源为 `sql`，已有接口不受影响。）
 
 **执行方式**
 
@@ -215,7 +220,7 @@ SELECT m.category, u.city_level, COUNT(*) AS orders, SUM(o.amount) AS gmv
 下推到各数据源的 SQL 照常经过只读防护、系统库保护、数据源项目范围检查、连接池与超时控制；请求参数始终以绑定参数传给数据源。
 关联计算的 DuckDB 禁止访问文件系统和安装插件，配置锁定。
 
-**编辑器**：多源 SQL 卡片左侧可浏览本项目可用的数据源 → 库 → 表 → 列，点击插入到 SQL；「执行计划」按测试参数展示
+**编辑器**：「多个数据源」下可浏览本项目可用的数据源 → 库 → 表 → 列，点击插入到 SQL；「执行计划」按测试参数展示
 各数据源实际执行的 SQL、取数顺序与关联计算 SQL（不取数据）。调用日志的「执行 SQL」记录每次的执行计划、各源行数与耗时。
 
 **与 MySQL 的语义一致性**：跨数据源计算时，SQL 会按 MySQL 规则改写后再计算，已覆盖：字符串比较 / LIKE / REGEXP 不区分大小写
@@ -252,6 +257,18 @@ JSON_CONTAINS` 等跨源时暂不支持（明确报错，单数据源时不受�
 
 执行计划按「项目 + 渲染后的 SQL」缓存（时长同 `gateway.config_cache_ttl`，修改数据源 / 项目配置后立即清空）。
 发布到生产时会检查 SQL 中引用的数据源在生产是否存在。
+
+## 选表生成 SQL（v2.23）
+
+不会写 SQL 也能开发接口：API 编辑器「执行逻辑」→ SQL 模板右上角 **选表生成 SQL**。
+
+1. **选表和字段**：依次选数据源 → 库 → 表，点字段选中；「+ 关联另一张表」可关联其它表（可以是其它数据源），关联字段自动猜（同名字段、`xxx_id = id`）
+2. **筛选条件**：等于 / 不等于 / 大于 / 小于 / 包含 / 开头是 / 在列表中 / 介于；值选「调用时传入」或「固定值」，非必填条件调用时不传就不筛选（自动生成 `$if$`）
+3. **汇总与排序**：勾「分组汇总」后每个字段选 分组 / 计数 / 去重计数 / 求和 / 平均 / 最大 / 最小；排序；最多返回行数
+4. **生成 SQL**：SQL 填入编辑器，参数定义自动补齐；用到多个数据源时自动切到「多个数据源」；名称和路径为空时按表名自动填写
+
+另外：保存时 SQL 里用到但未定义的 `:参数` 会自动加入参数定义（字符串、非必填）。
+向导支持 MySQL 协议的数据源（MySQL / SelectDB / Doris / StarRocks），PostgreSQL 等请手写 SQL。
 
 ## 多环境：预发 → 生产发布
 
@@ -359,48 +376,133 @@ onedata-portal-backend/
 
 ### 1. 安装依赖
 
+需要 **Python 3.11+** 和 [uv](https://docs.astral.sh/uv/)。
+
 ```bash
-# 确保已安装 uv (https://docs.astral.sh/uv/)
+# 安装 uv —— Linux / macOS
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+```powershell
+# 安装 uv —— Windows（PowerShell）
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+```bash
+# 在项目根目录安装依赖（三个系统相同）
 uv sync
 ```
 
 ### 2. 配置
 
-编辑 `config.yaml` 修改配置项：
+编辑 `config.yaml`，主要改数据库连接和两个环境的端口：
 
 ```yaml
 server:
   host: "0.0.0.0"
-  port: 8000
-  debug: true
+  port: 3000          # 未指定环境时的默认端口
+  debug: false
+  workers: 1
+
+environments:         # 预发 / 生产各自的端口（启动时按环境自动选端口）
+  prod:
+    port: 3000
+  pre:
+    port: 3002
 
 database:
-  url: "sqlite+aiosqlite:///./onedata.db"  # 开发环境
-  # url: "mysql+aiomysql://user:pass@host:3306/dbname"  # 生产环境
-
-security:
-  admin_username: "admin"
-  admin_password: "admin123"
-  jwt_secret: "your-secret-key"
+  url: "mysql+aiomysql://用户名:密码@主机:3306/库名"
+  # 本地试用也可以用 SQLite：sqlite+aiosqlite:///./onedata.db
 ```
 
-### 3. 启动
+两个环境用同一个库，预发环境的表名统一加 `_pre` 后缀；预发首次启动会把生产数据复制一份到 `_pre` 表。
+
+### 3. 本地启动
+
+最简单、三个系统通用的写法是 `uv run main.py`，用 `--env` 指定环境，端口自动取 `environments` 里的配置：
+
+| 环境 | 命令（Linux / macOS / Windows 通用） | 端口 |
+|------|-----------------------------------|------|
+| 生产 prod | `uv run main.py --env prod`（不写 `--env` 默认就是 prod） | 3000 |
+| 预发 pre | `uv run main.py --env pre` | 3002 |
+
+也可以直接用 uvicorn 启动，用环境变量 `APP_ENV` 指定环境（与线上脚本的写法一致）：
+
+**Linux / macOS**
 
 ```bash
-uv run main.py
+# 生产
+APP_ENV=prod uv run uvicorn app.main:app --host 0.0.0.0 --port 3000
+# 预发
+APP_ENV=pre  uv run uvicorn app.main:app --host 0.0.0.0 --port 3002
+# 本地开发热重载（改代码自动重启）
+APP_ENV=pre  uv run uvicorn app.main:app --host 0.0.0.0 --port 3002 --reload
 ```
 
-或者直接使用 uvicorn：
+**Windows PowerShell**
 
-```bash
-uv run uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload
+```powershell
+# 生产
+$env:APP_ENV="prod"; uv run uvicorn app.main:app --host 0.0.0.0 --port 3000
+# 预发
+$env:APP_ENV="pre";  uv run uvicorn app.main:app --host 0.0.0.0 --port 3002
 ```
+
+**Windows CMD**
+
+```bat
+:: 生产
+set APP_ENV=prod
+uv run uvicorn app.main:app --host 0.0.0.0 --port 3000
+
+:: 预发（新开一个窗口）
+set APP_ENV=pre
+uv run uvicorn app.main:app --host 0.0.0.0 --port 3002
+```
+
+> PowerShell / CMD 里设置的 `APP_ENV` 只对当前窗口有效，同时跑两个环境请各开一个窗口。
+> 不设 `APP_ENV` 时按端口判断环境（3002 → pre，3000 → prod），见下文「多环境」。
+> 启动日志里的 `运行环境: pre（表名后缀 _pre）` / `运行环境: prod（正式环境，无表名后缀）` 可以确认当前环境。
 
 ### 4. 访问
 
-- 管理后台: http://localhost:8000/login
-- API 文档: http://localhost:8000/docs
-- 默认账号: admin / admin123
+| 环境 | 管理后台 | API 文档 |
+|------|---------|---------|
+| 生产 | http://localhost:3000/login | http://localhost:3000/docs |
+| 预发 | http://localhost:3002/login | http://localhost:3002/docs |
+
+默认账号：`admin / admin123`（`config.yaml` 的 `security` 段可改，首次登录后请修改密码）。
+
+### 5. 线上部署（public_opinion_across.sh）
+
+线上服务器（Linux）用项目根目录的 `public_opinion_across.sh` 后台启动和管理：
+
+```bash
+chmod +x public_opinion_across.sh      # 首次需要
+
+./public_opinion_across.sh start       # 后台启动
+./public_opinion_across.sh stop        # 停止
+./public_opinion_across.sh restart     # 重启（发版后执行）
+./public_opinion_across.sh status      # 查看是否在运行 + 最近 10 行日志
+./public_opinion_across.sh logs        # 实时查看日志（Ctrl+C 退出）
+```
+
+- 进程号写在 `logs/public_opinion_across.pid`，日志在 `logs/public_opinion_across.log`
+- 启动命令由脚本里的 `UV_COMMAND` 决定，当前为 **预发环境 3002 端口**：
+
+  ```bash
+  UV_COMMAND="env APP_ENV=pre uv run uvicorn app.main:app --host 0.0.0.0 --port 3002  --workers 1"
+  ```
+
+  部署生产时改为：
+
+  ```bash
+  UV_COMMAND="env APP_ENV=prod uv run uvicorn app.main:app --host 0.0.0.0 --port 3000 --workers 1"
+  ```
+
+  预发和生产同机部署时，请放在两个目录分别部署（各自一份脚本，PID 和日志互不影响）。
+- `--workers` 可按 CPU 核数调大，需在 `config.yaml` 开启 Redis（缓存在多进程间共享）。
+- 发版流程：拉取代码 → `uv sync`（依赖有变化时）→ `./public_opinion_across.sh restart` → `status` 确认已启动。
 
 ## 配置说明
 
@@ -410,7 +512,8 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload
 |---------|------|--------|
 | `ONEDATA_DATABASE_URL` | 数据库连接 URL | sqlite+aiosqlite:///./onedata.db |
 | `SERVER_HOST` | 监听地址 | 0.0.0.0 |
-| `SERVER_PORT` | 监听端口 | 8000 |
+| `APP_ENV` | 运行环境 `prod` / `pre`（也可用启动参数 `--env`） | 按端口判断，默认 prod |
+| `SERVER_PORT` | 监听端口 | `environments.<环境>.port`，再取 `server.port` |
 | `ADMIN_USERNAME` | 管理员用户名 | admin |
 | `ADMIN_PASSWORD` | 管理员密码 | admin123 |
 | `JWT_SECRET` | JWT 密钥 | (config.yaml 中配置) |
@@ -464,7 +567,7 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| ANY | `/gw/{project_id}/{path}` | 动态 API 调用 |
+| ANY | `/v1/data/{项目编码}/{路径}` | 动态 API 调用（前缀见 `gateway.prefix`） |
 
 ### 监控
 

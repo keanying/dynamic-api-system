@@ -364,3 +364,202 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 });
+
+// ============================================================
+// 下拉框美化（v2.23）：原生 <select> 外面包一层自定义外观 + 浮层选项列表
+// - 原生 select 仍保留在页面里（隐藏），取值 / 赋值 / onchange 等旧代码都不用改
+// - 页面上动态生成的 select（弹窗、列表重绘）自动处理
+// - 选项多于 8 个时浮层顶部带搜索框
+// - 不想处理的 select 加 class="no-ui"
+// ============================================================
+const UISelect = (() => {
+    const SEL = 'select:not([multiple]):not([size]):not(.pill-select):not(.no-ui)';
+    const vDesc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+    const iDesc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'selectedIndex');
+    const ARROW = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+    let panel = null, current = null, active = -1, items = [];
+
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+    function enhance(sel) {
+        if (sel.dataset.ui === '1' || !sel.parentNode) return;
+        sel.dataset.ui = '1';
+        const wrap = document.createElement('div');
+        const cls = [...sel.classList].filter(c => c !== 'no-ui');
+        wrap.className = 'ui-select ' + (cls.length ? cls.join(' ') : 'ui-select-plain');
+        wrap.style.cssText = sel.style.cssText;
+        if (sel.title) wrap.title = sel.title;
+        wrap.tabIndex = 0;
+        wrap.innerHTML = `<span class="ui-select-text"></span><span class="ui-select-arrow">${ARROW}</span>`;
+        sel.parentNode.insertBefore(wrap, sel);
+        wrap.appendChild(sel);
+        sel.removeAttribute('style');
+        sel.classList.add('ui-select-native');
+        sel.tabIndex = -1;
+        sel._ui = wrap;
+        wrap._sel = sel;
+        // 代码里直接给 value / selectedIndex 赋值时同步显示
+        Object.defineProperty(sel, 'value', { configurable: true, get() { return vDesc.get.call(this); }, set(v) { vDesc.set.call(this, v); refresh(this); } });
+        Object.defineProperty(sel, 'selectedIndex', { configurable: true, get() { return iDesc.get.call(this); }, set(v) { iDesc.set.call(this, v); refresh(this); } });
+        sel.addEventListener('change', () => refresh(sel));
+        new MutationObserver(() => refresh(sel)).observe(sel, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['disabled', 'style'] });
+        wrap.addEventListener('mousedown', e => { if (!e.target.closest('.ui-select-panel')) { e.preventDefault(); wrap.focus(); toggle(wrap); } });
+        wrap.addEventListener('keydown', e => onKey(e, wrap));
+        refresh(sel);
+    }
+
+    function refresh(sel) {
+        const wrap = sel._ui;
+        if (!wrap) return;
+        const opt = sel.options[iDesc.get.call(sel)];
+        const text = wrap.querySelector('.ui-select-text');
+        text.textContent = opt ? opt.textContent : '';
+        text.classList.toggle('is-placeholder', !opt || opt.value === '');
+        wrap.classList.toggle('is-disabled', sel.disabled);
+        // 旧代码用 style.display 隐藏 select 时，外壳跟着隐藏
+        const d = sel.style.display;
+        if (d) { wrap.style.display = d === 'none' ? 'none' : ''; sel.style.display = ''; }
+        fitWidth(wrap);
+        if (current === wrap) renderList();
+    }
+
+    // 自适应宽度的下拉（小号 / 顶部信息条）：像原生 select 一样按最长选项定宽，切换选项时不跳动
+    let canvas = null;
+    function fitWidth(wrap) {
+        if (wrap.style.width || !(wrap.classList.contains('form-select-sm') || wrap.closest('.idbar-field'))) return;
+        const cs = getComputedStyle(wrap);
+        if (!cs.font) return;
+        canvas = canvas || document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.font = cs.font;
+        let max = 0;
+        [...wrap._sel.options].forEach(o => { if (!o.hidden) max = Math.max(max, ctx.measureText(o.textContent).width); });
+        if (wrap._cssMin === undefined) wrap._cssMin = parseFloat(cs.minWidth) || 0;
+        if (max) wrap.style.minWidth = Math.max(wrap._cssMin, Math.ceil(max + (parseFloat(cs.paddingLeft) || 12) + 34 + 2)) + 'px';
+    }
+
+    function toggle(wrap) { current === wrap ? close() : open(wrap); }
+
+    function open(wrap) {
+        const sel = wrap._sel;
+        if (sel.disabled) return;
+        close();
+        current = wrap;
+        wrap.classList.add('is-open');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.className = 'ui-select-panel';
+            panel.addEventListener('mousedown', e => { if (!e.target.closest('.ui-select-search')) e.preventDefault(); });
+            panel.addEventListener('click', e => {
+                const li = e.target.closest('.ui-option');
+                if (li && !li.classList.contains('is-disabled')) choose(+li.dataset.i);
+            });
+            document.body.appendChild(panel);
+        }
+        const many = [...sel.options].filter(o => !o.hidden).length > 8;
+        panel.innerHTML = (many ? '<div class="ui-select-search"><input type="text" placeholder="搜索..."></div>' : '') + '<div class="ui-select-list"></div>';
+        if (many) {
+            const inp = panel.querySelector('input');
+            inp.addEventListener('input', () => renderList(inp.value));
+            inp.addEventListener('keydown', e => onKey(e, wrap));
+        }
+        renderList();
+        panel.style.display = 'block';
+        position();
+        if (many) setTimeout(() => panel.querySelector('input').focus(), 0);
+        const on = panel.querySelector('.ui-option.is-selected');
+        if (on) on.scrollIntoView({ block: 'nearest' });
+    }
+
+    function renderList(keyword) {
+        if (!current || !panel) return;
+        const sel = current._sel;
+        const kw = (keyword ?? (panel.querySelector('.ui-select-search input')?.value || '')).trim().toLowerCase();
+        const cur = iDesc.get.call(sel);
+        let html = '', lastGroup = null;
+        items = [];
+        [...sel.options].forEach((o, i) => {
+            if (o.hidden) return;
+            if (kw && !o.textContent.toLowerCase().includes(kw)) return;
+            const g = o.parentElement.tagName === 'OPTGROUP' ? o.parentElement.label : null;
+            if (g !== lastGroup && g) html += `<div class="ui-optgroup">${esc(g)}</div>`;
+            lastGroup = g;
+            const dis = o.disabled || (o.parentElement.tagName === 'OPTGROUP' && o.parentElement.disabled);
+            html += `<div class="ui-option${i === cur ? ' is-selected' : ''}${dis ? ' is-disabled' : ''}${o.value === '' ? ' is-placeholder' : ''}" data-i="${i}">${esc(o.textContent)}</div>`;
+            if (!dis) items.push(i);
+        });
+        panel.querySelector('.ui-select-list').innerHTML = html || '<div class="ui-option-empty">无匹配项</div>';
+        active = items.indexOf(cur);
+        highlight();
+    }
+
+    function highlight() {
+        if (!panel) return;
+        panel.querySelectorAll('.ui-option.is-active').forEach(el => el.classList.remove('is-active'));
+        if (active < 0 || active >= items.length) return;
+        const el = panel.querySelector(`.ui-option[data-i="${items[active]}"]`);
+        if (el) { el.classList.add('is-active'); el.scrollIntoView({ block: 'nearest' }); }
+    }
+
+    function position() {
+        if (!current || !panel) return;
+        const r = current.getBoundingClientRect();
+        if (r.bottom < 0 || r.top > window.innerHeight || (!r.width && !r.height)) { close(); return; }
+        panel.style.minWidth = r.width + 'px';
+        panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - panel.offsetWidth - 8)) + 'px';
+        const below = window.innerHeight - r.bottom - 8, h = panel.offsetHeight;
+        panel.style.top = (below < h && r.top > below ? r.top - h - 6 : r.bottom + 6) + 'px';
+    }
+
+    function choose(i) {
+        const sel = current._sel, wrap = current;
+        close();
+        if (i !== iDesc.get.call(sel)) {
+            iDesc.set.call(sel, i);
+            refresh(sel);
+            sel.dispatchEvent(new Event('input', { bubbles: true }));
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        wrap.focus();
+    }
+
+    function close() {
+        if (current) current.classList.remove('is-open');
+        current = null;
+        if (panel) panel.style.display = 'none';
+    }
+
+    function onKey(e, wrap) {
+        const isOpen = current === wrap;
+        if (!isOpen) {
+            if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); open(wrap); }
+            return;
+        }
+        if (e.key === 'Escape') { e.preventDefault(); close(); wrap.focus(); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(items.length - 1, active + 1); highlight(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(0, active - 1); highlight(); }
+        else if (e.key === 'Enter') { e.preventDefault(); if (active >= 0) choose(items[active]); }
+        else if (e.key === 'Tab') close();
+    }
+
+    function scan(root) {
+        if (!root || root.nodeType !== 1) return;
+        if (root.matches && root.matches(SEL)) enhance(root);
+        root.querySelectorAll && root.querySelectorAll(SEL).forEach(enhance);
+    }
+
+    function init() {
+        scan(document.body);
+        new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => {
+            if (n.nodeType === 1 && !(panel && panel.contains(n))) scan(n);
+        }))).observe(document.body, { childList: true, subtree: true });
+        document.addEventListener('mousedown', e => {
+            if (current && !current.contains(e.target) && !(panel && panel.contains(e.target))) close();
+        });
+        window.addEventListener('scroll', e => { if (!(panel && panel.contains(e.target))) position(); }, true);
+        window.addEventListener('resize', close);
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+    return { enhance, refresh, close };
+})();
