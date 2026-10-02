@@ -9,10 +9,10 @@
  * ============================================================ */
 
 .ce-wrap {
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
+    border: none;
+    border-radius: 18px;
     overflow: hidden;
-    background: #282c34;
+    background: #2a2a2d;
     display: flex;
     flex-direction: column;
 }
@@ -22,29 +22,29 @@
     align-items: center;
     gap: 10px;
     padding: 6px 10px;
-    background: #21252b;
-    border-bottom: 1px solid #181a1f;
+    background: #232326;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
     font-size: 11px;
     flex: 0 0 auto;
 }
 .ce-lang {
-    color: #61afef;
+    color: #d6f36a;
     font-weight: 700;
     letter-spacing: 0.5px;
     font-family: 'Fira Code', 'JetBrains Mono', monospace;
 }
 .ce-hint { color: #5c6370; }
 .ce-btn {
-    background: #2c313a;
+    background: rgba(255,255,255,0.08);
     color: #abb2bf;
-    border: 1px solid #3b4048;
-    border-radius: 4px;
+    border: none;
+    border-radius: 999px;
     padding: 3px 9px;
     font-size: 11px;
     cursor: pointer;
     transition: all .12s;
 }
-.ce-btn:hover { background: #3b4048; color: #fff; }
+.ce-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
 
 .ce-body {
     position: relative;
@@ -87,7 +87,7 @@
 
 .ce-pre {
     pointer-events: none;
-    background: #282c34;
+    background: #2a2a2d;
     color: #abb2bf;
     z-index: 1;
 }
@@ -102,14 +102,14 @@
     /* 透明文字但保留选区高亮 */
     -webkit-text-fill-color: transparent;
 }
-.ce-ta::selection { background: rgba(80,140,255,0.40); -webkit-text-fill-color: transparent; }
-.ce-ta::-moz-selection { background: rgba(80,140,255,0.40); }
+.ce-ta::selection { background: rgba(183,167,245,0.38); -webkit-text-fill-color: transparent; }
+.ce-ta::-moz-selection { background: rgba(183,167,245,0.38); }
 
 /* 全屏遮罩 */
 .ce-mask {
     position: fixed;
     inset: 0;
-    background: rgba(15,23,42,0.65);
+    background: rgba(28,28,30,0.55);
     z-index: 9998;
 }
 .ce-wrap.ce-maxed {
@@ -133,8 +133,8 @@
     max-width: 340px;
     max-height: 220px;
     overflow-y: auto;
-    background: #21252b;
-    border: 1px solid #3b4048;
+    background: #232326;
+    border: 1px solid rgba(255,255,255,0.16);
     border-radius: 6px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.4);
     padding: 4px;
@@ -148,7 +148,7 @@
     cursor: pointer;
 }
 .ce-pop-item:hover,
-.ce-pop-item.active { background: #2c5fd6; }
+.ce-pop-item.active { background: #8f78ee; }
 .ce-pop-label {
     color: #e2e8f0;
     font-family: 'Fira Code', 'JetBrains Mono', monospace;

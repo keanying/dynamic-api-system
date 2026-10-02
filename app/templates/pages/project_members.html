@@ -11,11 +11,9 @@
 {% endblock %}
 
 {% block content %}
-<div class="toolbar">
-    <div class="toolbar-left">
-        <h2 style="font-size:18px;font-weight:700;">项目成员</h2>
-    </div>
-    <div class="toolbar-right">
+<div class="page-head">
+    <h1>成员 <span class="count" id="memberCount">-</span></h1>
+    <div class="actions">
         <button class="btn btn-secondary" onclick="location.href='/admin/projects/{{ project_id }}'">返回项目</button>
         <button class="btn btn-primary" id="addMemberBtn" onclick="openAddMember()" style="display:none;">+ 添加成员</button>
     </div>
@@ -23,16 +21,16 @@
 
 <div class="card">
     <div class="card-body">
-        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <table class="data-table" style="width:100%;">
             <thead>
-                <tr style="text-align:left; color:#64748b; border-bottom:1px solid #e2e8f0;">
-                    <th style="padding:10px 8px;">成员</th>
-                    <th style="padding:10px 8px;">账号</th>
-                    <th style="padding:10px 8px;">项目角色</th>
-                    <th style="padding:10px 8px; width:220px;">操作</th>
+                <tr>
+                    <th>成员</th>
+                    <th>账号</th>
+                    <th>项目角色</th>
+                    <th style="width:260px; text-align:right;">操作</th>
                 </tr>
             </thead>
-            <tbody id="memberTbody"><tr><td colspan="4" style="padding:12px; color:#94a3b8;">加载中...</td></tr></tbody>
+            <tbody id="memberTbody"><tr><td colspan="4" class="td-empty">加载中...</td></tr></tbody>
         </table>
     </div>
 </div>
@@ -91,12 +89,13 @@ async function loadMembers() {
     const tbody = document.getElementById('memberTbody');
     const data = await API.get(`/api/projects/${PROJECT_ID}/members`);
     if (!data || !data.data) {
-        tbody.innerHTML = '<tr><td colspan="4" style="padding:12px;color:#94a3b8;">无法加载成员（你可能不是项目成员）</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="td-empty">无法加载成员（你可能不是项目成员）</td></tr>';
         return;
     }
     const items = data.data.items || [];
+    document.getElementById('memberCount').textContent = items.length;
     if (!items.length) {
-        tbody.innerHTML = '<tr><td colspan="4" style="padding:12px;color:#94a3b8;">暂无成员</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="td-empty">暂无成员</td></tr>';
         return;
     }
     const canManage = (MY_ROLE === 'manager');
@@ -104,18 +103,20 @@ async function loadMembers() {
         let ops = '<span class="text-muted text-sm">—</span>';
         if (canManage) {
             ops = `
-                <select onchange="changeRole(${m.user_id}, this.value)" style="font-size:12px;padding:4px 8px;border:1px solid #cbd5e1;border-radius:4px;">
+                <select class="form-select form-select-sm" onchange="changeRole(${m.user_id}, this.value)">
                     <option value="manager" ${m.project_role==='manager'?'selected':''}>项目管理员</option>
                     <option value="developer" ${m.project_role==='developer'?'selected':''}>研发</option>
                     <option value="viewer" ${m.project_role==='viewer'?'selected':''}>只读</option>
                 </select>
-                <button class="btn btn-secondary btn-sm" style="margin-left:8px;padding:4px 10px;" onclick="removeMember(${m.user_id}, '${(m.nickname||'').replace(/'/g,'')}')">移除</button>`;
+                <button class="btn btn-ghost btn-sm" style="margin-left:6px;color:var(--color-danger);" onclick="removeMember(${m.user_id}, '${(m.nickname||'').replace(/'/g,'')}')">移除</button>`;
         }
-        return `<tr style="border-bottom:1px solid #f1f5f9;">
-            <td style="padding:10px 8px;">${escapeHtml(m.nickname || '')} ${m.is_active?'':'<span style="color:#dc2626;font-size:11px;">(已禁用)</span>'}</td>
-            <td style="padding:10px 8px;color:#64748b;">${escapeHtml(m.username || '')}</td>
-            <td style="padding:10px 8px;"><span style="font-size:11px;padding:3px 9px;border-radius:4px;background:#ede9fe;color:#6d28d9;">${ROLE_LABEL[m.project_role]||m.project_role}</span></td>
-            <td style="padding:10px 8px;">${ops}</td>
+        const shown = m.nickname || m.username || '';
+        const roleCls = {manager: 'badge-dark', developer: 'badge-violet', viewer: 'badge-gray'}[m.project_role] || 'badge-gray';
+        return `<tr>
+            <td><div class="user-cell"><span class="avatar av-${m.user_id % 3}">${escapeHtml(shown.slice(0, 1).toUpperCase())}</span><b>${escapeHtml(shown)}</b>${m.is_active?'':'<span class="badge badge-error">已禁用</span>'}</div></td>
+            <td class="text-muted">${escapeHtml(m.username || '')}</td>
+            <td><span class="badge ${roleCls}">${ROLE_LABEL[m.project_role]||m.project_role}</span></td>
+            <td style="text-align:right; white-space:nowrap;">${ops}</td>
         </tr>`;
     }).join('');
 }

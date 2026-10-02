@@ -278,6 +278,14 @@ function formatMs(ms) {
     return (ms / 1000).toFixed(2) + 's';
 }
 
+// 大数字按中文单位缩写：1234567 → 123万
+function compactNum(n) {
+    n = Number(n) || 0;
+    if (n >= 1e8) return (n / 1e8).toFixed(n >= 1e9 ? 0 : 1).replace(/\.0$/, '') + '亿';
+    if (n >= 1e4) return (n / 1e4).toFixed(n >= 1e5 ? 0 : 1).replace(/\.0$/, '') + '万';
+    return n.toLocaleString();
+}
+
 function methodBadge(method) {
     return `<span class="badge badge-${method.toLowerCase()}">${method}</span>`;
 }
