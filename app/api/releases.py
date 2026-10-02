@@ -479,6 +479,56 @@ async def pull_from_prod(body: PullBody, db: AsyncSession = Depends(get_db, scop
     return R_ok(data={"results": results, "ok_count": ok_count}, msg=msg)
 
 
+class PullAllBody(BaseModel):
+    overwrite: bool = False   # 预发有未发布改动的 API 也用生产覆盖
+
+
+def _pull_all_denied(user) -> Optional[str]:
+    if not IS_PRE:
+        return "只能在预发环境执行：方向固定为 生产 → 预发"
+    if not is_super_admin(user):
+        return "只有超级管理员可以从生产同步全部"
+    return None
+
+
+@router.get("/pull-all/preview")
+async def pull_all_preview(overwrite: bool = False, db: AsyncSession = Depends(get_db, scope="function"),
+                           user=Depends(get_current_user)):
+    """预发 + 超管 (v2.24)：预览「从生产同步全部」会怎么处理每个项目和 API。"""
+    from app.services import env_sync
+    denied = _pull_all_denied(user)
+    if denied:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=denied)
+    try:
+        return R_ok(data=await env_sync.plan(db, overwrite))
+    except ReleaseError as e:
+        return R_fail(ErrCode.SYSTEM_ERROR, msg=str(e))
+
+
+@router.post("/pull-all")
+async def pull_all(body: PullAllBody, db: AsyncSession = Depends(get_db, scope="function"),
+                   user=Depends(get_current_user)):
+    """预发 + 超管 (v2.24)：把生产的项目、数据源、API 一次性同步到预发（只有 生产 → 预发 一个方向）。"""
+    from app.services import env_sync
+    denied = _pull_all_denied(user)
+    if denied:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=denied)
+    try:
+        res = await env_sync.run(db, user, body.overwrite)
+    except ReleaseError as e:
+        await db.rollback()
+        return R_fail(ErrCode.SYSTEM_ERROR, msg=str(e))
+    c = res["counts"]
+    await audit(db, user, "release.pull_all", "env", 0,
+                f"从生产同步全部：项目新建 {c['project_create']} 更新 {c['project_update']}，数据源新建 {c['ds_create']}，"
+                f"API 新建 {c['create']} 覆盖 {c['update']} 一致 {c['same']} 跳过 {c['conflict'] + c['skip_review']}，失败 {len(res['errors'])}")
+    await db.commit()
+    msg = f"已同步：API 新建 {c['create']} 个、覆盖 {c['update']} 个，项目新建 {c['project_create']} 个"
+    if res["errors"]:
+        msg += f"，{len(res['errors'])} 个失败"
+    return R_ok(data=res, msg=msg)
+
+
 @router.get("/{release_id}")
 async def get_release(release_id: int, db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     """发布单详情。生产环境实时对比「待发布快照 vs 生产当前配置」；

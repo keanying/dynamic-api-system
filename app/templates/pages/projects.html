@@ -11,6 +11,12 @@
     <h1>项目 <span class="count" id="projCount">-</span></h1>
     <div class="actions">
         <input type="text" class="search-input" id="searchInput" placeholder="搜索项目..." oninput="debounceSearch()">
+        {% if app_env and app_env.is_pre %}
+        <button class="btn btn-secondary" id="pullAllBtn" onclick="openPullAll()" style="display:none;" title="超级管理员：把生产的项目、数据源、API 一次性同步到预发（只能 生产 → 预发）">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><path d="M5 21h14"/></svg>
+            从生产同步全部
+        </button>
+        {% endif %}
         <button class="btn btn-secondary" id="delApprovalBtn" onclick="openDelApprovals()">
             删除审批 <span id="delApprovalCount" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:0 6px;font-size:11px;margin-left:4px;"></span>
         </button>
@@ -83,6 +89,64 @@
 
 {% block extra_js %}
 <script>
+// 从生产同步全部 (v2.24)：仅预发 + 超级管理员；方向固定 生产 → 预发
+document.addEventListener('DOMContentLoaded', async () => {
+    const b = document.getElementById('pullAllBtn');
+    if (b && (await getMe()).global_role === 'super_admin') b.style.display = '';
+});
+
+const PULL_ACT = {
+    create: ['新建', 'badge-lime'], update: ['覆盖', 'badge-violet'], same: ['已一致', 'badge-gray'],
+    conflict: ['跳过：预发有未发布改动', 'badge-warning'], skip_review: ['跳过：审批中', 'badge-warning'], keep: ['保留：仅预发有', 'badge-gray'],
+};
+async function openPullAll() {
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay';
+    ov.style.display = 'flex';
+    ov.innerHTML = `<div class="modal" style="max-width:980px;width:95vw;">
+        <div class="modal-header"><h3>从生产同步全部 <span class="badge badge-prod" style="margin-left:8px;">生产 → 预发</span></h3><button class="btn-icon" data-x>&times;</button></div>
+        <div class="modal-body" style="max-height:68vh;overflow:auto;" id="__paBody"><div class="text-muted">正在对比生产和预发…</div></div>
+        <div class="modal-footer">
+            <label style="display:flex;gap:6px;align-items:center;margin-right:auto;font-size:13px;"><input type="checkbox" id="__paOw"> 预发有未发布改动的也用生产覆盖</label>
+            <button class="btn btn-secondary" data-x>取消</button>
+            <button class="btn btn-primary" id="__paGo" disabled>开始同步</button>
+        </div></div>`;
+    ov.querySelectorAll('[data-x]').forEach(x => x.onclick = () => ov.remove());
+    document.body.appendChild(ov);
+    const body = ov.querySelector('#__paBody'), ow = ov.querySelector('#__paOw'), go = ov.querySelector('#__paGo');
+    const load = async () => {
+        go.disabled = true;
+        const r = await API.get(`/api/releases/pull-all/preview?overwrite=${ow.checked}&_t=${Date.now()}`);
+        if (!r || !r.status) { body.innerHTML = `<div class="note note-danger">${escapeHtml((r && r.msg) || '预览失败')}</div>`; return; }
+        const c = r.data.counts;
+        const stat = (n, l) => `<div><b>${n}</b><span>${l}</span></div>`;
+        body.innerHTML = `<div class="note" style="margin-bottom:14px;">只会把生产的内容同步到预发，不会改动生产。预发独有的 API 保留不删；预发已有的同名数据源不覆盖。</div>
+            <div class="pa-stats">${stat(c.create, 'API 新建')}${stat(c.update, 'API 覆盖')}${stat(c.same, '已一致')}
+                ${stat(c.conflict + c.skip_review, '跳过')}${stat(c.project_create, '项目新建')}${stat(c.ds_create, '数据源新建')}</div>`
+            + r.data.projects.map(p => `<div class="pa-proj"><div class="pa-proj-h"><b>${escapeHtml(p.name)}</b> <code>${escapeHtml(p.code)}</code>
+                    ${p.exists_in_pre ? '' : '<span class="badge badge-lime">预发新建项目</span>'}</div>
+                ${p.apis.length ? `<table class="data-table"><tbody>${p.apis.map(a => `<tr>
+                    <td style="width:46%;">${methodBadge(a.method)} <code>${escapeHtml(a.url_path)}</code> <span class="text-muted text-sm">${escapeHtml(a.name)}</span></td>
+                    <td>${syncStateBadge(a.state, a.state_label)}</td>
+                    <td style="text-align:right;"><span class="badge ${PULL_ACT[a.action][1]}">${PULL_ACT[a.action][0]}</span></td></tr>`).join('')}</tbody></table>`
+                  : '<div class="text-muted text-sm" style="padding:6px 0;">没有 API</div>'}</div>`).join('');
+        go.disabled = !(c.create + c.update + c.project_create + c.ds_create + c.same);
+    };
+    ow.onchange = load;
+    go.onclick = async () => {
+        const msg = ow.checked ? '预发里未发布到生产的改动会被生产的内容覆盖，且不能撤销。确定同步吗？' : '确定把生产的内容同步到预发吗？';
+        if (!await confirmAsync('从生产同步全部', msg, { okText: '开始同步' })) return;
+        go.disabled = true;
+        const r = await API.post('/api/releases/pull-all', { overwrite: ow.checked });
+        if (!r || !r.status) { Toast.error((r && r.msg) || '同步失败'); go.disabled = false; return; }
+        Toast.success(r.msg);
+        if (r.data.errors.length) Toast.error(r.data.errors.map(e => `${e.project} ${e.url_path}：${e.msg}`).join('；'));
+        ov.remove();
+        loadProjects();
+    };
+    load();
+}
+
 let currentPage = 1;
 let searchTimer = null;
 

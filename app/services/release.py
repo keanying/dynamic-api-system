@@ -610,14 +610,17 @@ async def delete_base(db, project_code: str, method: str, url_path: str) -> None
 
 
 async def apply_to_pre(db, snapshot: Dict[str, Any], project: Project, api: Optional[ApiConfig],
-                       prod_status: Optional[str], user: User) -> ApiConfig:
-    """预发进程：把生产的配置写进预发（拉取生产）。api 为 None 时在预发新建。调用方负责 commit。"""
+                       prod_status: Optional[str], user: User, ignore_lock: bool = False) -> ApiConfig:
+    """预发进程：把生产的配置写进预发（拉取生产）。api 为 None 时在预发新建。调用方负责 commit。
+
+    ignore_lock：超管「从生产同步全部」时，锁定的 API 也覆盖（锁定状态保持不变）。
+    """
     from app.core.permissions import is_super_admin
     from app.api.api_configs import plugin_edit_denied
     from app.services.api_lifecycle import STATUS_DRAFT, STATUS_ONLINE, STATUS_PENDING, STATUS_APPROVED
 
     if api is not None:
-        if getattr(api, "is_locked", False):
+        if getattr(api, "is_locked", False) and not ignore_lock:
             raise ReleaseError("预发中的该 API 已锁定，请先解锁")
         if api.status in (STATUS_PENDING, STATUS_APPROVED):
             raise ReleaseError("预发中的该 API 正在上线审批中，请先撤回")
