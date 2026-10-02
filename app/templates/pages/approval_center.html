@@ -105,7 +105,7 @@ async function reload() {
 }
 
 async function decideOwner(id, decision) {
-    if (decision === 'reject' && !confirm('确认驳回该申请？')) return;
+    if (decision === 'reject' && !await confirmAsync('驳回申请', '确认驳回该申请？', { okText: '驳回' })) return;
     const ep = decision === 'approve' ? 'approve' : 'reject';
     const res = await API.post(`/api/owner-approvals/${id}/${ep}`, { comment: '' });
     if (res && res.status) { Toast.success(res.msg || '已处理'); reload(); }
@@ -113,7 +113,7 @@ async function decideOwner(id, decision) {
 }
 
 async function decideOnline(projectId, apprId, role, decision) {
-    if (decision === 'reject' && !confirm('确认驳回该上线单？')) return;
+    if (decision === 'reject' && !await confirmAsync('驳回上线单', '确认驳回该上线单？', { okText: '驳回' })) return;
     const res = await API.post(`/api/projects/${projectId}/approvals/${apprId}/${role}`, { decision, comment: '' });
     if (res && res.status) { Toast.success(res.msg || '已处理'); reload(); }
     else Toast.error((res && res.msg) || '处理失败');

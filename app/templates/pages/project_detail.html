@@ -231,23 +231,25 @@ async function loadApis(page) {
             <div class="api-path">
                 ${methodBadge(api.method)}
                 <code title="${escapeHtml(api.url_path)}">${escapeHtml(api.url_path)}</code>
+            </div>
+            <div class="api-tags">
                 ${statusBadge}
                 ${lockBadge}
                 ${cacheBadge}
                 ${prewarmBadge}
                 ${(api.api_type === 'html')
-                    ? '<span class="text-muted" style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px;font-size:11px;">HTML</span>'
+                    ? '<span class="text-muted" style="background:#fef3c7;color:#92400e;padding:2px 9px;border-radius:999px;font-size:11px;">HTML</span>'
                     : ''}
                 ${(api.api_type === 'plugin')
-                    ? '<span class="text-muted" style="background:#ece8fd;color:#5b44c9;padding:1px 6px;border-radius:4px;font-size:11px;">插件</span>'
+                    ? '<span class="text-muted" style="background:#ece8fd;color:#5b44c9;padding:2px 9px;border-radius:999px;font-size:11px;">插件</span>'
                     : ''}
                 ${(api.api_type === 'sync')
-                    ? '<span title="远端同步：写库接口，仅超级管理员可创建和调用" style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600;">✎ 远端同步</span>'
+                    ? '<span title="远端同步：写库接口，仅超级管理员可创建和调用" style="background:#fee2e2;color:#991b1b;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;">✎ 远端同步</span>'
                     : ''}
                 ${(api.api_type === 'federated')
-                    ? '<span title="多源 SQL：一条 SQL 关联多个数据源的表" style="background:#eaf8c4;color:#3d5a0a;padding:1px 6px;border-radius:4px;font-size:11px;">多源 SQL</span>'
+                    ? '<span title="多源 SQL：一条 SQL 关联多个数据源的表" style="background:#eaf8c4;color:#3d5a0a;padding:2px 9px;border-radius:999px;font-size:11px;">多源 SQL</span>'
                     : ''}
-                ${api.datasource_name ? `<span class="text-muted">· ${escapeHtml(api.datasource_name)}</span>` : ''}
+                ${api.datasource_name ? `<span class="api-ds" title="数据源：${escapeHtml(api.datasource_name)}">${escapeHtml(api.datasource_name)}</span>` : ''}
             </div>
             <div class="api-call-url">
                 <span style="font-size:11px; color:#71717a; white-space:nowrap;">调用</span>
@@ -492,16 +494,18 @@ async function openTransferDialog(apiId, apiName) {
     } catch (e) {}
     const opts = users.map(u => `<option value="${u.id}">${escapeHtml(u.nickname || u.username)} (${escapeHtml(u.username)})</option>`).join('');
     const html = `
-      <div id="__transferModal" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:9999;">
-        <div style="background:#fff;border-radius:8px;padding:20px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
-          <h3 style="margin:0 0 12px;font-size:16px;">转交责任人</h3>
-          <p style="font-size:12px;color:#71717a;margin:0 0 10px;">API：<b>${escapeHtml(apiName || '')}</b></p>
-          <select id="__newOwner" class="form-select" style="width:100%;margin-bottom:14px;">
-            <option value="">选择新责任人…</option>${opts}
-          </select>
-          <div style="text-align:right;">
-            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('__transferModal').remove()">取消</button>
-            <button class="btn btn-primary btn-sm" onclick="doTransfer(${apiId})">确认转交</button>
+      <div id="__transferModal" class="modal-overlay" style="display:flex;">
+        <div class="modal" style="max-width:440px;">
+          <div class="modal-header"><h3>转交责任人</h3><button class="btn-icon" onclick="document.getElementById('__transferModal').remove()">&times;</button></div>
+          <div class="modal-body">
+            <p class="text-sm text-muted" style="margin-bottom:12px;">API：<b>${escapeHtml(apiName || '')}</b></p>
+            <select id="__newOwner" class="form-select">
+              <option value="">选择新责任人…</option>${opts}
+            </select>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="document.getElementById('__transferModal').remove()">取消</button>
+            <button class="btn btn-primary" onclick="doTransfer(${apiId})">确认转交</button>
           </div>
         </div>
       </div>`;
@@ -606,7 +610,8 @@ function publishApi(apiId, apiName) {
 }
 
 async function releaseToProd(apiId, apiName) {
-    const remark = window.prompt(`发布「${apiName}」到生产环境。\n请填写发布说明（会展示给生产审核人）：`, '');
+    const remark = await promptAsync('发布到生产', `发布「${apiName}」到生产环境，发布说明会展示给生产审核人。`,
+        { multiline: true, placeholder: '本次发布改了什么（可选）', okText: '提交发布单' });
     if (remark === null) return;
     const r = await API.post('/api/releases', { project_id: PROJECT_ID, api_id: apiId, remark });
     if (r && r.status) {

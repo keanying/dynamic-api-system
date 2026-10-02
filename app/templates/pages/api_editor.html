@@ -1515,16 +1515,18 @@ async function openTransferDialog() {
     } catch (e) {}
     const opts = users.map(u => `<option value="${u.id}">${escapeHtml(u.nickname || u.username)} (${escapeHtml(u.username)})</option>`).join('');
     const html = `
-      <div id="__transferModal" class="modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:9999;">
-        <div style="background:#fff;border-radius:8px;padding:20px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
-          <h3 style="margin:0 0 12px;font-size:16px;">转交责任人</h3>
-          <p style="font-size:12px;color:#71717a;margin:0 0 10px;">当前责任人：<b>${document.getElementById('ownerName').textContent}</b></p>
-          <select id="__newOwner" class="form-select" style="width:100%;margin-bottom:14px;">
-            <option value="">选择新责任人…</option>${opts}
-          </select>
-          <div style="text-align:right;">
-            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('__transferModal').remove()">取消</button>
-            <button class="btn btn-primary btn-sm" onclick="doTransfer()">确认转交</button>
+      <div id="__transferModal" class="modal-overlay" style="display:flex;">
+        <div class="modal" style="max-width:440px;">
+          <div class="modal-header"><h3>转交责任人</h3><button type="button" class="btn-icon" onclick="document.getElementById('__transferModal').remove()">&times;</button></div>
+          <div class="modal-body">
+            <p class="text-sm text-muted" style="margin-bottom:12px;">当前责任人：<b>${escapeHtml(document.getElementById('ownerName').textContent)}</b></p>
+            <select id="__newOwner" class="form-select">
+              <option value="">选择新责任人…</option>${opts}
+            </select>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('__transferModal').remove()">取消</button>
+            <button type="button" class="btn btn-primary" onclick="doTransfer()">确认转交</button>
           </div>
         </div>
       </div>`;
@@ -3633,12 +3635,13 @@ function _wzBuild() {
     return res;
 }
 
-function applyQueryWizard() {
+async function applyQueryWizard() {
     const out = _wzBuild();
     if (!out.sql) { Toast.error(out.error || '先选择表'); return; }
     if (out.error) { Toast.error(out.error); return; }
     const cur = (sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql').value) || '';
-    if (cur.trim() && cur.trim() !== out.sql.trim() && !confirm('用生成的 SQL 替换当前 SQL？')) return;
+    if (cur.trim() && cur.trim() !== out.sql.trim()
+        && !await confirmAsync('替换 SQL', '用生成的 SQL 替换当前 SQL？', { okText: '替换', danger: false })) return;
     // 数据源模式：跨数据源 → 多个数据源；否则单个数据源并选中该数据源
     const typeSel = document.getElementById('apiType');
     if (out.multi) {
