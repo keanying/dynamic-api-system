@@ -547,20 +547,11 @@
             </div>
         </div>
         <div class="card-body">
-            <div class="form-hint" style="margin-bottom:10px; line-height:1.8;">
-                用标准 MySQL 语法写一条 SQL，表名写成
-                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">数据源名.库名.表名</code>
-                （或 <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">数据源名.表名</code>，库取数据源的默认库），
-                可以关联不同数据源（MySQL / SelectDB / Doris / StarRocks）的表。
-                只涉及一个数据源时整句交给该数据源执行；跨数据源时各源只取需要的列和行，再在服务内关联计算。
-                跨表引用列请写成「表别名.列名」。参数写法与数据 API 相同（:param、$if$ 等）。
-            </div>
             <div style="display:flex; gap:12px; flex-wrap:wrap;">
                 <div style="flex:1 1 260px; min-width:240px; max-height:320px; overflow:auto; border:1px solid #e2e8f0; border-radius:6px; padding:8px; font-size:12.5px;" id="catalogTree">
                     <div class="text-muted">加载中...</div>
                 </div>
                 <div style="flex:2 1 360px; min-width:280px;">
-                    <div class="text-sm text-muted" style="margin-bottom:6px;">点击左侧的表 / 列插入到 SQL 光标处；「执行计划」查看各数据源实际执行的 SQL（用测试参数渲染，不取数据）。</div>
                     <pre id="federatedPlan" style="display:none; max-height:320px; overflow:auto; background:#0f172a; color:#e2e8f0; padding:10px; border-radius:6px; font-size:12px; white-space:pre-wrap;"></pre>
                 </div>
             </div>
