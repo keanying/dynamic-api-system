@@ -9,17 +9,19 @@
 {% block content %}
 <div class="page-fill">
 <div class="page-head">
-    <h1>审批中心</h1>
+    <h1>审批中心 <span class="count" id="tabCount">-</span></h1>
     <div class="actions">
         <div class="seg">
-            <button class="btn btn-sm" id="tabPending" onclick="switchTab('pending')">待我审批</button>
-            <button class="btn btn-ghost btn-sm" id="tabMine" onclick="switchTab('mine')">我发起的</button>
+            <button class="btn btn-sm" data-ctab="pending" onclick="switchTab('pending')">待我审批</button>
+            <button class="btn btn-ghost btn-sm" data-ctab="mine" onclick="switchTab('mine')">我发起的</button>
+            <button class="btn btn-ghost btn-sm" data-ctab="release" onclick="switchTab('release')">发布到生产</button>
         </div>
-        <button class="btn btn-secondary" onclick="reload()">刷新</button>
+        <button class="btn btn-secondary" onclick="reloadCurrent()">刷新</button>
     </div>
 </div>
 
-<div class="card fill-card">
+<!-- 上线 / 下线 / 删除等审批 -->
+<div class="card fill-card" id="apprWrap">
     <div class="card-body fill-scroll" style="padding:0;">
         <table class="data-table" style="width:100%;">
             <thead>
@@ -34,11 +36,56 @@
                 </tr>
             </thead>
             <tbody id="apprBody">
-                <tr><td colspan="7" style="text-align:center;color:#a1a1aa;padding:24px;">加载中…</td></tr>
+                <tr><td colspan="7" class="td-empty">加载中…</td></tr>
             </tbody>
         </table>
     </div>
 </div>
+
+<!-- 发布到生产（预发 → 生产，原「发布审核」页） -->
+<div class="card fill-card" id="relWrap" style="display:none;">
+    <div class="rel-bar">
+        <div class="seg seg-sm">
+            <button class="btn btn-sm" data-rtab="pending" onclick="switchRelStatus('pending')">待审核</button>
+            <button class="btn btn-ghost btn-sm" data-rtab="all" onclick="switchRelStatus('all')">全部</button>
+        </div>
+        <span class="text-sm text-muted">
+            {% if app_env.is_prod %}预发发起的发布单，核对与生产的差异后通过即上线{% else %}已上线的 API 在项目页点「发布到生产」发起，由生产管理员核对差异后审核{% endif %}
+        </span>
+    </div>
+    <div class="fill-scroll">
+        <table class="data-table" style="width:100%;">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>API</th>
+                    <th>项目</th>
+                    <th>发起人</th>
+                    <th>说明</th>
+                    <th>状态</th>
+                    <th>时间</th>
+                    <th style="text-align:right;">操作</th>
+                </tr>
+            </thead>
+            <tbody id="relBody">
+                <tr><td colspan="8" class="td-empty">加载中…</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination" id="relPagination"></div>
+</div>
+</div>
+
+<!-- 发布单详情 / 差异 -->
+<div class="modal-overlay" id="relModal" style="display:none;">
+    <div class="modal" style="max-width:960px;width:94vw;">
+        <div class="modal-header">
+            <h3 id="relTitle">发布单</h3>
+            <button class="btn-icon" onclick="closeRelModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="relDetail" style="max-height:70vh;overflow:auto;"></div>
+        <div class="modal-footer" id="relFooter"></div>
+    </div>
 </div>
 
 <script>
@@ -46,19 +93,30 @@ let currentTab = 'pending';
 
 function switchTab(tab) {
     currentTab = tab;
-    document.getElementById('tabPending').className = tab === 'pending' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
-    document.getElementById('tabMine').className = tab === 'mine' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+    document.querySelectorAll('[data-ctab]').forEach(b => {
+        b.className = b.dataset.ctab === tab ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+    });
+    const isRel = tab === 'release';
+    document.getElementById('apprWrap').style.display = isRel ? 'none' : '';
+    document.getElementById('relWrap').style.display = isRel ? '' : 'none';
+    const url = new URL(location.href);
+    if (isRel) url.searchParams.set('tab', 'release'); else url.searchParams.delete('tab');
+    url.searchParams.delete('id');
+    history.replaceState(null, '', url.pathname + url.search);
+    if (isRel) { loadReleases(1); return; }
     document.getElementById('colPeople').textContent = tab === 'pending' ? '申请人' : '状态';
     document.getElementById('colAction').style.display = tab === 'pending' ? '' : 'none';
     reload();
 }
+
+function reloadCurrent() { currentTab === 'release' ? loadReleases() : reload(); }
 
 function actionBadge(label) {
     const color = { '上线': '#3d5a0a', '下线': '#b45309', '删除': '#b91c1c' }[label] || '#52525b';
     return `<span style="display:inline-block;padding:2px 9px;border-radius:999px;white-space:nowrap;font-size:12px;background:${color}1a;color:${color};">${label}</span>`;
 }
 
-function statusBadge(st) {
+function apprStatusBadge(st) {
     const m = { pending: ['待处理','#b45309'], approved: ['已通过','#3d5a0a'], rejected: ['已驳回','#b91c1c'],
                 cancelled: ['已撤回','#71717a'], withdrawn: ['已撤回','#71717a'] };
     const [txt, c] = m[st] || [st, '#52525b'];
@@ -67,16 +125,17 @@ function statusBadge(st) {
 
 async function reload() {
     const body = document.getElementById('apprBody');
-    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#a1a1aa;padding:24px;">加载中…</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" class="td-empty">加载中…</td></tr>';
     const url = currentTab === 'pending' ? '/api/owner-approvals/center/pending' : '/api/owner-approvals/center/mine';
     const res = await API.get(url);
     const items = (res && res.data && res.data.items) || [];
+    document.getElementById('tabCount').textContent = items.length;
     if (!items.length) {
-        body.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#a1a1aa;padding:24px;">${currentTab==='pending'?'暂无待审批事项':'你还没有发起过申请'}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="7" class="td-empty">${currentTab==='pending'?'暂无待审批事项':'你还没有发起过申请'}</td></tr>`;
         return;
     }
     body.innerHTML = items.map(it => {
-        const people = currentTab === 'pending' ? escapeHtml(it.requester_name || '') : statusBadge(it.status);
+        const people = currentTab === 'pending' ? escapeHtml(it.requester_name || '') : apprStatusBadge(it.status);
         let actions = '';
         if (currentTab === 'pending') {
             if (it.kind === 'online') {
@@ -101,7 +160,7 @@ async function reload() {
             <td>${people}</td>
             <td style="max-width:220px;color:#71717a;font-size:12px;">${escapeHtml((it.reason||it.decide_comment||'').slice(0,60))}</td>
             <td style="color:#a1a1aa;font-size:12px;">${escapeHtml(it.created_at || '')}</td>
-            <td style="text-align:right;">${actions}</td>
+            <td style="text-align:right;white-space:nowrap;">${actions}</td>
         </tr>`;
     }).join('');
 }
@@ -121,6 +180,148 @@ async function decideOnline(projectId, apprId, role, decision) {
     else Toast.error((res && res.msg) || '处理失败');
 }
 
-document.addEventListener('DOMContentLoaded', reload);
+// ================= 发布到生产 =================
+let relStatus = 'pending';
+let relPage = 1;
+let current = null;   // 当前打开的发布单详情
+
+const REL_STATUS = {
+    pending:   ['待审核', 'badge-warning'],
+    approved:  ['已发布', 'badge-success'],
+    rejected:  ['已驳回', 'badge-error'],
+    cancelled: ['已撤回', 'badge-gray'],
+};
+
+function esc(v) { return escapeHtml(v === null || v === undefined ? '' : String(v)); }
+
+function relBadge(st) {
+    const [t, cls] = REL_STATUS[st] || [st, 'badge-gray'];
+    return `<span class="badge ${cls}">${t}</span>`;
+}
+
+function switchRelStatus(st) {
+    relStatus = st;
+    document.querySelectorAll('[data-rtab]').forEach(b => {
+        b.className = b.dataset.rtab === st ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+    });
+    loadReleases(1);
+}
+
+async function loadReleases(page) {
+    if (page) relPage = page;
+    const body = document.getElementById('relBody');
+    const res = await API.get(`/api/releases?status=${relStatus}&page=${relPage}&page_size=20&_t=${Date.now()}`);
+    const items = (res && res.data && res.data.items) || [];
+    document.getElementById('tabCount').textContent = (res && res.data && res.data.total) || items.length;
+    if (!items.length) {
+        body.innerHTML = `<tr><td colspan="8" class="td-empty">暂无发布单</td></tr>`;
+        document.getElementById('relPagination').innerHTML = '';
+        return;
+    }
+    body.innerHTML = items.map(r => `<tr>
+        <td class="text-muted">${r.id}</td>
+        <td>${r.action === 'delete' ? '<span class="badge badge-error">删除</span> ' : '<span class="badge badge-violet">发布</span> '}${methodBadge(r.method)} <b>${esc(r.api_name)}</b><div class="text-muted" style="font-size:12px;"><code>${esc(r.url_path)}</code></div></td>
+        <td>${esc(r.project_name)}<div class="text-muted" style="font-size:12px;">${esc(r.project_code)}</div></td>
+        <td>${esc(r.submitter_name)}</td>
+        <td style="max-width:220px;color:#71717a;font-size:12px;">${esc((r.remark || '').slice(0, 60))}</td>
+        <td>${relBadge(r.status)}${r.reviewer_name ? `<div class="text-muted" style="font-size:12px;">${esc(r.reviewer_name)}</div>` : ''}</td>
+        <td style="color:#a1a1aa;font-size:12px;white-space:nowrap;">${esc(r.created_at)}</td>
+        <td style="text-align:right;white-space:nowrap;"><button class="btn ${(res.data.can_review && r.status === 'pending') ? 'btn-primary' : 'btn-secondary'} btn-xs" onclick="openRelease(${r.id})">${(res.data.can_review && r.status === 'pending') ? '核对差异并审核' : '查看差异'}</button></td>
+    </tr>`).join('');
+    renderPagination('relPagination', relPage, Math.ceil(res.data.total / res.data.page_size), 'loadReleases');
+}
+
+function renderRelDiff(d) {
+    if (d.action === 'delete') {
+        const where = d.prod_version != null ? `生产当前版本 v${d.prod_version}` : '生产环境已没有该 API';
+        return `<div class="note note-danger"><span>删除申请：审核通过后将<b>同时删除生产和预发</b>中的该 API（${esc(where)}），删除后调用方立即无法访问，且不可恢复。</span></div>`;
+    }
+    if (!d.diff) {
+        if (d.diff_error) return `<div class="note">无法读取生产配置：${esc(d.diff_error)}</div>`;
+        return '<div class="note">该发布单没有差异记录。</div>';
+    }
+    const basis = d.diff_basis === 'live'
+        ? '对比对象：<b>生产当前配置</b>（实时）'
+        : '对比对象：<b>发布当时的生产配置</b>';
+    return `<p class="text-sm" style="margin-bottom:10px;">${basis}</p>`
+        + ReleaseDiff.render(d.diff, { beforeLabel: '生产当前', afterLabel: '待发布', newText: '生产环境还没有该 API，审核通过将新建' })
+        + '<p class="text-muted text-sm" style="margin-top:10px;">API Key 按环境分别管理，不随发布同步；数据源按名称对应到生产同名数据源。</p>';
+}
+
+async function openRelease(id) {
+    const res = await API.get(`/api/releases/${id}?_t=${Date.now()}`);
+    if (!res || !res.status) { Toast.error((res && res.msg) || '加载失败'); return; }
+    const d = res.data;
+    current = d;
+    document.getElementById('relTitle').innerHTML = `${d.action === 'delete' ? '删除单' : '发布单'} #${d.id} · ${esc(d.api_name)} ${relBadge(d.status)}`;
+
+    let head = `<div class="rel-meta">
+        <div>项目：${esc(d.project_name)} <code>${esc(d.project_code)}</code></div>
+        <div>接口：${methodBadge(d.method)} <code>${esc(d.url_path)}</code></div>
+        <div>发起人：${esc(d.submitter_name)}（${esc(d.submitter_username)}）</div>
+        <div>发起时间：${esc(d.created_at)}</div>
+        <div style="grid-column:1/-1;">${d.action === 'delete' ? '删除原因' : '发布说明'}：${esc(d.remark) || '<span class="text-muted">（无）</span>'}</div>`;
+    if (d.reviewer_name) {
+        head += `<div>审核人：${esc(d.reviewer_name)}</div><div>审核时间：${esc(d.reviewed_at)}</div>
+                 <div style="grid-column:1/-1;">审核意见：${esc(d.review_comment) || '<span class="text-muted">（无）</span>'}</div>`;
+    }
+    head += '</div>';
+    if (d.diff_basis === 'live' && d.prod_project_exists === false) {
+        head += `<div class="note" style="margin-bottom:10px;">生产环境不存在项目「${esc(d.project_code)}」，需先在生产创建同编码项目才能发布。</div>`;
+    }
+    document.getElementById('relDetail').innerHTML = head + renderRelDiff(d);
+
+    let footer = '<button class="btn btn-secondary" onclick="closeRelModal()">关闭</button>';
+    if (d.can_review) {
+        footer = `<input class="form-input" id="relComment" placeholder="审核意见（可选）" style="flex:1;margin-right:8px;">
+                  <button class="btn btn-danger" onclick="reviewRelease('reject')">驳回</button>
+                  <button class="btn ${d.action === 'delete' ? 'btn-danger' : 'btn-primary'}" onclick="reviewRelease('approve')">${d.action === 'delete' ? '同意删除' : '通过并发布上线'}</button>`;
+    } else if (d.can_cancel) {
+        footer = `<button class="btn btn-secondary" onclick="closeRelModal()">关闭</button>
+                  <button class="btn btn-danger" onclick="cancelRelease(${d.id})">撤回发布单</button>`;
+    }
+    document.getElementById('relFooter').innerHTML = footer;
+    document.getElementById('relModal').style.display = 'flex';
+}
+
+function closeRelModal() {
+    document.getElementById('relModal').style.display = 'none';
+    current = null;
+}
+
+async function reviewRelease(decision) {
+    if (!current) return;
+    const comment = (document.getElementById('relComment') || {}).value || '';
+    const isDel = current.action === 'delete';
+    const ok = decision === 'approve'
+        ? (isDel
+            ? await confirmAsync('同意删除', `确认删除「${current.api_name}」？生产和预发中的该 API 会一起删除，不可恢复。`, { okText: '删除' })
+            : await confirmAsync('发布到生产', `确认将「${current.api_name}」写入生产并上线？上线后立即对外生效。`, { okText: '发布上线', danger: false }))
+        : await confirmAsync('驳回发布单', '确认驳回？生产环境不会有任何改动。', { okText: '驳回' });
+    if (!ok) return;
+    const body = { comment };
+    if (decision === 'approve') body.expected_prod_version = current.prod_version;
+    const r = await API.post(`/api/releases/${current.id}/${decision}`, body);
+    if (r && r.status) { Toast.success(r.msg || '已处理'); closeRelModal(); loadReleases(); }
+    else Toast.error((r && r.msg) || '处理失败');
+}
+
+async function cancelRelease(id) {
+    if (!await confirmAsync('撤回发布单', '确认撤回该发布单？')) return;
+    const r = await API.post(`/api/releases/${id}/cancel`, {});
+    if (r && r.status) { Toast.success(r.msg || '已撤回'); closeRelModal(); loadReleases(); }
+    else Toast.error((r && r.msg) || '撤回失败');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const q = new URLSearchParams(location.search);
+    const id = parseInt(q.get('id') || '', 10);
+    if (q.get('tab') === 'release') {
+        switchTab('release');
+        if (id) openRelease(id);
+    } else {
+        reload();
+    }
+});
 </script>
 {% endblock %}

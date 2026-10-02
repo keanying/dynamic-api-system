@@ -383,6 +383,9 @@
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             结构预览
         </button>
+        {% if api_id and app_env %}
+        <button type="button" class="btn btn-ghost btn-sm" onclick="compareWithOtherEnv(PROJECT_ID, API_ID)">{% if app_env.is_pre %}对比生产{% else %}对比预发{% endif %}</button>
+        {% endif %}
         <button type="button" class="btn btn-ghost btn-sm" onclick="openTutorial()">使用教程</button>
     </div>
 

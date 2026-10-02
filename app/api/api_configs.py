@@ -519,6 +519,12 @@ async def delete_api(
             msg=f"当前状态「{label}」不可删除。已上线 API 请先下线后再删除。",
         )
 
+    # 跨环境 (v2.23)：已发布到生产的 API，预发不能单独删除，须提交删除审核
+    from app.services.release import pre_delete_blocked
+    blocked = await pre_delete_blocked(db, api)
+    if blocked:
+        return R_fail(ErrCode.API_DELETE_FAILED, msg=blocked, data={"in_prod": True})
+
     # 责任人制 (v2.10)：责任人本人/管理员可直接删；其他人发起申请由责任人或管理员审批
     from app.services.owner_approval import can_act_directly, create_request
     if not await can_act_directly(db, _user, api):

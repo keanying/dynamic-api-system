@@ -278,6 +278,32 @@ async function loadApis(page) {
 
     const totalPages = Math.ceil(total / page_size);
     renderPagination('apiPagination', apiPage, totalPages, 'loadApis');
+    decorateEnv();
+}
+
+// 跨环境 (v2.23)：预发卡片标出「已在生产」及版本，并可对比生产；生产卡片可对比预发
+window.__prodPresence = {};
+async function decorateEnv() {
+    const env = AppEnv.info();
+    if (!env.env) return;
+    if (env.is_pre) {
+        const r = await API.get(`/api/releases/prod-presence?project_id=${PROJECT_ID}&_t=${Date.now()}`);
+        window.__prodPresence = (r && r.data) || {};
+    }
+    document.querySelectorAll('#apiList .api-card').forEach(card => {
+        const id = card.dataset.apiId;
+        const actions = card.querySelector('.api-actions');
+        if (!actions || actions.querySelector('[data-action="compare"]')) return;
+        if (env.is_pre) {
+            const p = window.__prodPresence[id];
+            if (!p) return;
+            const tags = card.querySelector('.api-tags');
+            if (tags) tags.insertAdjacentHTML('afterbegin', `<span class="badge badge-prod" title="生产环境已有该 API">生产 v${p.version}</span>`);
+            actions.insertAdjacentHTML('afterbegin', '<button class="btn btn-ghost btn-sm" data-action="compare" title="与生产当前配置对比">对比生产</button>');
+        } else {
+            actions.insertAdjacentHTML('afterbegin', '<button class="btn btn-ghost btn-sm" data-action="compare" title="与预发当前配置对比">对比预发</button>');
+        }
+    });
 }
 
 // 事件委托：所有 api-card 的按钮统一处理（避免 inline onclick 中嵌入 JSON 的 quote 坑）
@@ -320,6 +346,8 @@ async function loadApis(page) {
             clearApiCache(apiId, apiName);
         } else if (action === 'release') {
             releaseToProd(apiId, apiName);
+        } else if (action === 'compare') {
+            compareWithOtherEnv(PROJECT_ID, apiId);
         }
     });
     container.addEventListener('change', async (e) => {
@@ -535,7 +563,8 @@ async function copyApi(apiId) {
     }
 }
 
-function deleteApi(apiId, name) {
+async function deleteApi(apiId, name) {
+    if (AppEnv.info().is_pre && window.__prodPresence[apiId]) { askDeleteReview(apiId, name); return; }
     showConfirm('删除 API', `确定要删除 API "${name}" 吗？此操作不可恢复。`, async () => {
         const result = await API.del(`/api/projects/${PROJECT_ID}/apis/${apiId}`);
         if (result && result.status === true) {
@@ -546,10 +575,28 @@ function deleteApi(apiId, name) {
                 Toast.success(result.msg || 'API 已删除');
             }
             loadApis();
+        } else if (result && result.data && result.data.in_prod) {
+            askDeleteReview(apiId, name);
         } else {
             Toast.error(result?.msg || '删除失败');
         }
     });
+}
+
+async function askDeleteReview(apiId, name) {
+    const remark = await promptAsync('删除需要审核',
+        `「${name}」已发布到生产，预发不能单独删除。\n提交删除审核后，生产管理员同意即同时删除生产和预发中的该 API。`,
+        { multiline: true, placeholder: '删除原因（会展示给生产审核人）', okText: '提交删除审核', required: true });
+    if (remark === null) return;
+    const r = await API.post('/api/releases/delete', { project_id: PROJECT_ID, api_id: apiId, remark });
+    if (r && r.status) {
+        Toast.success(r.msg || '已提交删除审核');
+        if (AppEnv.urlOf('prod') && await confirmAsync('已提交删除审核', '需要生产管理员在「审批中心 · 发布到生产」里同意。现在打开生产环境查看吗？', { okText: '打开', danger: false })) {
+            SSO.go(`/admin/approvals?tab=release&id=${r.data.id}`, window.open('about:blank', '_blank'));
+        }
+    } else {
+        Toast.error((r && r.msg) || '提交失败');
+    }
 }
 
 // ============ API 生命周期：提交上线 / 撤回 / 下线 ============
@@ -610,19 +657,44 @@ function publishApi(apiId, apiName) {
 }
 
 async function releaseToProd(apiId, apiName) {
-    const remark = await promptAsync('发布到生产', `发布「${apiName}」到生产环境，发布说明会展示给生产审核人。`,
-        { multiline: true, placeholder: '本次发布改了什么（可选）', okText: '提交发布单' });
-    if (remark === null) return;
-    const r = await API.post('/api/releases', { project_id: PROJECT_ID, api_id: apiId, remark });
-    if (r && r.status) {
+    const c = await API.get(`/api/releases/compare?project_id=${PROJECT_ID}&api_id=${apiId}&_t=${Date.now()}`);
+    if (!c || !c.status) { Toast.error((c && c.msg) || '读取生产配置失败'); return; }
+    const d = c.data;
+    const same = d.diff && !d.diff.is_new && !d.diff.changed_count;
+    let diffHtml = !d.other_project_exists
+        ? `<div class="note">生产环境没有项目「${escapeHtml(d.project_code)}」，需先在生产创建同编码项目，否则审核时会失败。</div>`
+        : ReleaseDiff.render(d.diff, { beforeLabel: '生产当前', afterLabel: '本次发布', newText: '生产环境还没有该 API，审核通过后新建' });
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay';
+    ov.style.display = 'flex';
+    ov.innerHTML = `<div class="modal" style="max-width:960px;width:94vw;">
+        <div class="modal-header"><h3>发布到生产 · ${escapeHtml(apiName)}</h3><button class="btn-icon" data-x>&times;</button></div>
+        <div class="modal-body" style="max-height:66vh;overflow:auto;">
+            <div class="diff-head">${methodBadge(d.method)} <code>${escapeHtml(d.url_path)}</code>
+                ${d.other_version ? `<span class="badge badge-prod">生产 v${d.other_version}</span>` : ''}</div>
+            ${diffHtml}
+            ${same ? '<div class="note" style="margin-top:10px;">与生产完全一致，一般不需要再发布。</div>' : ''}
+            <div class="form-group" style="margin-top:16px;">
+                <label class="form-label">发布说明（会展示给生产审核人）</label>
+                <textarea class="form-textarea" rows="3" id="__relRemark" placeholder="本次发布改了什么（可选）"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" data-x>取消</button>
+            <button class="btn btn-primary" data-ok>提交发布单</button>
+        </div></div>`;
+    ov.querySelectorAll('[data-x]').forEach(b => b.onclick = () => ov.remove());
+    ov.querySelector('[data-ok]').onclick = async () => {
+        const remark = ov.querySelector('#__relRemark').value;
+        const r = await API.post('/api/releases', { project_id: PROJECT_ID, api_id: apiId, remark });
+        if (!r || !r.status) { Toast.error((r && r.msg) || '提交失败'); return; }
+        ov.remove();
         Toast.success(r.msg || '发布单已提交');
-        const prodUrl = AppEnv.urlOf('prod');
-        if (prodUrl && await confirmAsync('发布单已提交', '需要到生产环境由管理员核对差异后审核。现在打开生产环境的发布审核页吗？', { okText: '打开', danger: false })) {
-            window.open(`${prodUrl}/admin/releases?id=${r.data.id}`, '_blank');
+        if (AppEnv.urlOf('prod') && await confirmAsync('发布单已提交', '需要生产管理员核对差异后审核。现在打开生产环境的审批中心吗？', { okText: '打开', danger: false })) {
+            SSO.go(`/admin/approvals?tab=release&id=${r.data.id}`, window.open('about:blank', '_blank'));
         }
-    } else {
-        Toast.error((r && r.msg) || '提交失败');
-    }
+    };
+    document.body.appendChild(ov);
 }
 
 function withdrawApi(apiId) {
