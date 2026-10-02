@@ -1868,18 +1868,18 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
 .page-content-inner > .pagination { margin-top: auto; }
 
 /* ---------- 交互按钮：圆点扩散 + 文字滑动（参考 InteractiveHoverButton） ---------- */
-.btn.ihb { position: relative; overflow: hidden; isolation: isolate; }
-.btn.ihb:not(.ihb-icon) { padding-left: 34px; }
+.ihb { position: relative; overflow: hidden; isolation: isolate; }
+.ihb:not(.ihb-icon) { padding-left: 34px; }
 .ihb-dot { position: absolute; left: 16px; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%;
            z-index: 0; transform: scale(1); transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1); pointer-events: none; }
-.btn.ihb-icon .ihb-dot { left: 26px; transform: scale(0); }
+.ihb-icon .ihb-dot { left: 26px; transform: scale(0); }
 .ihb-label { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px;
              transition: transform 0.3s ease, opacity 0.3s ease; }
 .ihb-hover { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 6px;
              transform: translateX(48px); opacity: 0; transition: transform 0.3s ease, opacity 0.3s ease; pointer-events: none; white-space: nowrap; }
-.btn.ihb:hover:not(:disabled) .ihb-dot { transform: scale(60); }
-.btn.ihb:hover:not(:disabled) .ihb-label { transform: translateX(48px); opacity: 0; }
-.btn.ihb:hover:not(:disabled) .ihb-hover { transform: translateX(0); opacity: 1; }
+.ihb:hover:not(:disabled) .ihb-dot { transform: scale(60); }
+.ihb:hover:not(:disabled) .ihb-label { transform: translateX(48px); opacity: 0; }
+.ihb:hover:not(:disabled) .ihb-hover { transform: translateX(0); opacity: 1; }
 /* 各类按钮的圆点 / 悬停文字颜色 */
 .btn-secondary.ihb .ihb-dot { background: var(--ui-ink); }
 .btn-secondary.ihb .ihb-hover { color: #fff; }
@@ -1890,8 +1890,20 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
 .btn-danger.ihb .ihb-dot { background: #7f1d1d; }
 .btn-danger.ihb .ihb-hover { color: #fff; }
 /* 圆点铺满后按钮本身不再变色，避免和动画叠加 */
-.btn.ihb:hover:not(:disabled) { transform: none; }
-.btn.ihb:disabled .ihb-dot { opacity: 0.6; }
+.ihb:hover:not(:disabled) { transform: none; }
+/* 小号按钮（表格、卡片里的）：圆点和留白都小一号 (v2.24) */
+.ihb.ihb-sm:not(.ihb-icon) { padding-left: 24px; }
+.ihb-sm .ihb-dot { left: 11px; width: 6px; height: 6px; margin-top: -3px; }
+.ihb-sm.ihb-icon .ihb-dot { left: 18px; }
+.ihb-sm:hover:not(:disabled) .ihb-dot { transform: scale(80); }
+.ihb-sm .ihb-label, .ihb-sm .ihb-hover { gap: 4px; }
+.ihb-sm .ihb-hover svg { width: 12px; height: 12px; }
+.btn-ghost.ihb .ihb-dot, .btn-action.ihb .ihb-dot { background: var(--ui-ink); }
+.btn-ghost.ihb .ihb-hover, .btn-action.ihb .ihb-hover { color: #fff; }
+.ihb.ihb-danger .ihb-dot { background: #dc2626; }
+.ihb.ihb-danger .ihb-hover { color: #fff; }
+.btn-action.ihb { position: relative; overflow: hidden; isolation: isolate; }
+.ihb:disabled .ihb-dot { opacity: 0.6; }
 @media (prefers-reduced-motion: reduce) {
     .ihb-dot, .ihb-label, .ihb-hover { transition: none; }
 }
@@ -2079,3 +2091,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
 .brand-tile { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 11px; }
 .brand-tile::before { top: 5px; right: 5px; width: 5px; height: 5px; }
 .brand-tile .logo-mark { width: 21px; height: 14px; }
+/* 项目卡片底栏：按钮加了圆点后放不下时换行，按钮靠右 */
+.pc-foot { flex-wrap: wrap; row-gap: 8px; }
+.pc-foot .card-actions { margin-left: auto; gap: 4px; }
+.pc-foot .ihb.ihb-sm:not(.ihb-icon) { padding: 5px 10px 5px 21px; }
+.pc-foot .ihb-sm .ihb-dot { left: 9px; }
