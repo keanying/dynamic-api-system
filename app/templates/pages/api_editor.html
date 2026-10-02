@@ -312,8 +312,8 @@
             <div class="idbar-field">
                 <label>类型</label>
                 <select class="form-select" id="apiType" onchange="onApiTypeChange()">
-                    <option value="sql">数据 API</option>
-                    <option value="federated">多源 SQL API（跨数据源关联）</option>
+                    <option value="sql">SQL 查询</option>
+                    <option value="federated" hidden>SQL 查询</option>
                     <option value="html">静态页面 API</option>
                     <option value="plugin">Python API</option>
                     <option value="sync" id="apiTypeSyncOption">数据同步 API（仅超管）</option>
@@ -357,7 +357,7 @@
                     转交
                 </button>
             </div>
-            <span class="text-sm text-muted" id="apiTypeHint">通过 SQL/管线 把数据库查询发布为 RESTful API</span>
+            <span class="text-sm text-muted" id="apiTypeHint">写一条 SQL 即发布为接口，可用「选表生成 SQL」自动生成</span>
             <label class="idbar-enable">
                 <label class="switch"><input type="checkbox" id="apiEnabled" checked><span class="slider"></span></label>
                 启用
@@ -520,40 +520,39 @@
     <!-- ============ 页3: 执行逻辑(主工作区,原逻辑定义) ============ -->
     <div class="editor-pane" id="pane-logic">
 
-    <!-- 数据源选择 -->
-    <div class="card mb-16" data-mode="sql sync" id="datasourceCard">
+    <!-- 数据源选择：SQL 查询分「单个数据源 / 多个数据源」两种（后者即多源 SQL，v2.23 合并入口） -->
+    <div class="card mb-16" data-mode="sql federated sync" id="datasourceCard">
         <div class="card-header">
             <h3>数据源</h3>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="loadDatasources()">刷新</button>
+            <div style="display:flex; gap:8px; align-items:center; margin-left:auto;">
+                <div class="seg" data-mode="sql federated">
+                    <button type="button" class="btn btn-sm" id="dsModeSingle" onclick="setSqlSourceMode('sql')">单个数据源</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="dsModeMulti" onclick="setSqlSourceMode('federated')">多个数据源</button>
+                </div>
+            </div>
         </div>
         <div class="card-body">
-            <div class="form-group">
-                <label class="form-label">选择数据源</label>
-                <select class="form-select" id="apiDatasource">
-                    <option value="">-- 请选择数据源 --</option>
-                </select>
+            <div class="form-group" data-mode="sql sync" style="margin-bottom:0;">
+                <div style="display:flex; gap:8px;">
+                    <select class="form-select" id="apiDatasource" style="flex:1;">
+                        <option value="">-- 请选择数据源 --</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary" onclick="loadDatasources()">刷新</button>
+                </div>
                 <div class="form-hint"><a href="/admin/datasources" target="_blank">管理数据源</a></div>
             </div>
-        </div>
-    </div>
-
-    <!-- 多源 SQL（仅 api_type == federated 显示，v2.22） -->
-    <div class="card mb-16" id="federatedCard" data-mode="federated" style="display:none;">
-        <div class="card-header">
-            <h3>多源 SQL</h3>
-            <div style="display:flex; gap:8px; align-items:center; margin-left:auto;">
-                <button type="button" class="btn btn-ghost btn-sm" onclick="loadCatalogs()">刷新</button>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="explainFederated()">执行计划</button>
-            </div>
-        </div>
-        <div class="card-body">
-            <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                <div style="flex:1 1 260px; min-width:240px; max-height:320px; overflow:auto; border:1px solid #e4e4e7; border-radius:6px; padding:8px; font-size:12.5px;" id="catalogTree">
+            <div data-mode="federated" id="federatedCard">
+                <div class="fed-browser" id="catalogTree">
                     <div class="text-muted">加载中...</div>
                 </div>
-                <div style="flex:2 1 360px; min-width:280px;">
-                    <pre id="federatedPlan" style="display:none; max-height:320px; overflow:auto; background:#1c1c1e; color:#e4e4e7; padding:10px; border-radius:6px; font-size:12px; white-space:pre-wrap;"></pre>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                    <span class="text-sm text-muted">SQL 里用 <code class="code-chip">数据源.库.表</code> 引用不同数据源的表</span>
+                    <div style="display:flex; gap:8px;">
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="loadCatalogs()">刷新</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="explainFederated()">执行计划</button>
+                    </div>
                 </div>
+                <pre id="federatedPlan" style="display:none; margin-top:10px; max-height:320px; overflow:auto; background:#1c1c1e; color:#e4e4e7; padding:12px 14px; border-radius:14px; font-size:12px; white-space:pre-wrap;"></pre>
             </div>
         </div>
     </div>
@@ -563,7 +562,11 @@
         <div class="card-header">
             <h3>SQL 模板</h3>
             <div style="display:flex; gap:8px; align-items:center; margin-left:auto;">
-                <span class="text-sm text-muted" id="sqlModeHint">单数据源查询</span>
+                <span class="text-sm text-muted" id="sqlModeHint" style="display:none;">单数据源查询</span>
+                <button type="button" class="btn btn-lime btn-sm" onclick="openQueryWizard()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px;"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7M14 17.5h7"/></svg>
+                    选表生成 SQL
+                </button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="openStructurePreview('sql')">渲染预览</button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="openTutorial()">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px;"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -572,9 +575,6 @@
             </div>
         </div>
         <div class="card-body">
-            <div style="display:flex; justify-content:flex-end; gap:6px; margin-bottom:8px;">
-                <button type="button" class="btn btn-ghost btn-sm" style="color:#71717a;" onclick="previewRenderedSql()">预览渲染</button>
-            </div>
             <div id="sqlEditorMount"></div>
             <textarea id="apiSql" style="display:none;"></textarea>
             <div class="text-sm text-muted" style="margin-top:8px;">
@@ -1279,6 +1279,15 @@ function onApiTypeChange() {
     const modes = (el.getAttribute('data-mode') || '').split(/\s+/).filter(Boolean);
     el.style.display = modes.includes(type) ? '' : 'none';
   });
+  // SQL 查询：单个 / 多个数据源 分段按钮跟随类型
+  const _single = document.getElementById('dsModeSingle'), _multi = document.getElementById('dsModeMulti');
+  if (_single && _multi) {
+    _single.className = type === 'federated' ? 'btn btn-ghost btn-sm' : 'btn btn-sm';
+    _multi.className = type === 'federated' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+  }
+  // 多步骤管线已由「多个数据源」SQL 取代：只对已经配置了管线的老 API 显示
+  const _pc = document.getElementById('pipelineCard');
+  if (_pc && !window.__hasPipeline) _pc.style.display = 'none';
   // 插件模式下"从 SQL 解析"无意义，隐藏
   const parseBtn = document.getElementById('parseSqlParamsBtn');
   if (parseBtn) parseBtn.style.display = (type === 'sql' || type === 'federated') ? '' : 'none';
@@ -1301,7 +1310,7 @@ function onApiTypeChange() {
       ? '数据写入接口：按 tableName 把 data 写进数据源表（仅超管可建可调用）'
       : (type === 'federated')
       ? '一条 MySQL 语法的 SQL 关联多个数据源的表（数据源名.库名.表名）'
-      : '通过 SQL/管线 把数据库查询发布为 RESTful API';
+      : '写一条 SQL 即发布为接口，可用「选表生成 SQL」自动生成';
   }
   // HTML 类型 API 通常是公开页面，切到 HTML 时如果用户没显式开启过校验，自动建议关闭
   const reqKey = document.getElementById('requireApiKey');
@@ -1604,6 +1613,8 @@ async function loadApiData() {
     if (pipelineEditor) pipelineEditor.setValue(pipelineRaw);
     // 有管线配置则自动开启多步骤模式
     const hasPipeline = !!pipelineRaw.trim();
+    window.__hasPipeline = hasPipeline;
+    if (hasPipeline) onApiTypeChange();
     document.getElementById('pipelineEnabled').checked = hasPipeline;
     togglePipelineMode();
     // 把已有 JSON 解析进可视化编排器
@@ -3153,6 +3164,445 @@ async function explainFederated() {
     } catch (e) {
         out.textContent = '无法生成执行计划：' + (e.message || e);
     }
+}
+
+// ========== 选表生成 SQL（查询向导，v2.23） ==========
+// 点选 数据源 → 库 → 表 → 字段，可关联多张表（可跨数据源）、加筛选条件、分组汇总、排序，
+// 自动生成 SQL 和参数定义。跨数据源时自动切到「多个数据源」模式。
+const WZ_OPS = [
+    ['eq', '等于'], ['ne', '不等于'], ['gt', '大于'], ['ge', '大于等于'], ['lt', '小于'], ['le', '小于等于'],
+    ['like', '包含'], ['prefix', '开头是'], ['in', '在列表中'], ['between', '介于'],
+];
+const WZ_AGGS = [['group', '分组'], ['count', '计数'], ['distinct', '去重计数'], ['sum', '求和'], ['avg', '平均'], ['max', '最大'], ['min', '最小']];
+const _wzCache = {};
+let WZ = null;
+
+function _wzNew() {
+    return { cats: [], tables: [], filters: [], groupOn: false, order: { ref: '', dir: 'DESC' }, limit: '' };
+}
+function _wzIsNum(type) { return /int|decimal|numeric|float|double|real|bit/i.test(type || ''); }
+function _wzEsc(v) { return escapeHtml(v == null ? '' : String(v)); }
+
+async function _wzGet(key, url) {
+    if (_wzCache[key]) return _wzCache[key];
+    const res = await API.get(url);
+    if (!res || res.status === false) throw new Error((res && res.msg) || '加载失败');
+    return (_wzCache[key] = res.data || []);
+}
+
+async function openQueryWizard() {
+    if (!WZ) WZ = _wzNew();
+    let ov = document.getElementById('__wizard');
+    if (!ov) {
+        ov = document.createElement('div');
+        ov.id = '__wizard';
+        ov.className = 'modal-overlay';
+        ov.innerHTML = `
+        <div class="modal wz-modal">
+            <div class="modal-header">
+                <h3>选表生成 SQL</h3>
+                <button type="button" class="btn-icon" onclick="closeQueryWizard()">&times;</button>
+            </div>
+            <div class="modal-body" id="wzBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="WZ = _wzNew(); _wzStart()">重新开始</button>
+                <span style="flex:1"></span>
+                <button type="button" class="btn btn-secondary" onclick="closeQueryWizard()">取消</button>
+                <button type="button" class="btn btn-primary" onclick="applyQueryWizard()">生成 SQL</button>
+            </div>
+        </div>`;
+        document.body.appendChild(ov);
+    }
+    ov.style.display = 'flex';
+    await _wzStart();
+}
+function closeQueryWizard() { const ov = document.getElementById('__wizard'); if (ov) ov.style.display = 'none'; }
+
+async function _wzStart() {
+    const body = document.getElementById('wzBody');
+    if (!WZ.cats.length) {
+        body.innerHTML = '<div class="empty-block">加载数据源...</div>';
+        try {
+            WZ.cats = await _wzGet('cats', `/api/sql/federated/catalogs?project_id=${PROJECT_ID}`);
+        } catch (e) {
+            body.innerHTML = `<div class="empty-block">${_wzEsc(e.message || e)}</div>`; return;
+        }
+        if (!WZ.cats.length) {
+            body.innerHTML = '<div class="empty-block">本项目还没有可用的 MySQL 协议数据源，请先到「数据源」添加并开放给本项目</div>'; return;
+        }
+    }
+    if (!WZ.tables.length) {
+        // 默认从当前选中的数据源开始
+        const dsId = String(document.getElementById('apiDatasource')?.value || '');
+        const cur = WZ.cats.find(c => String(c.id) === dsId) || WZ.cats[0];
+        await wzAddTable(cur.name);
+        return;
+    }
+    _wzRender();
+}
+
+async function wzAddTable(catName) {
+    const cat = catName || (WZ.tables.length ? WZ.tables[WZ.tables.length - 1].cat : WZ.cats[0].name);
+    WZ.tables.push({ cat, db: '', table: '', cols: [], picked: [], agg: {}, join: { type: 'inner', left: '', right: '' } });
+    await wzSetCat(WZ.tables.length - 1, cat);
+}
+function wzRemoveTable(i) {
+    const alias = 't' + (i + 1);
+    WZ.tables.splice(i, 1);
+    // 引用了被删表或其后表的筛选/排序/关联都清掉（别名会顺移）
+    WZ.filters = WZ.filters.filter(f => +f.ref.split('.')[0].slice(1) - 1 < i);
+    if (WZ.order.ref && +WZ.order.ref.split('.')[0].slice(1) - 1 >= i) WZ.order.ref = '';
+    WZ.tables.forEach((t, k) => { if (k >= i && t.join.left && +t.join.left.split('.')[0].slice(1) - 1 >= i) t.join.left = ''; });
+    _wzRender();
+}
+
+async function wzSetCat(i, cat) {
+    const t = WZ.tables[i];
+    Object.assign(t, { cat, db: '', table: '', cols: [], picked: [], agg: {} });
+    _wzRender();
+    try {
+        const dbs = await _wzGet(`db|${cat}`, `/api/sql/federated/databases?project_id=${PROJECT_ID}&catalog=${encodeURIComponent(cat)}`);
+        const def = (WZ.cats.find(c => c.name === cat) || {}).database;
+        await wzSetDb(i, dbs.includes(def) ? def : (dbs[0] || ''));
+    } catch (e) { Toast.error(e.message || String(e)); }
+}
+
+async function wzSetDb(i, db) {
+    const t = WZ.tables[i];
+    Object.assign(t, { db, table: '', cols: [], picked: [], agg: {} });
+    _wzRender();
+    if (!db) return;
+    try { await _wzGet(`tb|${t.cat}|${db}`, `/api/sql/federated/tables?project_id=${PROJECT_ID}&catalog=${encodeURIComponent(t.cat)}&database=${encodeURIComponent(db)}`); }
+    catch (e) { Toast.error(e.message || String(e)); }
+    _wzRender();
+}
+
+async function wzSetTable(i, table) {
+    const t = WZ.tables[i];
+    Object.assign(t, { table, cols: [], picked: [], agg: {} });
+    if (!table) { _wzRender(); return; }
+    try {
+        t.cols = await _wzGet(`col|${t.cat}|${t.db}|${table}`,
+            `/api/sql/federated/columns?project_id=${PROJECT_ID}&catalog=${encodeURIComponent(t.cat)}&database=${encodeURIComponent(t.db)}&table=${encodeURIComponent(table)}`);
+    } catch (e) { Toast.error(e.message || String(e)); }
+    t.picked = t.cols.map(c => c.name);
+    if (i > 0) _wzGuessJoin(i);
+    _wzRender();
+}
+
+// 自动猜关联字段：同名字段（id 除外）优先，其次 前表.xxx_id = 本表.id / 前表.id = 本表.xxx_id
+function _wzGuessJoin(i) {
+    const t = WZ.tables[i];
+    const names = t.cols.map(c => c.name.toLowerCase());
+    for (let k = 0; k < i; k++) {
+        const p = WZ.tables[k], pn = p.cols.map(c => c.name);
+        const same = pn.find(n => n.toLowerCase() !== 'id' && names.includes(n.toLowerCase()));
+        if (same) { t.join.left = `t${k + 1}.${same}`; t.join.right = t.cols[names.indexOf(same.toLowerCase())].name; return; }
+        const single = t.table.toLowerCase().replace(/s$/, '');
+        const fk = pn.find(n => n.toLowerCase() === single + '_id');
+        if (fk && names.includes('id')) { t.join.left = `t${k + 1}.${fk}`; t.join.right = t.cols[names.indexOf('id')].name; return; }
+        const pSingle = p.table.toLowerCase().replace(/s$/, '');
+        const back = t.cols.find(c => c.name.toLowerCase() === pSingle + '_id');
+        if (back && pn.some(n => n.toLowerCase() === 'id')) { t.join.left = `t${k + 1}.${pn.find(n => n.toLowerCase() === 'id')}`; t.join.right = back.name; return; }
+    }
+    t.join.left = ''; t.join.right = '';
+}
+
+function wzToggleCol(i, col, on) {
+    const t = WZ.tables[i];
+    t.picked = on ? [...new Set([...t.picked, col])] : t.picked.filter(c => c !== col);
+    _wzRender();
+}
+function wzPickAll(i, on) { const t = WZ.tables[i]; t.picked = on ? t.cols.map(c => c.name) : []; _wzRender(); }
+
+function _wzAllCols() {
+    const out = [];
+    WZ.tables.forEach((t, i) => t.cols.forEach(c => out.push({ ref: `t${i + 1}.${c.name}`, label: (WZ.tables.length > 1 ? `t${i + 1}.` : '') + c.name, type: c.type, col: c.name })));
+    return out;
+}
+function _wzColType(ref) { const c = _wzAllCols().find(x => x.ref === ref); return c ? c.type : ''; }
+
+function wzAddFilter() {
+    const first = _wzAllCols()[0];
+    if (!first) { Toast.info('先选择一张表'); return; }
+    WZ.filters.push({ ref: first.ref, op: 'eq', src: 'param', param: first.col, value: '', required: false });
+    _wzRender();
+}
+function wzSetFilter(k, key, val) {
+    const f = WZ.filters[k];
+    if (key === 'ref') {
+        const auto = !f.param || f.param === f.ref.split('.').slice(1).join('.');
+        f.ref = val; if (auto) f.param = val.split('.').slice(1).join('.');
+    } else f[key] = val;
+    _wzRender();
+}
+
+function _wzRender() {
+    const body = document.getElementById('wzBody');
+    if (!body) return;
+    const multiTables = WZ.tables.length > 1;
+    const cols = _wzAllCols();
+    const colOpts = (sel, withEmpty) => (withEmpty ? `<option value="">${withEmpty}</option>` : '') +
+        cols.map(c => `<option value="${_wzEsc(c.ref)}" ${c.ref === sel ? 'selected' : ''}>${_wzEsc(c.label)}</option>`).join('');
+
+    const tablesHtml = WZ.tables.map((t, i) => {
+        const dbs = _wzCache[`db|${t.cat}`] || [];
+        const tbs = _wzCache[`tb|${t.cat}|${t.db}`] || [];
+        let joinHtml = '';
+        if (i > 0) {
+            const prev = cols.filter(c => +c.ref.split('.')[0].slice(1) - 1 < i);
+            joinHtml = `<div class="wz-join">
+                <span class="wz-label">关联</span>
+                <select class="form-select form-select-sm" onchange="WZ.tables[${i}].join.type=this.value; _wzRender()">
+                    <option value="inner" ${t.join.type === 'inner' ? 'selected' : ''}>两边都有的数据</option>
+                    <option value="left" ${t.join.type === 'left' ? 'selected' : ''}>保留前面表的全部数据</option>
+                </select>
+                <select class="form-select form-select-sm" onchange="WZ.tables[${i}].join.left=this.value; _wzRender()">
+                    <option value="">选择前面表的字段</option>
+                    ${prev.map(c => `<option value="${_wzEsc(c.ref)}" ${c.ref === t.join.left ? 'selected' : ''}>${_wzEsc(c.label)}</option>`).join('')}
+                </select>
+                <span class="wz-eq">=</span>
+                <select class="form-select form-select-sm" onchange="WZ.tables[${i}].join.right=this.value; _wzRender()">
+                    <option value="">选择本表字段</option>
+                    ${t.cols.map(c => `<option value="${_wzEsc(c.name)}" ${c.name === t.join.right ? 'selected' : ''}>t${i + 1}.${_wzEsc(c.name)}</option>`).join('')}
+                </select>
+            </div>`;
+        }
+        const colsHtml = t.cols.length ? `<div class="wz-cols">
+                ${t.cols.map(c => `<label class="wz-col ${t.picked.includes(c.name) ? 'on' : ''}" title="${_wzEsc(c.type)}">
+                    <input type="checkbox" ${t.picked.includes(c.name) ? 'checked' : ''} onchange="wzToggleCol(${i}, this.dataset.c, this.checked)" data-c="${_wzEsc(c.name)}">${_wzEsc(c.name)}</label>`).join('')}
+                <span class="wz-col-ops"><a href="javascript:void(0)" onclick="wzPickAll(${i}, true)">全选</a> · <a href="javascript:void(0)" onclick="wzPickAll(${i}, false)">清空</a></span>
+            </div>` : (t.table ? '<div class="text-muted text-sm">加载字段...</div>' : '');
+        return `<div class="wz-table">
+            <div class="wz-table-head">
+                <span class="wz-alias">${multiTables ? 't' + (i + 1) : '表'}</span>
+                <select class="form-select form-select-sm" onchange="wzSetCat(${i}, this.value)">
+                    ${WZ.cats.map(c => `<option value="${_wzEsc(c.name)}" ${c.name === t.cat ? 'selected' : ''}>${_wzEsc(c.name)}</option>`).join('')}
+                </select>
+                <select class="form-select form-select-sm" onchange="wzSetDb(${i}, this.value)">
+                    ${dbs.map(d => `<option value="${_wzEsc(d)}" ${d === t.db ? 'selected' : ''}>${_wzEsc(d)}</option>`).join('')}
+                </select>
+                <select class="form-select form-select-sm wz-tsel" onchange="wzSetTable(${i}, this.value)">
+                    <option value="">选择表</option>
+                    ${tbs.map(x => `<option value="${_wzEsc(x)}" ${x === t.table ? 'selected' : ''}>${_wzEsc(x)}</option>`).join('')}
+                </select>
+                <span style="flex:1"></span>
+                ${i > 0 ? `<button type="button" class="btn btn-ghost btn-sm" onclick="wzRemoveTable(${i})">移除</button>` : ''}
+            </div>
+            ${joinHtml}
+            ${colsHtml}
+        </div>`;
+    }).join('');
+
+    const filtersHtml = WZ.filters.map((f, k) => `<div class="wz-filter">
+        <select class="form-select form-select-sm" onchange="wzSetFilter(${k}, 'ref', this.value)">${colOpts(f.ref)}</select>
+        <select class="form-select form-select-sm" onchange="wzSetFilter(${k}, 'op', this.value)">
+            ${WZ_OPS.map(([v, l]) => `<option value="${v}" ${v === f.op ? 'selected' : ''}>${l}</option>`).join('')}
+        </select>
+        <div class="seg">
+            <button type="button" class="btn btn-sm ${f.src === 'param' ? '' : 'btn-ghost'}" onclick="wzSetFilter(${k}, 'src', 'param')">调用时传入</button>
+            <button type="button" class="btn btn-sm ${f.src === 'fixed' ? '' : 'btn-ghost'}" onclick="wzSetFilter(${k}, 'src', 'fixed')">固定值</button>
+        </div>
+        ${f.src === 'param'
+            ? `<input class="form-input wz-in" value="${_wzEsc(f.param)}" placeholder="参数名" onchange="wzSetFilter(${k}, 'param', this.value.trim())">
+               <label class="wz-check"><input type="checkbox" ${f.required ? 'checked' : ''} onchange="wzSetFilter(${k}, 'required', this.checked)">必填</label>`
+            : `<input class="form-input wz-in" value="${_wzEsc(f.value)}" placeholder="${f.op === 'in' ? '多个用逗号分隔' : f.op === 'between' ? '如 1,100' : '值'}" onchange="wzSetFilter(${k}, 'value', this.value)">`}
+        <span style="flex:1"></span>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="WZ.filters.splice(${k}, 1); _wzRender()">删除</button>
+    </div>`).join('');
+
+    const picked = [];
+    WZ.tables.forEach((t, i) => t.picked.forEach(c => picked.push({ i, c, ref: `t${i + 1}.${c}`, type: (t.cols.find(x => x.name === c) || {}).type })));
+    const aggHtml = WZ.groupOn ? `<div class="wz-aggs">${picked.map(p => {
+        const cur = WZ.tables[p.i].agg[p.c] || (_wzIsNum(p.type) && !/(^|_)id$/i.test(p.c) ? 'sum' : 'group');
+        WZ.tables[p.i].agg[p.c] = cur;
+        return `<div class="wz-agg"><span>${_wzEsc((multiTables ? `t${p.i + 1}.` : '') + p.c)}</span>
+            <select class="form-select form-select-sm" onchange="WZ.tables[${p.i}].agg[this.dataset.c]=this.value; _wzRender()" data-c="${_wzEsc(p.c)}">
+                ${WZ_AGGS.map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`).join('')}
+            </select></div>`;
+    }).join('') || '<span class="text-muted text-sm">先勾选字段</span>'}</div>` : '';
+
+    const out = _wzBuild();
+    const orderOpts = WZ.groupOn
+        ? out.outputs.map(o => `<option value="${_wzEsc(o.ref)}" ${o.ref === WZ.order.ref ? 'selected' : ''}>${_wzEsc(o.label)}</option>`).join('')
+        : cols.map(c => `<option value="${_wzEsc(c.ref)}" ${c.ref === WZ.order.ref ? 'selected' : ''}>${_wzEsc(c.label)}</option>`).join('');
+
+    body.innerHTML = `
+        <div class="wz-step"><span class="wz-no">1</span><b>选表和字段</b>${new Set(WZ.tables.map(t => t.cat)).size > 1 ? '<span class="badge badge-lime">跨数据源</span>' : ''}</div>
+        ${tablesHtml}
+        <button type="button" class="btn btn-secondary btn-sm" onclick="wzAddTable()">+ 关联另一张表</button>
+
+        <div class="wz-step"><span class="wz-no">2</span><b>筛选条件</b></div>
+        ${filtersHtml}
+        <button type="button" class="btn btn-secondary btn-sm" onclick="wzAddFilter()">+ 添加条件</button>
+
+        <div class="wz-step"><span class="wz-no">3</span><b>汇总与排序</b></div>
+        <div class="wz-row">
+            <label class="wz-check"><input type="checkbox" ${WZ.groupOn ? 'checked' : ''} onchange="WZ.groupOn=this.checked; WZ.order.ref=''; _wzRender()">分组汇总</label>
+        </div>
+        ${aggHtml}
+        <div class="wz-row">
+            <span class="wz-label">排序</span>
+            <select class="form-select form-select-sm" onchange="WZ.order.ref=this.value; _wzRender()"><option value="">不排序</option>${orderOpts}</select>
+            <select class="form-select form-select-sm" onchange="WZ.order.dir=this.value; _wzRender()">
+                <option value="DESC" ${WZ.order.dir === 'DESC' ? 'selected' : ''}>从大到小</option>
+                <option value="ASC" ${WZ.order.dir === 'ASC' ? 'selected' : ''}>从小到大</option>
+            </select>
+            <span class="wz-label" style="margin-left:12px;">最多返回</span>
+            <input class="form-input wz-in" type="number" min="1" value="${_wzEsc(WZ.limit)}" placeholder="不限" onchange="WZ.limit=this.value; _wzRender()" style="width:100px;">
+            <span class="wz-label">行</span>
+        </div>
+
+        <div class="wz-step"><span class="wz-no">4</span><b>生成结果</b>${out.error ? `<span class="badge badge-warning">${_wzEsc(out.error)}</span>` : ''}</div>
+        <pre class="wz-sql">${_wzEsc(out.sql || '-- 先选择表')}</pre>
+        ${out.params.length ? `<div class="wz-params">参数：${out.params.map(p => `<span class="code-chip">${_wzEsc(p.name)}${p.required ? ' *' : ''}</span>`).join(' ')}</div>` : ''}
+    `;
+}
+
+function _wzIdent(n) { return /^[A-Za-z_][A-Za-z0-9_]*$/.test(n) ? n : '`' + String(n).replace(/`/g, '``') + '`'; }
+function _wzLit(v) {
+    v = String(v).trim();
+    return /^-?\d+(\.\d+)?$/.test(v) ? v : `'${v.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`;
+}
+
+// 生成 SQL：返回 { sql, params, outputs, multi, error }
+function _wzBuild() {
+    const res = { sql: '', params: [], outputs: [], multi: false, error: '' };
+    const tables = WZ.tables.filter(t => t.table);
+    if (!tables.length || tables.length !== WZ.tables.length) { if (WZ.tables.length) res.error = '还有表没选'; return res; }
+    const many = WZ.tables.length > 1;
+    res.multi = new Set(WZ.tables.map(t => t.cat)).size > 1;
+    const tref = t => (res.multi ? `${_wzIdent(t.cat)}.` : '') + `${_wzIdent(t.db)}.${_wzIdent(t.table)}`;
+    const cref = ref => { const [a, ...rest] = ref.split('.'); const c = rest.join('.'); return many ? `${a}.${_wzIdent(c)}` : _wzIdent(c); };
+
+    // SELECT
+    const all = [];
+    WZ.tables.forEach((t, i) => t.picked.forEach(c => all.push({ ref: `t${i + 1}.${c}`, c, agg: WZ.groupOn ? (t.agg[c] || 'group') : 'group' })));
+    const nameCount = {};
+    all.forEach(p => { nameCount[p.c.toLowerCase()] = (nameCount[p.c.toLowerCase()] || 0) + 1; });
+    const sel = [], groups = [];
+    const AGG_SQL = { count: e => `COUNT(${e})`, distinct: e => `COUNT(DISTINCT ${e})`, sum: e => `SUM(${e})`, avg: e => `AVG(${e})`, max: e => `MAX(${e})`, min: e => `MIN(${e})` };
+    all.forEach(p => {
+        const e = cref(p.ref);
+        const base = nameCount[p.c.toLowerCase()] > 1 ? `${p.ref.split('.')[0]}_${p.c}` : p.c;
+        if (p.agg === 'group') {
+            groups.push(e);
+            const alias = base !== p.c ? base : '';
+            sel.push(alias ? `${e} AS ${_wzIdent(alias)}` : e);
+            res.outputs.push({ ref: p.ref, expr: e, label: base, out: alias || p.c });
+        } else {
+            const alias = `${base}_${p.agg}`;
+            sel.push(`${AGG_SQL[p.agg](e)} AS ${_wzIdent(alias)}`);
+            res.outputs.push({ ref: 'agg:' + alias, expr: alias, label: `${base}（${(WZ_AGGS.find(a => a[0] === p.agg) || [])[1]}）`, out: alias });
+        }
+    });
+    if (!sel.length) {
+        if (many) { res.error = '至少勾选一个字段'; return res; }
+        sel.push('*');
+    }
+    let sql = `SELECT ${sel.join(',\n       ')}\n  FROM ${tref(WZ.tables[0])}${many ? ' t1' : ''}`;
+    for (let i = 1; i < WZ.tables.length; i++) {
+        const t = WZ.tables[i];
+        if (!t.join.left || !t.join.right) { res.error = `t${i + 1} 还没选关联字段`; }
+        sql += `\n  ${t.join.type === 'left' ? 'LEFT JOIN' : 'JOIN'} ${tref(t)} t${i + 1}` +
+            (t.join.left && t.join.right ? ` ON t${i + 1}.${_wzIdent(t.join.right)} = ${cref(t.join.left)}` : ' ON 1 = 1');
+    }
+
+    // WHERE
+    const conds = [];
+    const addParam = (name, type, required, desc) => {
+        if (!res.params.some(p => p.name === name)) res.params.push({ name, param_type: type, required, description: desc });
+    };
+    WZ.filters.forEach(f => {
+        const e = cref(f.ref);
+        const colType = _wzColType(f.ref);
+        const pType = _wzIsNum(colType) ? 'number' : 'string';
+        const OPS = { eq: '=', ne: '<>', gt: '>', ge: '>=', lt: '<', le: '<=' };
+        if (f.src === 'fixed') {
+            const v = String(f.value || '').trim();
+            if (!v) { res.error = '有条件没填值'; return; }
+            const parts = v.split(/[,，]/).map(x => x.trim()).filter(Boolean);
+            let c;
+            if (OPS[f.op]) c = `${e} ${OPS[f.op]} ${_wzLit(v)}`;
+            else if (f.op === 'like') c = `${e} LIKE ${_wzLit('%' + v + '%')}`;
+            else if (f.op === 'prefix') c = `${e} LIKE ${_wzLit(v + '%')}`;
+            else if (f.op === 'in') c = `${e} IN (${parts.map(_wzLit).join(', ')})`;
+            else if (f.op === 'between') {
+                if (parts.length !== 2) { res.error = '「介于」要填两个值，用逗号分隔'; return; }
+                c = `${e} BETWEEN ${_wzLit(parts[0])} AND ${_wzLit(parts[1])}`;
+            }
+            conds.push({ c });
+            return;
+        }
+        const p = (f.param || '').trim();
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(p)) { res.error = `参数名「${p}」只能用字母、数字、下划线`; return; }
+        let c, guard = p;
+        if (OPS[f.op]) { c = `${e} ${OPS[f.op]} :${p}`; addParam(p, pType, f.required, f.ref.split('.').slice(1).join('.')); }
+        else if (f.op === 'like') { c = `${e} LIKE :${p}|like`; addParam(p, 'string', f.required, '模糊匹配'); }
+        else if (f.op === 'prefix') { c = `${e} LIKE :${p}|like_right`; addParam(p, 'string', f.required, '前缀匹配'); }
+        else if (f.op === 'in') { c = `${e} IN (:${p})`; addParam(p, 'array', f.required, '多个值'); }
+        else if (f.op === 'between') {
+            c = `${e} BETWEEN :${p}_start AND :${p}_end`; guard = `${p}_start`;
+            addParam(`${p}_start`, pType, f.required, '起始值'); addParam(`${p}_end`, pType, f.required, '结束值');
+        }
+        conds.push(f.required ? { c } : { c, guard });
+    });
+    if (conds.length) {
+        const req = conds.filter(x => !x.guard), opt = conds.filter(x => x.guard);
+        sql += `\n WHERE ${req.length ? req.map(x => x.c).join('\n   AND ') : '1 = 1'}`;
+        opt.forEach(x => { sql += `\n   $if(${x.guard} != null)$AND ${x.c}$endif$`; });
+    }
+    // GROUP BY
+    if (WZ.groupOn && groups.length && groups.length < all.length) sql += `\n GROUP BY ${groups.join(', ')}`;
+    // ORDER BY
+    if (WZ.order.ref) {
+        const o = res.outputs.find(x => x.ref === WZ.order.ref);
+        const expr = o ? (o.ref.startsWith('agg:') ? _wzIdent(o.out) : o.expr) : cref(WZ.order.ref);
+        sql += `\n ORDER BY ${expr} ${WZ.order.dir}`;
+    }
+    const lim = parseInt(WZ.limit, 10);
+    if (lim > 0) sql += `\n LIMIT ${lim}`;
+    res.sql = sql;
+    return res;
+}
+
+function applyQueryWizard() {
+    const out = _wzBuild();
+    if (!out.sql) { Toast.error(out.error || '先选择表'); return; }
+    if (out.error) { Toast.error(out.error); return; }
+    const cur = (sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql').value) || '';
+    if (cur.trim() && cur.trim() !== out.sql.trim() && !confirm('用生成的 SQL 替换当前 SQL？')) return;
+    // 数据源模式：跨数据源 → 多个数据源；否则单个数据源并选中该数据源
+    const typeSel = document.getElementById('apiType');
+    if (out.multi) {
+        typeSel.value = 'federated';
+    } else {
+        typeSel.value = 'sql';
+        const c = WZ.cats.find(x => x.name === WZ.tables[0].cat);
+        const dsSel = document.getElementById('apiDatasource');
+        if (c && dsSel && [...dsSel.options].some(o => o.value === String(c.id))) dsSel.value = String(c.id);
+    }
+    onApiTypeChange();
+    document.getElementById('apiSql').value = out.sql;
+    if (sqlEditor) sqlEditor.setValue(out.sql);
+    // 参数：没有的补上，已有的不动
+    let added = 0;
+    out.params.forEach(p => {
+        if (params.some(x => x.name === p.name)) return;
+        params.push({ name: p.name, param_type: p.param_type, required: !!p.required, default_value: '', description: p.description || '', item_schema: '', sort_order: params.length });
+        added++;
+    });
+    renderParams();
+    closeQueryWizard();
+    Toast.success(added ? `已生成 SQL，并添加 ${added} 个参数` : '已生成 SQL');
+}
+
+// 「单个数据源 / 多个数据源」切换 = 在 sql 与 federated 两种类型之间切换
+function setSqlSourceMode(mode) {
+    const sel = document.getElementById('apiType');
+    if (!sel || sel.value === mode) return;
+    sel.value = mode;
+    onApiTypeChange();
 }
 
 // ========== 保存 API ==========
