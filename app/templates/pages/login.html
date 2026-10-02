@@ -3,30 +3,42 @@
 {% block title %}登录 - OneData Portal{% endblock %}
 
 {% block body %}
-<div class="login-page">
-    <div class="login-card">
-        <div class="logo">
-            <svg width="36" height="36" viewBox="0 0 28 28" fill="none">
-                <rect width="28" height="28" rx="14" fill="#1c1c1e"/>
-                <path d="M7 14h14M14 7v14M9 9l10 10M19 9L9 19" stroke="#d6f36a" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            <span class="logo-text">OneData Portal</span>
-        </div>
-        <p class="subtitle">数据开放平台管理后台</p>
+<div class="lp">
+    <canvas id="ribbonBg" class="lp-bg" aria-hidden="true"></canvas>
+    <div class="lp-veil" aria-hidden="true"></div>
 
-        <form id="loginForm" onsubmit="handleLogin(event)">
-            <div class="form-group">
-                <label class="form-label">用户名</label>
-                <input type="text" class="form-input" id="username" placeholder="请输入用户名" required autofocus>
-            </div>
-            <div class="form-group">
-                <label class="form-label">密码</label>
-                <input type="password" class="form-input" id="password" placeholder="请输入密码" required>
-            </div>
-            <div id="loginError" style="color: var(--color-danger); font-size: 13px; margin-bottom: 12px; display: none;"></div>
-            <button type="submit" class="btn btn-primary" id="loginBtn">登 录</button>
-        </form>
-    </div>
+    <header class="lp-head">
+        <span class="lp-brand"><img src="/static/img/logo.png" alt="" width="22" height="22">数据开放平台</span>
+        <span class="lp-meta">{% if app_env and app_env.label %}{{ app_env.label }} · {% endif %}ONEDATA PORTAL</span>
+    </header>
+
+    <main class="lp-main">
+        <div class="lp-hero">
+            <h1><span>数据，</span><span>即刻成为接口。</span></h1>
+            <p>一条 SQL 发布为 API，跨数据源关联、审批上线、预发到生产，一站完成。</p>
+        </div>
+
+        <div class="lp-card">
+            <h2>登录</h2>
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label class="form-label" for="username">账号</label>
+                    <input type="text" class="form-input" id="username" placeholder="请输入账号" autocomplete="username" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="password">密码</label>
+                    <input type="password" class="form-input" id="password" placeholder="请输入密码" autocomplete="current-password" required>
+                </div>
+                <div id="loginError" class="lp-error" style="display: none;"></div>
+                <button type="submit" class="btn btn-primary" id="loginBtn">登 录</button>
+            </form>
+        </div>
+    </main>
+
+    <footer class="lp-foot">
+        <span>SQL · 多数据源 · 审批发布 · 单点登录</span>
+        <span>OneData Portal</span>
+    </footer>
 </div>
 
 <!-- Toast -->
@@ -82,5 +94,75 @@ document.addEventListener('DOMContentLoaded', async () => {
     const next = SSO.safeNext(q.get('next'));
     location.replace(`${url}/sso/issue?to=${encodeURIComponent(AppEnv.info().env)}&next=${encodeURIComponent(next)}`);
 });
+
+// ========== 登录页背景：流动丝带（参考 Inspira UI RibbonBackground） ==========
+(function ribbonBackground() {
+    const canvas = document.getElementById('ribbonBg');
+    if (!canvas || !canvas.getContext) return;
+    const ctx = canvas.getContext('2d');
+    const COLORS = ['#d6f36a', '#b7a7f5', '#8f78ee', '#f4f4f5', '#5b44c9'];
+    const ANGLE = -14 * Math.PI / 180;   // 丝带整体倾斜
+    const SPEED = 0.00028;
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let w = 0, h = 0, dpr = 1;
+
+    // 每条丝带：基线位置、振幅、频率、相位、粗细
+    const ribbons = COLORS.map((c, i) => ({
+        color: c,
+        base: 0.30 + i * 0.11,
+        amp: 0.07 + (i % 3) * 0.025,
+        freq: 1.4 + i * 0.35,
+        phase: i * 1.7,
+        width: 0.045 + (i % 2) * 0.02,
+        twist: 0.9 + i * 0.25,
+    }));
+
+    function resize() {
+        dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+        w = canvas.clientWidth; h = canvas.clientHeight;
+        canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    }
+
+    function draw(t) {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        ctx.save();
+        ctx.translate(w / 2, h / 2);
+        ctx.rotate(ANGLE);
+        ctx.translate(-w * 0.75, -h / 2);
+        ctx.globalCompositeOperation = 'lighter';
+        const span = w * 1.5, step = Math.max(10, span / 160), LINES = 26;
+        ribbons.forEach((r, ri) => {
+            const time = t * SPEED * (1 + ri * 0.12);
+            for (let k = 0; k < LINES; k++) {
+                const f = k / (LINES - 1) - 0.5;          // -0.5 ~ 0.5：在丝带宽度上的位置
+                ctx.beginPath();
+                for (let x = 0; x <= span + step; x += step) {
+                    const u = x / span;
+                    const y = h * (r.base
+                        + r.amp * Math.sin(u * Math.PI * r.freq + time * 2 + r.phase)
+                        + r.amp * 0.45 * Math.sin(u * Math.PI * r.freq * 2.3 - time * 1.4 + r.phase * 0.7))
+                        + f * h * r.width * Math.sin(u * Math.PI * r.twist + time * 1.1 + r.phase);   // 扭转
+                    x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                }
+                ctx.strokeStyle = r.color;
+                ctx.globalAlpha = 0.07 + 0.16 * (1 - Math.abs(f) * 2);
+                ctx.lineWidth = 1.2;
+                ctx.stroke();
+            }
+        });
+        ctx.restore();
+    }
+
+    let last = 0;
+    function frame(t) {
+        if (t - last > 33) { draw(t); last = t; }   // 约 30 帧，省电
+        requestAnimationFrame(frame);
+    }
+
+    resize();
+    window.addEventListener('resize', () => { resize(); draw(last || 0); });
+    if (reduce) draw(4000); else requestAnimationFrame(frame);
+})();
 </script>
 {% endblock %}

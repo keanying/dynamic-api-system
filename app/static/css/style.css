@@ -1895,3 +1895,43 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
 @media (prefers-reduced-motion: reduce) {
     .ihb-dot, .ihb-label, .ihb-hover { transition: none; }
 }
+
+/* ---------- 登录页：深色底 + 流动丝带（参考 Inspira UI RibbonBackground） ---------- */
+.lp { position: relative; isolation: isolate; min-height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+      background: #070708; color: #fff; }
+.lp-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -2; display: block; }
+.lp-veil { position: absolute; inset: 0; z-index: -1; pointer-events: none;
+           background: radial-gradient(ellipse 70% 60% at 18% 85%, rgba(7, 7, 8, 0.85), transparent 70%),
+                       linear-gradient(180deg, rgba(7, 7, 8, 0.55), transparent 22%, transparent 78%, rgba(7, 7, 8, 0.7)); }
+.lp-head, .lp-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 40px; }
+.lp-head { border-bottom: 1px solid rgba(255, 255, 255, 0.14); }
+.lp-foot { border-top: 1px solid rgba(255, 255, 255, 0.14); font-size: 12px; color: rgba(255, 255, 255, 0.55); flex-wrap: wrap; }
+.lp-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; letter-spacing: 0.16em; }
+.lp-meta { font-size: 12px; color: rgba(255, 255, 255, 0.55); letter-spacing: 0.08em; }
+.lp-main { flex: 1; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; padding: 48px 40px; flex-wrap: wrap; }
+.lp-hero { max-width: 640px; }
+.lp-hero h1 { font-size: clamp(40px, 6.2vw, 80px); line-height: 1.02; font-weight: 600; letter-spacing: -0.02em; }
+.lp-hero h1 span { display: block; }
+.lp-hero p { margin-top: 22px; max-width: 460px; font-size: 16px; line-height: 1.75; color: rgba(255, 255, 255, 0.65); }
+.lp-card { width: 380px; max-width: 100%; padding: 30px 30px 26px; border-radius: 28px;
+           background: rgba(22, 22, 24, 0.62); border: 1px solid rgba(255, 255, 255, 0.12);
+           backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45); }
+.lp-card h2 { font-size: 22px; font-weight: 600; margin-bottom: 22px; }
+.lp-card .form-group { margin-bottom: 16px; }
+.lp-card .form-label { color: rgba(255, 255, 255, 0.7); }
+.lp-card .form-input { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); color: #fff;
+                       border-radius: 14px; padding: 11px 16px; }
+.lp-card .form-input::placeholder { color: rgba(255, 255, 255, 0.35); }
+.lp-card .form-input:focus { border-color: var(--ui-lime); box-shadow: 0 0 0 3px rgba(214, 243, 106, 0.18); background: rgba(255, 255, 255, 0.08); }
+.lp-card .btn-primary { width: 100%; justify-content: center; margin-top: 8px; padding-top: 12px; padding-bottom: 12px;
+                        background: var(--ui-lime); color: var(--ui-ink); font-weight: 600; }
+.lp-card .btn-primary:hover:not(:disabled) { background: var(--ui-lime); }
+.lp-card .btn-primary.ihb .ihb-dot { background: var(--ui-ink); }
+.lp-card .btn-primary.ihb .ihb-hover { color: var(--ui-lime); }
+.lp-error { color: #fca5a5; font-size: 13px; margin-bottom: 12px; }
+@media (max-width: 760px) {
+    .lp-head, .lp-foot { padding: 16px 20px; }
+    .lp-main { padding: 28px 20px; align-items: stretch; flex-direction: column; justify-content: flex-end; }
+    .lp-hero p { display: none; }
+    .lp-card { width: 100%; }
+}
