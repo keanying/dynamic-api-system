@@ -732,3 +732,60 @@ async function compareWithOtherEnv(projectId, apiId) {
     ov.querySelectorAll('[data-x]').forEach(b => b.onclick = () => ov.remove());
     document.body.appendChild(ov);
 }
+
+// ============================================================
+// 交互按钮（v2.23，参考 InteractiveHoverButton）：
+//   左侧小圆点，悬停时圆点扩散铺满按钮，原文字右滑淡出，同样文字 + 箭头滑入
+// 只作用于页面级主要按钮（主按钮 / 次按钮 / 亮绿 / 危险 / 成功，常规尺寸）；
+// 表格、卡片底栏、分段切换里的小按钮不处理；不想要效果的按钮加 class="no-fx"
+// ============================================================
+const UIButton = (() => {
+    const SEL = '.btn.btn-primary, .btn.btn-secondary, .btn.btn-lime, .btn.btn-danger, .btn.btn-success';
+    const ARROW = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+
+    function eligible(b) {
+        return b.matches && b.matches(SEL) && !b.matches('.btn-sm, .btn-xs, .no-fx')
+            && !b.closest('.seg, .api-actions, .pc-foot, .card-actions, table, .editor-tabs, .seg-toggle')
+            && b.textContent.trim();
+    }
+
+    function enhance(b) {
+        if (!eligible(b)) return;
+        if (b.querySelector(':scope > .ihb-label')) return;   // 已处理（且结构完好）
+        b.querySelectorAll(':scope > .ihb-dot, :scope > .ihb-hover').forEach(x => x.remove());
+        const text = b.textContent.trim();
+        const label = document.createElement('span');
+        label.className = 'ihb-label';
+        while (b.firstChild) label.appendChild(b.firstChild);
+        const dot = document.createElement('span');
+        dot.className = 'ihb-dot';
+        const hover = document.createElement('span');
+        hover.className = 'ihb-hover';
+        hover.setAttribute('aria-hidden', 'true');
+        hover.innerHTML = `<span></span>${ARROW}`;
+        hover.firstChild.textContent = text;
+        b.classList.add('ihb');
+        b.classList.toggle('ihb-icon', !!label.querySelector('svg'));
+        b.append(dot, label, hover);
+    }
+
+    function scan(root) {
+        if (!root || root.nodeType !== 1) return;
+        if (root.matches && root.matches(SEL)) enhance(root);
+        if (root.querySelectorAll) root.querySelectorAll(SEL).forEach(enhance);
+    }
+
+    function init() {
+        scan(document.body);
+        // 新增的按钮自动处理；旧代码用 textContent 改按钮文字（如「登录中...」）会冲掉结构，这里重新处理
+        new MutationObserver(ms => ms.forEach(m => {
+            const t = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+            const btn = t && t.closest && t.closest('.btn');
+            if (btn && !btn.querySelector(':scope > .ihb-label')) enhance(btn);
+            m.addedNodes.forEach(n => { if (n.nodeType === 1) scan(n); });
+        })).observe(document.body, { childList: true, subtree: true, characterData: true });
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+    return { enhance };
+})();
