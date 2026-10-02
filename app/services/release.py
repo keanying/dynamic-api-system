@@ -170,6 +170,19 @@ async def apply_release(db, snapshot: Dict[str, Any], project_code: str, method:
         if not ds_id:
             raise ReleaseError(f"生产环境不存在数据源「{ds_name}」，请先在生产创建同名数据源")
 
+    # 多源 SQL (v2.22)：SQL 里按名称引用数据源（数据源名.库名.表名），生产需有同名数据源
+    if (snapshot.get("api_type") or "sql") == "federated":
+        try:
+            from app.services.federated import referenced_catalogs
+            names = referenced_catalogs(snapshot.get("sql_template") or "")
+        except ImportError:
+            names = []
+        if names:
+            found = set((await db.execute(select(DataSource.name).where(DataSource.name.in_(names)))).scalars().all())
+            missing = [n for n in names if n not in found]
+            if missing:
+                raise ReleaseError(f"生产环境不存在数据源「{'」「'.join(missing)}」（多源 SQL 中引用），请先在生产创建同名数据源")
+
     before = await build_snapshot(db, api) if api else None
 
     if api is None:

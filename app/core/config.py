@@ -163,6 +163,25 @@ class ApprovalConfig:
 
 
 @dataclass
+class CatalogConfig:
+    """多源 SQL（catalog 模式，v2.22+）：一条 MySQL 语法的 SQL 关联多个数据源的表。"""
+    # 单个源表最多拉取的行数，超过即报错（提示加过滤条件），防止误写成全表关联把内存打满
+    max_rows_per_source: int = 200000
+    # 关联键不超过这么多个时，把它们作为 IN 条件下推到另一侧的源库，只取能关联上的行
+    dynamic_filter_max_keys: int = 10000
+    # 同时进行的跨源计算数（每个 worker 进程），超出的请求排队
+    max_concurrency: int = 8
+    # 关联计算引擎(DuckDB)的内存上限与线程数
+    memory_limit: str = "1GB"
+    threads: int = 4
+    # 跨源计算时字符串比较：nocase = 不区分大小写（与 MySQL 默认 *_ci 排序规则一致）；
+    # nocase_noaccent = 再不区分重音（é = e，与 utf8mb4_general_ci 完全一致，字符串关联约慢一倍）；binary = 区分大小写
+    string_compare: str = "nocase"
+    # 源表结构（列名/类型）缓存秒数
+    schema_cache_ttl: int = 300
+
+
+@dataclass
 class AuthConfig:
     default_admin: str = "admin"
     default_password: str = "admin123"
@@ -195,6 +214,7 @@ class FullConfig:
     monitor: MonitorConfig = field(default_factory=MonitorConfig)
     gateway: GatewayConfig = field(default_factory=GatewayConfig)
     approval: ApprovalConfig = field(default_factory=ApprovalConfig)
+    catalog: CatalogConfig = field(default_factory=CatalogConfig)
 
 
 def load_config() -> FullConfig:
@@ -211,6 +231,7 @@ def load_config() -> FullConfig:
     cache_raw = raw.get("cache", {})
     log_raw = raw.get("log", {})
     monitor_raw = raw.get("monitor", {})
+    cat_raw = raw.get("catalog", {}) or {}
 
     # 监听端口 (v2.18+)：environments.<当前环境>.port 优先于 server.port，
     # 这样 `python main.py --env pre` 会自动监听预发端口。环境变量 SERVER_PORT 仍最高优先。
@@ -319,6 +340,15 @@ def load_config() -> FullConfig:
         ),
         approval=ApprovalConfig(
             online_mode=(raw.get("approval", {}) or {}).get("online_mode", "any"),
+        ),
+        catalog=CatalogConfig(
+            max_rows_per_source=int(cat_raw.get("max_rows_per_source", 200000)),
+            dynamic_filter_max_keys=int(cat_raw.get("dynamic_filter_max_keys", 10000)),
+            max_concurrency=max(1, int(cat_raw.get("max_concurrency", 8))),
+            memory_limit=str(cat_raw.get("memory_limit", "1GB")),
+            threads=max(1, int(cat_raw.get("threads", 4))),
+            string_compare=str(cat_raw.get("string_compare", "nocase")).lower(),
+            schema_cache_ttl=int(cat_raw.get("schema_cache_ttl", 300)),
         ),
         gateway=GatewayConfig(
             prefix=_env("GATEWAY_PREFIX", raw.get("gateway", {}).get("prefix", "/v1/data")),

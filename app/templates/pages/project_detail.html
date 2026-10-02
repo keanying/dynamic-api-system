@@ -242,6 +242,9 @@ async function loadApis(page) {
                 ${(api.api_type === 'sync')
                     ? '<span title="数据同步：写库接口，仅超级管理员可创建和调用" style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600;">✎ 数据同步</span>'
                     : ''}
+                ${(api.api_type === 'federated')
+                    ? '<span title="多源 SQL：一条 SQL 关联多个数据源的表" style="background:#ccfbf1;color:#0f766e;padding:1px 6px;border-radius:4px;font-size:11px;">多源 SQL</span>'
+                    : ''}
                 ${api.datasource_name ? `<span class="text-muted">· ${escapeHtml(api.datasource_name)}</span>` : ''}
             </div>
             <div class="api-call-url">
