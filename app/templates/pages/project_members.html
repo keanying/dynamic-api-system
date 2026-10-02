@@ -11,6 +11,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="page-fill">
 <div class="page-head">
     <h1>成员 <span class="count" id="memberCount">-</span></h1>
     <div class="actions">
@@ -19,8 +20,8 @@
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body">
+<div class="card fill-card">
+    <div class="card-body fill-scroll">
         <table class="data-table" style="width:100%;">
             <thead>
                 <tr>
@@ -33,6 +34,7 @@
             <tbody id="memberTbody"><tr><td colspan="4" class="td-empty">加载中...</td></tr></tbody>
         </table>
     </div>
+</div>
 </div>
 
 <!-- 添加成员弹窗 -->

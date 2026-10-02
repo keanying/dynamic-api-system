@@ -7,6 +7,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="page-fill">
 <div class="page-head">
     <h1>发布审核 <span class="count" id="relCount">-</span></h1>
     <div class="actions">
@@ -28,8 +29,8 @@
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body" style="padding:0;">
+<div class="card fill-card">
+    <div class="card-body fill-scroll" style="padding:0;">
         <table class="data-table" style="width:100%;">
             <thead>
                 <tr>
@@ -50,6 +51,7 @@
     </div>
 </div>
 <div class="pagination" id="relPagination"></div>
+</div>
 
 <!-- 发布单详情 / 差异 -->
 <div class="modal-overlay" id="relModal" style="display:none;">
