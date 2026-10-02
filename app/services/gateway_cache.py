@@ -37,6 +37,11 @@ def invalidate() -> None:
     _entries.clear()
     from app.services import ds_scope
     ds_scope.clear_cache()
+    # 多源 SQL 的执行计划缓存（含数据源、项目范围等配置）一起清空；模块未加载时不导入（避免加载其依赖）
+    import sys
+    fed = sys.modules.get("app.services.federated")
+    if fed is not None:
+        fed.clear_plan_cache()
 
 
 def get(project_code: str, method: str, url_path: str):

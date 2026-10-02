@@ -162,6 +162,24 @@ approval:
   # 上线审批通过条件 (v2.21+)：any = 项目管理员或会审研发任一方通过（当前行为）；both = 双方都要通过
   online_mode: "any"
 
+catalog:
+  # 多源 SQL API (v2.22+)：一条 MySQL 语法的 SQL 关联多个数据源，表名写成「数据源名.库名.表名」。
+  # 只涉及一个数据源时整句交给该源执行；跨数据源时各源只取需要的列和行，再在本进程内关联计算。
+  # 单个源表最多拉取的行数，超过报错提示加过滤条件
+  max_rows_per_source: 200000
+  # 关联键不超过这么多个时作为 IN 条件下推到另一侧源库，只取能关联上的行
+  dynamic_filter_max_keys: 10000
+  # 每个 worker 同时进行的跨源计算数，超出排队
+  max_concurrency: 8
+  # 关联计算的内存上限、线程数
+  memory_limit: "1GB"
+  threads: 4
+  # 跨源计算时字符串比较：nocase = 不区分大小写（与 MySQL 默认 *_ci 排序规则一致）；
+  # nocase_noaccent = 再不区分重音（é = e，与 utf8mb4_general_ci 完全一致，字符串关联约慢一倍）；binary = 区分大小写
+  string_compare: "nocase"
+  # 源表结构缓存秒数
+  schema_cache_ttl: 300
+
 gateway:
   # API 调用地址前缀 (默认 /v1/data)
   prefix: "/v1/data"

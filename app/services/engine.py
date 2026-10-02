@@ -754,6 +754,48 @@ async def _execute_single_sql_mode(api_config, params, api_params, datasource):
     return data
 
 
+async def _execute_federated_mode(api_config, params, api_params, db):
+    """多源 SQL (v2.22+)：一条 MySQL 语法的 SQL 关联多个数据源（表名写成「数据源名.库名.表名」），
+    见 app/services/federated.py。模板语法（:param / #{} / $if$ / $for$）与单 SQL 模式完全相同。"""
+    from app.services.trace_context import get_trace
+    tctx = get_trace()
+
+    if not (api_config.sql_template or "").strip():
+        raise Exception("该 API 未配置 SQL")
+    try:
+        from app.services import federated
+    except ImportError as e:
+        raise Exception(f"多源 SQL 依赖未安装（sqlglot / duckdb / pyarrow），请在部署环境执行 uv sync：{e}")
+
+    if getattr(settings.query, "defaults_visible_in_template", False):
+        params = apply_param_defaults(params, api_params)
+    if tctx:
+        tctx.mark_render_start()
+    sql, bound_params = _parse_sql_params(api_config.sql_template, params, api_params)
+    if tctx:
+        tctx.mark_render_end()
+        tctx.set_rendered_sql(sql)
+
+    _q0 = time.time()
+    try:
+        data, plan = await federated.execute(
+            sql, bound_params, db=db, project_id=api_config.project_id,
+            timeout=api_config.timeout or settings.query.default_timeout,
+            max_rows=api_config.max_rows or settings.query.default_max_rows,
+        )
+    except federated.FederatedError as e:
+        raise Exception(str(e))
+    if tctx:
+        tctx.add_query_time((time.time() - _q0) * 1000)
+        try:
+            tctx.set_executed_sql(federated.plan_text(plan), bound_params)
+        except Exception:
+            pass
+    if _is_debug():
+        log.debug(f"多源 SQL 执行完成 | api_id={api_config.id} | plan={plan}")
+    return data
+
+
 async def _execute_plugin_mode(api_config, params, api_params, db, primary_datasource):
     """走 Python 插件模式 (v1.9+)：执行 plugin_code 里的 main(params, ctx)。
 
@@ -1022,6 +1064,8 @@ async def execute_api(
         #    因此插件模式下数据源缺失不报错；其余模式保持强制。
         is_plugin = getattr(api_config, "api_type", "sql") == "plugin" and \
             (getattr(api_config, "plugin_code", "") or "").strip()
+        # 多源 SQL (v2.22)：数据源写在 SQL 的表名里（数据源名.库名.表名），不需要主数据源
+        is_federated = (getattr(api_config, "api_type", "sql") or "sql").lower() == "federated"
 
         if datasource is None and api_config.datasource_id:
             ds_result = await db.execute(
@@ -1029,7 +1073,9 @@ async def execute_api(
             )
             datasource = ds_result.scalar_one_or_none()
 
-        if not is_plugin:
+        if is_federated:
+            datasource = None
+        elif not is_plugin:
             if not api_config.datasource_id:
                 raise Exception("未配置数据源")
             if not datasource:
@@ -1096,7 +1142,9 @@ async def execute_api(
 
         # 7. 分流：插件模式 > 管线模式 > 单 SQL 模式
         pipeline_raw = getattr(api_config, "pipeline_steps", None)
-        if is_plugin:
+        if is_federated:
+            data = await _execute_federated_mode(api_config, params, api_params, db)
+        elif is_plugin:
             data = await _execute_plugin_mode(
                 api_config, params, api_params, db, datasource,
             )
@@ -1262,7 +1310,29 @@ async def _execute_mysql(
     timeout: int = 30,
     max_rows: int = 10000,
 ) -> list:
-    """执行 MySQL 查询（走连接池，连接复用不再每次新建）
+    """执行 MySQL 查询，返回 [{列名: 值}]（单元格已转成可序列化的值）。"""
+    fields, rows, truncated = await _query_mysql_raw(
+        datasource, password, sql, params, timeout=timeout, max_rows=max_rows,
+    )
+    names = _dict_column_names(fields)
+    # 组装成字典并把特殊类型转为可序列化格式（一次完成，不再先建一遍 dict 再复制）
+    result = [{k: _clean_value(v) for k, v in zip(names, row)} for row in rows]
+
+    if _is_debug():
+        log.debug(f"MySQL 查询结果 | rows={len(result)} | max_rows={max_rows} | truncated={truncated}")
+    return result
+
+
+async def _query_mysql_raw(
+    datasource: DataSource,
+    password: str,
+    sql: str,
+    params: dict,
+    timeout: int = 30,
+    max_rows: int = 10000,
+):
+    """执行 MySQL 查询（走连接池，连接复用不再每次新建），返回 (列描述, 原始行元组, 是否被截断)。
+    列描述是驱动的字段对象（name / table_name / type_code / flags / scale / length / charsetnr）。
 
     v2.19:
       - 改用流式游标(SSDictCursor)：只从网络读 max_rows 行。原来的缓冲游标会先把
@@ -1312,22 +1382,22 @@ async def _execute_mysql(
             # 这里用 SSCursor 取元组，再按 aiomysql DictCursor 的规则命名列
             cur = conn.cursor(SSCursor)
             await cur.execute(mysql_sql, params)
-            names = _dict_column_names(getattr(cur._result, "fields", None) or [])  # noqa: SLF001
+            fields = list(getattr(cur._result, "fields", None) or [])  # noqa: SLF001
         else:
             cur = await conn.cursor(aiomysql.SSCursor)
             await cur.execute(mysql_sql, params)
-            names = _dict_column_names(getattr(cur._result, "fields", None) or [])  # noqa: SLF001
+            fields = list(getattr(cur._result, "fields", None) or [])  # noqa: SLF001
         rows = await cur.fetchmany(max_rows)
         # 再探一行判断是否还有剩余；有剩余说明被 max_rows 截断
         truncated = (await cur.fetchone()) is not None if len(rows) >= max_rows else False
         if not truncated:
             await cur.close()
-        return names, rows, truncated
+        return fields, rows, truncated
 
     discard = True
     try:
         try:
-            names, rows, truncated = await asyncio.wait_for(_run(), timeout=timeout)
+            fields, rows, truncated = await asyncio.wait_for(_run(), timeout=timeout)
         except asyncio.TimeoutError:
             raise Exception(f"查询超时（超过 {timeout}s）")
         # 截断时连接上还有没读完的行，直接丢弃这条连接，比把剩余行读完快得多
@@ -1340,13 +1410,7 @@ async def _execute_mysql(
             # aiomysql 归还已关闭的连接时不会唤醒排队等连接的协程，这里补一次
             # （asyncmy 的 release 在任何情况下都会唤醒）
             asyncio.ensure_future(pool._wakeup())  # noqa: SLF001
-
-    # 组装成字典并把特殊类型转为可序列化格式（一次完成，不再先建一遍 dict 再复制）
-    result = [{k: _clean_value(v) for k, v in zip(names, row)} for row in rows]
-
-    if _is_debug():
-        log.debug(f"MySQL 查询结果 | rows={len(result)} | max_rows={max_rows} | truncated={truncated}")
-    return result
+    return fields, rows, truncated
 
 def _discard_conn(conn) -> None:
     """关闭一条处在协议中途的连接，使连接池不再复用它。"""

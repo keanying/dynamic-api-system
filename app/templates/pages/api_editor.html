@@ -313,6 +313,7 @@
                 <label>类型</label>
                 <select class="form-select" id="apiType" onchange="onApiTypeChange()">
                     <option value="sql">数据 API</option>
+                    <option value="federated">多源 SQL API（跨数据源关联）</option>
                     <option value="html">静态页面 API</option>
                     <option value="plugin">Python API</option>
                     <option value="sync" id="apiTypeSyncOption">数据同步 API（仅超管）</option>
@@ -369,7 +370,7 @@
     <div class="editor-left">
     <div class="editor-tabs" role="tablist">
         <button type="button" class="editor-tab active" id="tab-basic" onclick="switchEditorTab('basic')">基础信息</button>
-        <button type="button" class="editor-tab" id="tab-params" data-mode="sql plugin" onclick="switchEditorTab('params')">参数定义 <span class="tab-count" id="paramTabCount">0</span></button>
+        <button type="button" class="editor-tab" id="tab-params" data-mode="sql plugin federated" onclick="switchEditorTab('params')">参数定义 <span class="tab-count" id="paramTabCount">0</span></button>
         <button type="button" class="editor-tab" id="tab-logic" onclick="switchEditorTab('logic')">执行逻辑</button>
         <span class="tab-spacer"></span>
         <button type="button" class="btn btn-secondary btn-sm" onclick="openStructurePreview()" title="查看请求结构 / SQL 渲染中间态 / 响应结构">
@@ -536,8 +537,38 @@
         </div>
     </div>
 
+    <!-- 多源 SQL（仅 api_type == federated 显示，v2.22） -->
+    <div class="card mb-16" id="federatedCard" data-mode="federated" style="display:none;">
+        <div class="card-header">
+            <h3>多源 SQL</h3>
+            <div style="display:flex; gap:8px; align-items:center; margin-left:auto;">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="loadCatalogs()">刷新</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="explainFederated()">执行计划</button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="form-hint" style="margin-bottom:10px; line-height:1.8;">
+                用标准 MySQL 语法写一条 SQL，表名写成
+                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">数据源名.库名.表名</code>
+                （或 <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">数据源名.表名</code>，库取数据源的默认库），
+                可以关联不同数据源（MySQL / SelectDB / Doris / StarRocks）的表。
+                只涉及一个数据源时整句交给该数据源执行；跨数据源时各源只取需要的列和行，再在服务内关联计算。
+                跨表引用列请写成「表别名.列名」。参数写法与数据 API 相同（:param、$if$ 等）。
+            </div>
+            <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                <div style="flex:1 1 260px; min-width:240px; max-height:320px; overflow:auto; border:1px solid #e2e8f0; border-radius:6px; padding:8px; font-size:12.5px;" id="catalogTree">
+                    <div class="text-muted">加载中...</div>
+                </div>
+                <div style="flex:2 1 360px; min-width:280px;">
+                    <div class="text-sm text-muted" style="margin-bottom:6px;">点击左侧的表 / 列插入到 SQL 光标处；「执行计划」查看各数据源实际执行的 SQL（用测试参数渲染，不取数据）。</div>
+                    <pre id="federatedPlan" style="display:none; max-height:320px; overflow:auto; background:#0f172a; color:#e2e8f0; padding:10px; border-radius:6px; font-size:12px; white-space:pre-wrap;"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- SQL 模板 -->
-    <div class="card mb-16" id="sqlModeCard" data-mode="sql">
+    <div class="card mb-16" id="sqlModeCard" data-mode="sql federated">
         <div class="card-header">
             <h3>SQL 模板</h3>
             <div style="display:flex; gap:8px; align-items:center; margin-left:auto;">
@@ -1259,7 +1290,16 @@ function onApiTypeChange() {
   });
   // 插件模式下"从 SQL 解析"无意义，隐藏
   const parseBtn = document.getElementById('parseSqlParamsBtn');
-  if (parseBtn) parseBtn.style.display = (type === 'sql') ? '' : 'none';
+  if (parseBtn) parseBtn.style.display = (type === 'sql' || type === 'federated') ? '' : 'none';
+  // 多源 SQL：SQL 编辑器始终可编辑（管线开关只属于数据 API）
+  const _sqlHint = document.getElementById('sqlModeHint');
+  if (type === 'federated') {
+    if (typeof _setSqlEditorDisabled === 'function') _setSqlEditorDisabled(false);
+    if (_sqlHint) { _sqlHint.textContent = '多数据源 SQL'; _sqlHint.style.color = '#0f766e'; }
+    if (!window.__catalogsLoaded) loadCatalogs();
+  } else if (type === 'sql' && _sqlHint && _sqlHint.textContent === '多数据源 SQL') {
+    _sqlHint.textContent = '单数据源查询'; _sqlHint.style.color = '';
+  }
   const hint = document.getElementById('apiTypeHint');
   if (hint) {
     hint.textContent = (type === 'html')
@@ -1268,6 +1308,8 @@ function onApiTypeChange() {
       ? 'Python 插件 API'
       : (type === 'sync')
       ? '数据写入接口：按 tableName 把 data 写进数据源表（仅超管可建可调用）'
+      : (type === 'federated')
+      ? '一条 MySQL 语法的 SQL 关联多个数据源的表（数据源名.库名.表名）'
       : '通过 SQL/管线 把数据库查询发布为 RESTful API';
   }
   // HTML 类型 API 通常是公开页面，切到 HTML 时如果用户没显式开启过校验，自动建议关闭
@@ -1616,7 +1658,7 @@ function openStructurePreview(tab) {
     let existing = document.getElementById('__structurePreview');
     if (existing) existing.remove();
     const apiTypeNow = (document.getElementById('apiType')?.value || 'sql').toLowerCase();
-    const defaultTab = tab || (apiTypeNow === 'sql' ? 'sql' : 'req');
+    const defaultTab = tab || ((apiTypeNow === 'sql' || apiTypeNow === 'federated') ? 'sql' : 'req');
     const html = `
     <div class="modal-overlay" id="__structurePreview" style="display:flex;">
         <div class="modal" style="max-width: 780px; width: 92%;">
@@ -1743,7 +1785,7 @@ async function spFetchSqlPreview() {
     const pane = document.getElementById('sp-sql');
     if (!pane) return;
     const apiTypeNow = (document.getElementById('apiType')?.value || 'sql').toLowerCase();
-    if (apiTypeNow !== 'sql') {
+    if (apiTypeNow !== 'sql' && apiTypeNow !== 'federated') {
         pane.innerHTML = `<div class="sp-note">当前是 ${apiTypeNow === 'plugin' ? 'Python 插件' : 'HTML 页面'} API,无 SQL 渲染中间态;${apiTypeNow === 'plugin' ? '插件里通过 params 直接读取①中的请求结构。' : ''}</div>`;
         return;
     }
@@ -2825,9 +2867,9 @@ function togglePipelineMode() {
         // html(静态页面)/plugin(Python) 类型本就不用 SQL 模板，必须保持隐藏，
         // 否则会把 onApiTypeChange() 刚隐藏的 SQL 卡又显示出来。
         const _type = (document.getElementById('apiType')?.value) || 'sql';
-        if(sqlCard) sqlCard.style.display = (_type === 'sql') ? '' : 'none';
-        if(hint){ hint.textContent='单数据源查询'; hint.style.color=''; }
-        _setSqlEditorDisabled(_type !== 'sql');
+        if(sqlCard) sqlCard.style.display = (_type === 'sql' || _type === 'federated') ? '' : 'none';
+        if(hint){ hint.textContent = _type === 'federated' ? '多数据源 SQL' : '单数据源查询'; hint.style.color = _type === 'federated' ? '#0f766e' : ''; }
+        _setSqlEditorDisabled(_type !== 'sql' && _type !== 'federated');
     }
 }
 
@@ -2996,6 +3038,132 @@ function copyToClipboard(text) {
     }
 }
 
+
+// ========== 多源 SQL：catalog 浏览 / 执行计划 (v2.22) ==========
+function _fedInsert(text) {
+    if (sqlEditor && typeof sqlEditor._insertAtCursor === 'function') {
+        sqlEditor._insertAtCursor(text);
+    } else {
+        const ta = document.getElementById('apiSql');
+        if (ta) ta.value += text;
+    }
+}
+
+function _fedIdent(name) {
+    return /^[A-Za-z_\u4e00-\u9fff][\w\u4e00-\u9fff]*$/.test(name) ? name : '`' + String(name).replace(/`/g, '``') + '`';
+}
+
+async function loadCatalogs() {
+    const box = document.getElementById('catalogTree');
+    if (!box) return;
+    box.innerHTML = '<div class="text-muted">加载中...</div>';
+    try {
+        const res = await API.get(`/api/sql/federated/catalogs?project_id=${PROJECT_ID}`);
+        const list = (res && res.data) || [];
+        window.__catalogsLoaded = true;
+        if (!list.length) {
+            box.innerHTML = '<div class="text-muted">本项目没有可用的 MySQL 协议数据源，请先在「数据源管理」中添加并开放给本项目。</div>';
+            return;
+        }
+        box.innerHTML = list.map(c => `
+            <div class="fed-node" data-catalog="${escapeHtml(c.name)}">
+                <a href="javascript:void(0)" onclick="toggleCatalog(this)" style="font-weight:600;">▸ ${escapeHtml(c.name)}</a>
+                <span class="text-muted" style="font-size:11px;"> ${escapeHtml(c.type_name || c.type)}${c.database ? ' · 默认库 ' + escapeHtml(c.database) : ''}</span>
+                <div class="fed-children" style="display:none; margin-left:14px;"></div>
+            </div>`).join('');
+    } catch (e) {
+        box.innerHTML = `<div class="text-muted">加载失败：${escapeHtml(e.message || e)}</div>`;
+    }
+}
+
+async function toggleCatalog(a) {
+    const node = a.parentElement, kids = node.querySelector('.fed-children');
+    if (kids.style.display !== 'none') { kids.style.display = 'none'; a.textContent = a.textContent.replace('▾', '▸'); return; }
+    kids.style.display = ''; a.textContent = a.textContent.replace('▸', '▾');
+    if (kids.dataset.loaded) return;
+    const cat = node.dataset.catalog;
+    kids.innerHTML = '<div class="text-muted">加载中...</div>';
+    try {
+        const res = await API.get(`/api/sql/federated/databases?project_id=${PROJECT_ID}&catalog=${encodeURIComponent(cat)}`);
+        if (res.status === false) throw new Error(res.msg);
+        kids.dataset.loaded = '1';
+        kids.innerHTML = (res.data || []).map(d => `
+            <div class="fed-node" data-db="${escapeHtml(d)}">
+                <a href="javascript:void(0)" onclick="toggleDatabase(this)">▸ ${escapeHtml(d)}</a>
+                <div class="fed-children" style="display:none; margin-left:14px;"></div>
+            </div>`).join('') || '<div class="text-muted">（无可见的库）</div>';
+    } catch (e) {
+        kids.innerHTML = `<div class="text-muted">${escapeHtml(e.message || e)}</div>`;
+    }
+}
+
+async function toggleDatabase(a) {
+    const node = a.parentElement, kids = node.querySelector('.fed-children');
+    if (kids.style.display !== 'none') { kids.style.display = 'none'; a.textContent = a.textContent.replace('▾', '▸'); return; }
+    kids.style.display = ''; a.textContent = a.textContent.replace('▸', '▾');
+    if (kids.dataset.loaded) return;
+    const cat = node.closest('[data-catalog]').dataset.catalog, dbn = node.dataset.db;
+    kids.innerHTML = '<div class="text-muted">加载中...</div>';
+    try {
+        const res = await API.get(`/api/sql/federated/tables?project_id=${PROJECT_ID}&catalog=${encodeURIComponent(cat)}&database=${encodeURIComponent(dbn)}`);
+        if (res.status === false) throw new Error(res.msg);
+        kids.dataset.loaded = '1';
+        kids.innerHTML = (res.data || []).map(t => `
+            <div class="fed-node" data-table="${escapeHtml(t)}">
+                <a href="javascript:void(0)" onclick="toggleTable(this)" title="展开列">▸</a>
+                <a href="javascript:void(0)" onclick="insertFedTable(this)" title="插入表名">${escapeHtml(t)}</a>
+                <div class="fed-children" style="display:none; margin-left:14px;"></div>
+            </div>`).join('') || '<div class="text-muted">（无表）</div>';
+    } catch (e) {
+        kids.innerHTML = `<div class="text-muted">${escapeHtml(e.message || e)}</div>`;
+    }
+}
+
+function insertFedTable(a) {
+    const node = a.closest('[data-table]');
+    const cat = node.closest('[data-catalog]').dataset.catalog, dbn = node.closest('[data-db]').dataset.db;
+    _fedInsert(`${_fedIdent(cat)}.${_fedIdent(dbn)}.${_fedIdent(node.dataset.table)}`);
+}
+
+async function toggleTable(a) {
+    const node = a.closest('[data-table]'), kids = node.querySelector('.fed-children');
+    if (kids.style.display !== 'none') { kids.style.display = 'none'; a.textContent = '▸'; return; }
+    kids.style.display = ''; a.textContent = '▾';
+    if (kids.dataset.loaded) return;
+    const cat = node.closest('[data-catalog]').dataset.catalog, dbn = node.closest('[data-db]').dataset.db;
+    kids.innerHTML = '<div class="text-muted">加载中...</div>';
+    try {
+        const res = await API.get(`/api/sql/federated/columns?project_id=${PROJECT_ID}&catalog=${encodeURIComponent(cat)}&database=${encodeURIComponent(dbn)}&table=${encodeURIComponent(node.dataset.table)}`);
+        if (res.status === false) throw new Error(res.msg);
+        kids.dataset.loaded = '1';
+        kids.innerHTML = (res.data || []).map(c => `
+            <div><a href="javascript:void(0)" data-col="${escapeHtml(c.name)}" onclick="_fedInsert(_fedIdent(this.dataset.col))">${escapeHtml(c.name)}</a>
+            <span class="text-muted" style="font-size:11px;">${escapeHtml(c.type)}</span></div>`).join('');
+    } catch (e) {
+        kids.innerHTML = `<div class="text-muted">${escapeHtml(e.message || e)}</div>`;
+    }
+}
+
+async function explainFederated() {
+    const out = document.getElementById('federatedPlan');
+    const sql = (sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql').value) || '';
+    if (!sql.trim()) { Toast.error('请先填写 SQL'); return; }
+    let params = {};
+    try {
+        const raw = ((typeof testParamsEditor !== 'undefined' && testParamsEditor ? testParamsEditor.getValue()
+            : document.getElementById('testParams')?.value) || '').trim();
+        if (raw) params = JSON.parse(raw);
+    } catch (e) { Toast.error('测试参数不是合法 JSON，按空参数生成执行计划'); }
+    out.style.display = '';
+    out.textContent = '生成中...';
+    try {
+        const res = await API.post('/api/sql/federated/explain', { project_id: PROJECT_ID, sql_template: sql, params });
+        out.textContent = res.status === false ? ('无法生成执行计划：' + res.msg) : (res.data.text || '');
+    } catch (e) {
+        out.textContent = '无法生成执行计划：' + (e.message || e);
+    }
+}
+
 // ========== 保存 API ==========
 async function saveApi(e) {
     if (e) e.preventDefault();
@@ -3017,10 +3185,11 @@ async function saveApi(e) {
     }
     const isHtml = apiType === 'html';
     const isPlugin = apiType === 'plugin';
+    const isFederated = apiType === 'federated';
 
     // 关键：只有开关打开时才提交 pipeline_steps，否则强制空字符串
     // 防止单源 API 因残留 JSON 被误判为管线模式
-    const pipelineOn = !isHtml && !isPlugin && document.getElementById('pipelineEnabled').checked;
+    const pipelineOn = !isHtml && !isPlugin && !isFederated && document.getElementById('pipelineEnabled').checked;
     // 若在可视化模式，先把表单状态同步成 JSON；若在 JSON 模式，取编辑器当前值
     if (pipelineOn && typeof currentPMode !== 'undefined') {
         if (currentPMode === 'visual') {
@@ -3040,7 +3209,8 @@ async function saveApi(e) {
         api_type: apiType,
         sync_tables: (document.getElementById('syncTables')?.value || '').trim(),
         // 插件可选用主数据源（也可在脚本里 ctx.query 指定其它源）；HTML 不需要
-        datasource_id: isHtml ? null : (parseInt(document.getElementById('apiDatasource').value) || null),
+        // 多源 SQL 的数据源写在 SQL 表名里，不用主数据源
+        datasource_id: (isHtml || isFederated) ? null : (parseInt(document.getElementById('apiDatasource').value) || null),
         sql_template: (isHtml || isPlugin) ? '' : ((sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql').value) || ''),
         pipeline_steps: pipelineVal,
         html_content: isHtml ? (document.getElementById('apiHtml')?.value || '') : '',
@@ -3078,6 +3248,11 @@ async function saveApi(e) {
             Toast.error('插件代码必须定义 main(params, ctx) 函数');
             return false;
         }
+    }
+
+    if (isFederated && !body.sql_template.trim()) {
+        Toast.error('请填写多源 SQL');
+        return false;
     }
 
     // HTML 模式的轻量校验

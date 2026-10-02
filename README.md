@@ -8,6 +8,7 @@ OneData Portal 是一个轻量级的数据 API 开放平台，支持通过可视
 - **API 配置**：可视化配置 SQL 模板、参数、缓存、限流等
 - **数据源管理**：支持 MySQL / **StarRocks** / **SelectDB** / **Apache Doris** / PostgreSQL / Redis 多种数据源，密码加密存储
 - **动态调用引擎**：SQL 参数化执行、DDL 拦截、行数限制、超时控制
+- **多源 SQL（v2.22）**：一条 MySQL 语法的 SQL 关联多个数据源（MySQL / SelectDB / Doris / StarRocks）的表，见下文
 - **SQL 动态模板**：`$if(条件)$ ... $endif$` 条件块，根据入参动态拼装 SQL，配合 `:param IN` 自动展开数组
 - **API 网关**：统一入口 `/gw/{project_id}/...`，支持 API Key 认证和 IP 白名单
 - **在线测试**：内置 API 测试工具，实时查看请求和响应
@@ -185,6 +186,72 @@ $endif$
 > **向后兼容**：`pipeline_steps` 为空时走原单 SQL 模式，老 API 完全不受影响。
 > **生产部署**：v1.6 给 `src_dop_api_configs` 新增了 `pipeline_steps` 列，生产库需执行
 > `ALTER TABLE src_dop_api_configs ADD COLUMN pipeline_steps TEXT DEFAULT '';`（开发用 SQLite 自动建表无需处理）。
+
+## 多源 SQL（catalog 模式，v2.22）
+
+API 类型选「多源 SQL API」，用**一条标准 MySQL 语法的 SQL** 关联多个数据源的表，表名写成 `数据源名.库名.表名`
+（数据源名即「数据源管理」中登记的名称；也可写 `数据源名.表名`，库取数据源配置的默认库）：
+
+```sql
+SELECT m.category, u.city_level, COUNT(*) AS orders, SUM(o.amount) AS gmv
+  FROM 订单库.biz.orders o                                   -- MySQL 实例一
+  JOIN selectdb.crm.members u ON u.user_name = o.user_name   -- SelectDB
+  JOIN 商户库.mall.merchants m ON m.id = o.merchant_id       -- MySQL 实例二
+ WHERE o.status = 'paid' AND o.created_at >= :start
+ $if(vip != null)$ AND u.vip = :vip $endif$
+ GROUP BY m.category, u.city_level ORDER BY gmv DESC
+```
+
+参数、`$if$` / `$for$` / `#{}` 等模板语法与数据 API 完全相同；缓存、预热、限流、审批、预发→生产发布照常使用。
+现有的数据 API（单 SQL / 多步骤管线）、插件等类型**不受任何影响**。
+
+**执行方式**
+
+| 情况 | 怎么执行 |
+|------|---------|
+| 只涉及一个数据源 | 只去掉 SQL 里的数据源名前缀，整句交给该数据源执行，结果与单 SQL 模式完全相同 |
+| 跨数据源 | ① 整段都来自同一数据源、且不引用外层的子查询 / CTE，整段下推（聚合在源库完成）；② 其余的表各自只取用到的列，只涉及这张表的 WHERE / ON 条件下推；③ 先取「驱动表」，把它的关联键作为 `IN (...)` 下推到另一侧，只取能关联上的行（各表行数用 EXPLAIN 估算）；④ 取回的数据在服务进程内用嵌入式计算库 DuckDB 完成关联、聚合、排序 |
+
+下推到各数据源的 SQL 照常经过只读防护、系统库保护、数据源项目范围检查、连接池与超时控制；请求参数始终以绑定参数传给数据源。
+关联计算的 DuckDB 禁止访问文件系统和安装插件，配置锁定。
+
+**编辑器**：多源 SQL 卡片左侧可浏览本项目可用的数据源 → 库 → 表 → 列，点击插入到 SQL；「执行计划」按测试参数展示
+各数据源实际执行的 SQL、取数顺序与关联计算 SQL（不取数据）。调用日志的「执行 SQL」记录每次的执行计划、各源行数与耗时。
+
+**与 MySQL 的语义一致性**：跨数据源计算时，SQL 会按 MySQL 规则改写后再计算，已覆盖：字符串比较 / LIKE / REGEXP 不区分大小写
+（`catalog.string_compare`）、升序 NULL 在前、整数与 DECIMAL 除法 / AVG 的结果小数位、字符串参与算术与比较时按 MySQL 转数字、
+DATE 加减天/月/年仍为 DATE、`LENGTH` 为字节数、`DAYOFWEEK / WEEKDAY / WEEK / YEARWEEK`、`TIMESTAMPDIFF`（按满单位）、
+`DATE_FORMAT` 全部格式符、`FIND_IN_SET / FIELD / ELT / SUBSTRING_INDEX / STRCMP / MID / MAKEDATE / TO_DAYS / UNIX_TIMESTAMP /
+FROM_UNIXTIME / JSON_UNQUOTE / JSON_LENGTH / TIMEDIFF / ADDTIME`、`LOG / SQRT` 负数返回 NULL、`FORMAT` 四舍五入、
+非严格 GROUP BY（未分组列取任意一行）、结果列名（未写别名时为表达式原文）。
+200 个常用函数 / 表达式与 MySQL 原生结果逐个比对，187 个完全一致；其余为：`CONV / OCT / CRC32 / QUOTE / TIME_FORMAT /
+JSON_CONTAINS` 等跨源时暂不支持（明确报错，单数据源时不受限制）、无符号整数溢出回绕、非法日期截断等极少见写法。
+
+**使用建议与限制**
+
+- 跨数据源时尽量带上过滤条件；单个源表需要取回的行数超过 `catalog.max_rows_per_source`（默认 20 万）时报错提示。
+- `NOW()` / `CURDATE()` 等按北京时间计算（与平台其它时间一致）。
+- 跨数据源查询之间没有统一的一致性快照（各源在各自的时间点读取），与「流水线」模式相同。
+- 跨源列引用请写成「表别名.列名」；只在一张表中存在的列可以省略表别名。
+- 依赖 `sqlglot`、`duckdb`、`pyarrow`（已加入 `pyproject.toml`，`uv sync` 安装；内网部署请提前准备离线 wheel）。
+  没有多源 SQL API 时这些依赖不会被加载。
+
+**参考性能**（单 worker、本机 MySQL）：三个数据源的点查关联（每源 1 行）约 5ms，单进程约 600 QPS；
+订单 8000 行 × 会员 5 万行 × 商户的分组聚合约 120ms（同一 MySQL 实例原生关联约 80ms）。开启缓存后与普通 API 相同。
+
+**配置**（`config.yaml` 的 `catalog` 段）
+
+| 配置 | 默认 | 说明 |
+|------|------|------|
+| `max_rows_per_source` | 200000 | 单个源表最多取回的行数 |
+| `dynamic_filter_max_keys` | 10000 | 关联键不超过这么多个时作为 IN 条件下推到另一侧 |
+| `max_concurrency` | 8 | 每个 worker 同时进行的跨源计算数 |
+| `memory_limit` / `threads` | 1GB / 4 | 关联计算的内存上限与线程数 |
+| `string_compare` | nocase | `nocase` 不区分大小写；`nocase_noaccent` 再不区分重音（与 utf8mb4_general_ci 完全一致，字符串关联约慢一倍）；`binary` 区分大小写 |
+| `schema_cache_ttl` | 300 | 源表结构缓存秒数 |
+
+执行计划按「项目 + 渲染后的 SQL」缓存（时长同 `gateway.config_cache_ttl`，修改数据源 / 项目配置后立即清空）。
+发布到生产时会检查 SQL 中引用的数据源在生产是否存在。
 
 ## 多环境：预发 → 生产发布
 
@@ -416,6 +483,16 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/test/{api_id}` | 测试 API 调用 |
+
+### 多源 SQL 编辑辅助（v2.22）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/sql/federated/catalogs?project_id=` | 本项目可用的数据源（MySQL 协议） |
+| GET | `/api/sql/federated/databases?project_id=&catalog=` | 数据源下的库 |
+| GET | `/api/sql/federated/tables?project_id=&catalog=&database=` | 库下的表 |
+| GET | `/api/sql/federated/columns?project_id=&catalog=&database=&table=` | 表的列 |
+| POST | `/api/sql/federated/explain` | 执行计划（各数据源执行的 SQL、关联计算 SQL，不取数据） |
 
 ## License
 

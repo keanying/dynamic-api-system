@@ -35,6 +35,22 @@ if not settings.log.access_log:
     _std_logging.getLogger("uvicorn.access").disabled = True
 
 
+async def _warmup_federated():
+    """有多源 SQL API 时，后台预热其计算引擎（没有则不加载，不占内存）。"""
+    import asyncio
+    try:
+        from sqlalchemy import func, select
+        from app.core.database import async_session
+        from app.models.models import ApiConfig
+        async with async_session() as db:
+            n = (await db.execute(select(func.count()).select_from(ApiConfig).where(ApiConfig.api_type == "federated"))).scalar()
+        if n:
+            from app.services import federated
+            await asyncio.to_thread(federated.warmup)
+    except Exception as e:  # noqa: BLE001 - 预热失败不影响启动，首个请求时再初始化
+        log.warning(f"多源 SQL 预热失败（不影响使用）| {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
@@ -64,6 +80,7 @@ async def lifespan(app: FastAPI):
     _index_task = asyncio.create_task(ensure_perf_indexes())
     from app.core.database import check_connection_budget
     await check_connection_budget(1 if settings.app.debug else settings.app.workers)
+    _warmup_task = asyncio.create_task(_warmup_federated())  # noqa: F841 - 持有引用，避免任务被回收
 
     # 启动任务：备份正式核心数据 +（pre 环境）从正式表同步到空的 pre 表
     from app.core.backup import run_startup_tasks
@@ -284,7 +301,7 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "app" / "static")), na
 
 # 注册 API 路由
 from app.api import auth, projects, api_configs, datasources, monitor, test_api, gateway, views, users, sql_tools, \
-    system, members, approvals, plugin_libraries, owner_approvals, project_variables, releases
+    system, members, approvals, plugin_libraries, owner_approvals, project_variables, releases, catalog
 
 app.include_router(auth.router)
 app.include_router(projects.router)
@@ -303,3 +320,4 @@ app.include_router(owner_approvals.router)
 app.include_router(project_variables.router)
 app.include_router(plugin_libraries.router)
 app.include_router(releases.router)
+app.include_router(catalog.router)
