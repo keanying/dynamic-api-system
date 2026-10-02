@@ -1797,3 +1797,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
 .ui-select.ui-select.ui-select { padding-right: 34px; }
 .ui-select.form-select-sm { display: inline-flex; vertical-align: middle; }
 .ui-select.form-select-sm .ui-select-arrow { right: 11px; }
+
+/* API 卡片：方法+路径一行，标签单独一行可换行，标签文字不折断 */
+.api-card .api-path { margin-bottom: 6px; }
+.api-card .api-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; min-height: 22px; }
+.api-card .api-tags > span { white-space: nowrap; flex-shrink: 0; display: inline-flex; align-items: center; line-height: 1.5; }
+.api-card .api-tags .api-ds { font-family: var(--font-mono); font-size: 11.5px; color: var(--ui-muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 0; display: inline-block; }
+.api-card .api-tags .api-ds::before { content: '◇ '; color: #c4c4c8; }

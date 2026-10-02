@@ -137,6 +137,56 @@ function doConfirm() {
     closeConfirm();
 }
 
+// Promise 版输入弹窗：平替原生 prompt()，确定返回输入内容，取消返回 null
+// opts 可选: { value, placeholder, okText, cancelText, multiline, required }
+function promptAsync(title, message, opts) {
+    opts = opts || {};
+    return new Promise((resolve) => {
+        const ov = document.createElement('div');
+        ov.className = 'modal-overlay';
+        ov.style.display = 'flex';
+        const field = opts.multiline
+            ? `<textarea class="form-textarea" rows="4" placeholder="${escapeHtml(opts.placeholder || '')}"></textarea>`
+            : `<input type="text" class="form-input" placeholder="${escapeHtml(opts.placeholder || '')}">`;
+        ov.innerHTML = `
+            <div class="modal" style="max-width:480px;">
+                <div class="modal-header">
+                    <h3>${escapeHtml(title || '')}</h3>
+                    <button type="button" class="btn-icon" data-x>&times;</button>
+                </div>
+                <div class="modal-body">
+                    ${message ? `<p class="text-sm text-muted" style="margin-bottom:12px;white-space:pre-line;">${escapeHtml(message)}</p>` : ''}
+                    ${field}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-cancel>${escapeHtml(opts.cancelText || '取消')}</button>
+                    <button type="button" class="btn btn-primary" data-ok>${escapeHtml(opts.okText || '确定')}</button>
+                </div>
+            </div>`;
+        document.body.appendChild(ov);
+        const inp = ov.querySelector('input, textarea');
+        inp.value = opts.value || '';
+        const finish = (val) => {
+            document.removeEventListener('keydown', onKey, true);
+            ov.remove();
+            resolve(val);
+        };
+        const ok = () => {
+            if (opts.required && !inp.value.trim()) { inp.focus(); Toast.warning('请填写内容'); return; }
+            finish(inp.value);
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape') { e.preventDefault(); finish(null); }
+            else if (e.key === 'Enter' && (!opts.multiline || e.ctrlKey || e.metaKey) && document.activeElement === inp) { e.preventDefault(); ok(); }
+        };
+        document.addEventListener('keydown', onKey, true);
+        ov.querySelector('[data-ok]').onclick = ok;
+        ov.querySelector('[data-cancel]').onclick = () => finish(null);
+        ov.querySelector('[data-x]').onclick = () => finish(null);
+        setTimeout(() => inp.focus(), 0);
+    });
+}
+
 // Promise 版确认弹窗：可用 `if (!await confirmAsync(...)) return;` 平替原生 confirm()
 // opts 可选: { okText, cancelText, danger }
 function confirmAsync(title, message, opts) {
