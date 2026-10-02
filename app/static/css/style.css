@@ -1820,3 +1820,40 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
 .fill-card .pagination, .page-fill > .pagination { position: static; background: none; margin-top: 0; padding: 12px 0 2px; flex-shrink: 0; }
 .fill-card .pagination-wrapper { flex-shrink: 0; }
 @media (max-width: 900px) { .page-fill { height: calc(100vh - 124px); } }
+
+/* 数据源列表：改用网格（多列瀑布流在卡片少时会全挤在第一列） */
+#dsList { column-width: auto; columns: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; align-items: start; }
+#dsList .ds-card { display: block; width: auto; margin: 0; }
+
+/* 配置差异 */
+.diff-summary { margin-bottom: 12px; display: flex; gap: 8px; align-items: center; }
+.diff-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.diff-table { width: 100%; margin-bottom: 12px; }
+.diff-table td.d-before { color: #991b1b; }
+.diff-table td.d-after { color: #3d5a0a; }
+.diff-field { margin: 14px 0 6px; font-weight: 600; font-size: 13px; }
+.diff-block { border-radius: 12px; overflow: auto; }
+
+/* 审批中心 · 发布到生产 */
+.rel-bar { display: flex; align-items: center; gap: 14px; padding: 14px 20px 10px; flex-shrink: 0; flex-wrap: wrap; }
+.rel-bar .seg { background: #f1f1f3; }
+.rel-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; margin-bottom: 16px; font-size: 13px;
+            background: #f7f7f8; border-radius: 16px; padding: 14px 16px; }
+#relWrap .pagination { padding: 10px 0 12px; }
+/* 项目卡片：生产版本标签 */
+.badge-prod { background: var(--ui-ink); color: var(--ui-lime); }
+
+/* 仪表盘深色卡片里的小下拉 */
+.ui-select.pill-select { display: inline-flex; width: auto; min-height: 0; padding: 7px 34px 7px 14px; border: none; border-radius: 999px; font-size: 12.5px; box-shadow: none; }
+.card-dark .ui-select.pill-select { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.card-dark .ui-select.pill-select .ui-select-arrow { color: rgba(255, 255, 255, 0.7); }
+.card-dark .ui-select.pill-select:hover, .card-dark .ui-select.pill-select.is-open { background: rgba(255, 255, 255, 0.18); box-shadow: none; }
+.note-danger { background: #fdecec; color: #7f1d1d; }
+.note-danger::before { background: #dc2626; }
+
+/* 侧边栏收窄 */
+:root { --sidebar-width: 196px; }
+.sidebar-header { padding: 22px 18px 18px; }
+.sidebar-nav { padding: 8px 10px; }
+.sidebar .nav-item { padding: 11px 14px; gap: 10px; }
+.sidebar-footer { margin-left: 10px; margin-right: 10px; padding: 12px; }

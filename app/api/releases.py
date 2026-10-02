@@ -29,16 +29,24 @@ from app.core.runtime_env import CURRENT_ENV, ENV_LABEL, IS_PRE, IS_PROD, env_po
 from app.core.timezone import now as _cst_now
 from app.models.models import ApiConfig, Project, ReleaseRequest
 from app.services.audit import audit
-from app.services.release import ReleaseError, apply_release, build_snapshot, diff_snapshots, find_target
+from app.services.release import (ReleaseError, apply_release, build_snapshot, delete_everywhere, diff_snapshots,
+                                  find_target, prod_presence, read_env_snapshot)
 
 log = get_logger("releases")
 
 router = APIRouter(prefix="/api/releases", tags=["跨环境发布"])
 
 STATUS_LABELS = {"pending": "待审核", "approved": "已发布", "rejected": "已驳回", "cancelled": "已撤回"}
+ACTION_LABELS = {"publish": "发布", "delete": "删除"}
 
 
 class ReleaseCreate(BaseModel):
+    project_id: int
+    api_id: int
+    remark: str = Field("", max_length=512)
+
+
+class DeleteRequestBody(BaseModel):
     project_id: int
     api_id: int
     remark: str = Field("", max_length=512)
@@ -71,6 +79,7 @@ def _row(r: ReleaseRequest) -> dict:
     return {
         "id": r.id,
         "source_env": r.source_env, "target_env": r.target_env,
+        "action": r.action or "publish", "action_label": ACTION_LABELS.get(r.action or "publish", r.action),
         "project_code": r.project_code, "project_name": r.project_name,
         "source_api_id": r.source_api_id, "target_api_id": r.target_api_id,
         "api_name": r.api_name, "method": r.method, "url_path": r.url_path,
@@ -176,6 +185,126 @@ async def _load(db, release_id: int, lock: bool = False) -> Optional[ReleaseRequ
     return (await db.execute(q)).scalar_one_or_none()
 
 
+@router.get("/prod-presence")
+async def get_prod_presence(project_id: int, db: AsyncSession = Depends(get_db, scope="function"),
+                            user=Depends(get_current_user)):
+    """预发：本项目哪些 API 已经在生产里（按 方法 + 路径 对应），返回 {api_id: {version, status}}。"""
+    if not IS_PRE:
+        return R_ok(data={})
+    from app.core.permissions import is_project_member
+    if not (is_admin_or_above(user) or await is_project_member(db, user, project_id)):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="不是该项目成员")
+    project = (await db.execute(select(Project).where(Project.id == project_id))).scalar_one_or_none()
+    if not project:
+        return R_fail(ErrCode.PROJECT_NOT_FOUND)
+    try:
+        prod = await prod_presence(db, project.code)
+    except Exception as e:  # noqa: BLE001  生产表不存在等
+        log.warning(f"读取生产 API 列表失败 | project={project.code} | error={e}")
+        return R_ok(data={})
+    rows = (await db.execute(
+        select(ApiConfig.id, ApiConfig.method, ApiConfig.url_path).where(ApiConfig.project_id == project_id)
+    )).all()
+    return R_ok(data={str(i): prod[(m, u)] for i, m, u in rows if (m, u) in prod})
+
+
+@router.post("/delete")
+async def create_delete_request(req: DeleteRequestBody, db: AsyncSession = Depends(get_db, scope="function"),
+                                user=Depends(get_current_user)):
+    """预发：已发布到生产的 API 不能在预发单独删除，提交删除审核；生产管理员同意后两边一起删除。"""
+    if not IS_PRE:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="请在预发环境提交删除审核")
+    if not await can_edit_project_resources(db, user, req.project_id):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="无权删除该项目的 API")
+    api = (await db.execute(
+        select(ApiConfig).where(ApiConfig.id == req.api_id, ApiConfig.project_id == req.project_id)
+    )).scalar_one_or_none()
+    if not api:
+        return R_fail(ErrCode.API_NOT_FOUND)
+    if (api.api_type or "sql") == "sync" and not is_super_admin(user):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="远端同步类 API 只能由超级管理员删除")
+    project = (await db.execute(select(Project).where(Project.id == req.project_id))).scalar_one_or_none()
+    if not project:
+        return R_fail(ErrCode.PROJECT_NOT_FOUND)
+    try:
+        _, _, meta = await read_env_snapshot(db, "", project.code, api.method, api.url_path)
+    except ReleaseError as e:
+        return R_fail(ErrCode.SYSTEM_ERROR, msg=str(e))
+    if not meta:
+        return R_fail(ErrCode.API_DELETE_FAILED, msg="生产环境没有该 API，直接在预发删除即可")
+    dup = (await db.execute(select(ReleaseRequest.id).where(
+        ReleaseRequest.status == "pending",
+        ReleaseRequest.project_code == project.code,
+        ReleaseRequest.method == api.method,
+        ReleaseRequest.url_path == api.url_path,
+    ))).scalars().first()
+    if dup:
+        return R_fail(ErrCode.API_DELETE_FAILED, msg=f"该 API 已有待审核的发布单 #{dup}，请等待审核或先撤回")
+
+    snapshot = await build_snapshot(db, api)
+    rr = ReleaseRequest(
+        source_env=CURRENT_ENV, target_env="prod", action="delete",
+        project_code=project.code, project_name=project.name,
+        source_api_id=api.id, api_name=api.name,
+        method=api.method, url_path=api.url_path,
+        snapshot=json.dumps(snapshot, ensure_ascii=False),
+        remark=req.remark or "",
+        status="pending",
+        submitter_username=user.username, submitter_name=user.nickname or user.username,
+    )
+    db.add(rr)
+    await db.flush()
+    await audit(db, user, "release.delete_submit", "api", api.id,
+                f"删除单#{rr.id} {project.code} {api.method} {api.url_path}")
+    log.info(f"提交删除审核 | release_id={rr.id} | {project.code} {api.method} {api.url_path} | by={user.username}")
+    return R_ok(data={"id": rr.id}, msg="已提交删除审核，生产管理员同意后会同时删除生产和预发中的该 API")
+
+
+@router.get("/compare")
+async def compare_with_other_env(project_id: int, api_id: int,
+                                 db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
+    """当前环境的一个 API 与另一环境同名 API（按 项目编码 + 方法 + 路径 对应）的配置差异 (v2.23)。
+
+    方向固定为「生产当前 → 预发当前」：预发里看就是「发布后生产会变成什么样」。
+    """
+    from app.core.permissions import is_project_member
+    if not (is_admin_or_above(user) or await is_project_member(db, user, project_id)):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="不是该项目成员")
+    api = (await db.execute(
+        select(ApiConfig).where(ApiConfig.id == api_id, ApiConfig.project_id == project_id)
+    )).scalar_one_or_none()
+    if not api:
+        return R_fail(ErrCode.API_NOT_FOUND)
+    project = (await db.execute(select(Project).where(Project.id == project_id))).scalar_one_or_none()
+    if not project:
+        return R_fail(ErrCode.PROJECT_NOT_FOUND)
+
+    mine = await build_snapshot(db, api)
+    try:
+        exists, other, meta = await read_env_snapshot(db, "" if IS_PRE else "_pre", project.code, api.method, api.url_path)
+    except ReleaseError as e:
+        return R_fail(ErrCode.SYSTEM_ERROR, msg=str(e))
+
+    data = {
+        "api_name": api.name, "method": api.method, "url_path": api.url_path,
+        "project_code": project.code, "project_name": project.name,
+        "env": env_info(),
+        "other_env": "prod" if IS_PRE else "pre",
+        "other_project_exists": exists,
+        "other_api_exists": other is not None,
+        "other_version": meta["version"] if meta else None,
+        "other_status": meta["status"] if meta else None,
+        "version": api.version, "status": api.status,
+    }
+    if IS_PRE:
+        data["diff"] = diff_snapshots(other, mine, "生产当前", "预发当前")
+    elif other is not None:
+        data["diff"] = diff_snapshots(mine, other, "生产当前", "预发当前")
+    else:
+        data["diff"] = None   # 预发没有该 API
+    return R_ok(data=data)
+
+
 @router.get("/{release_id}")
 async def get_release(release_id: int, db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
     """发布单详情。生产环境实时对比「待发布快照 vs 生产当前配置」；
@@ -193,7 +322,28 @@ async def get_release(release_id: int, db: AsyncSession = Depends(get_db, scope=
     data["can_cancel"] = IS_PRE and rr.status == "pending" and (
         rr.submitter_username == user.username or is_super_admin(user))
 
-    if IS_PROD and rr.status == "pending":
+    if (rr.action or "publish") == "delete":
+        # 删除单：展示生产当前是否还有该 API、版本号（审核时校验没被改动）
+        data["diff"] = None
+        data["diff_basis"] = "delete"
+        if rr.status == "pending":
+            try:
+                if IS_PROD:
+                    _, prod_api = await find_target(db, rr.project_code, rr.method, rr.url_path)
+                    data["prod_version"] = prod_api.version if prod_api else None
+                    data["prod_status"] = prod_api.status if prod_api else None
+                else:
+                    _, _, meta = await read_env_snapshot(db, "", rr.project_code, rr.method, rr.url_path)
+                    data["prod_version"] = meta["version"] if meta else None
+                    data["prod_status"] = meta["status"] if meta else None
+            except ReleaseError as e:
+                data["diff_error"] = str(e)
+        return R_ok(data=data)
+    if rr.status == "approved":
+        before = json.loads(rr.prod_before) if rr.prod_before else None
+        data["diff"] = diff_snapshots(before, snapshot)
+        data["diff_basis"] = "at_release"
+    elif IS_PROD:
         project, prod_api = await find_target(db, rr.project_code, rr.method, rr.url_path)
         before = await build_snapshot(db, prod_api) if prod_api else None
         data["diff"] = diff_snapshots(before, snapshot)
@@ -202,13 +352,18 @@ async def get_release(release_id: int, db: AsyncSession = Depends(get_db, scope=
         data["prod_version"] = prod_api.version if prod_api else None
         data["prod_status"] = prod_api.status if prod_api else None
         data["diff_basis"] = "live"
-    elif rr.status == "approved":
-        before = json.loads(rr.prod_before) if rr.prod_before else None
-        data["diff"] = diff_snapshots(before, snapshot)
-        data["diff_basis"] = "at_release"
     else:
-        data["diff"] = None
-        data["diff_basis"] = "none"
+        # 预发 (v2.23)：同库直接读生产表，实时对比生产当前配置
+        try:
+            exists, before, meta = await read_env_snapshot(db, "", rr.project_code, rr.method, rr.url_path)
+            data["diff"] = diff_snapshots(before, snapshot)
+            data["prod_project_exists"] = exists
+            data["prod_version"] = meta["version"] if meta else None
+            data["diff_basis"] = "live"
+        except ReleaseError as e:
+            data["diff"] = None
+            data["diff_basis"] = "none"
+            data["diff_error"] = str(e)
     return R_ok(data=data)
 
 
@@ -232,6 +387,22 @@ async def approve_release(release_id: int, body: ReviewBody,
     if cur_version != body.expected_prod_version:
         return R_fail(ErrCode.API_UPDATE_FAILED,
                       msg="生产环境的该 API 在你查看差异后发生了变化，请刷新后重新核对差异")
+
+    if (rr.action or "publish") == "delete":
+        try:
+            prod_id, pre_id = await delete_everywhere(db, rr.project_code, rr.method, rr.url_path)
+        except ReleaseError as e:
+            return R_fail(ErrCode.API_DELETE_FAILED, msg=str(e))
+        rr.status = "approved"
+        rr.reviewer_username = user.username
+        rr.reviewer_name = user.nickname or user.username
+        rr.review_comment = body.comment or ""
+        rr.reviewed_at = _cst_now()
+        rr.target_api_id = prod_id
+        await audit(db, user, "release.delete", "api", prod_id or 0,
+                    f"删除单#{rr.id} {rr.project_code} {rr.method} {rr.url_path} 生产 api_id={prod_id} 预发 api_id={pre_id}")
+        log.info(f"删除审核通过 | release_id={rr.id} | prod_api={prod_id} | pre_api={pre_id} | by={user.username}")
+        return R_ok(data={"prod_api_id": prod_id, "pre_api_id": pre_id}, msg="已删除生产和预发中的该 API")
 
     try:
         api, before = await apply_release(

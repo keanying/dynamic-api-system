@@ -41,6 +41,9 @@ CORE_TABLES = [
     "src_dop_api_parameters",  # API 参数（依赖 api_configs）
 ]
 
+# 预发与生产共用、不加 _pre 后缀的表 (v2.23)
+SHARED_TABLES = {"src_dop_users"}
+
 BACKUP_DIR = os.path.join(str(BASE_DIR), "backup")
 
 
@@ -156,6 +159,8 @@ async def sync_prod_to_pre():
             await conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
         try:
             for base in CORE_TABLES:
+                if base in SHARED_TABLES:   # 两个环境共用的表（如用户表）不需要同步
+                    continue
                 pre_table = _t(base)   # 加 _pre 后缀
                 # _pre 表应已由 create_all 建好；正式表存在才能同步
                 if not await _table_exists(conn, pre_table):

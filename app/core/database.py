@@ -109,25 +109,25 @@ async def _run_migration(conn, table_suffix: str = ""):
 
     # ---- 1. src_dop_users: 补 nickname ----
     try:
-        cols = await _get_existing_columns(conn, "src_dop_users" + table_suffix, is_mysql)
+        cols = await _get_existing_columns(conn, "src_dop_users", is_mysql)
         if cols and "nickname" not in cols:
             if is_mysql:
                 await conn.execute(text(
-                    f"ALTER TABLE `src_dop_users{table_suffix}` ADD COLUMN `nickname` VARCHAR(64) NOT NULL DEFAULT '' AFTER `username`"
+                    f"ALTER TABLE `src_dop_users` ADD COLUMN `nickname` VARCHAR(64) NOT NULL DEFAULT '' AFTER `username`"
                 ))
             else:
                 await conn.execute(text(
-                    f"ALTER TABLE `src_dop_users{table_suffix}` ADD COLUMN `nickname` VARCHAR(64) NOT NULL DEFAULT ''"
+                    f"ALTER TABLE `src_dop_users` ADD COLUMN `nickname` VARCHAR(64) NOT NULL DEFAULT ''"
                 ))
             log.info("迁移: src_dop_users 添加 nickname 列")
         if cols and "global_role" not in cols:
             if is_mysql:
                 await conn.execute(text(
-                    f"ALTER TABLE `src_dop_users{table_suffix}` ADD COLUMN `global_role` VARCHAR(16) NOT NULL DEFAULT 'user'"
+                    f"ALTER TABLE `src_dop_users` ADD COLUMN `global_role` VARCHAR(16) NOT NULL DEFAULT 'user'"
                 ))
             else:
                 await conn.execute(text(
-                    f"ALTER TABLE `src_dop_users{table_suffix}` ADD COLUMN `global_role` VARCHAR(16) NOT NULL DEFAULT 'user'"
+                    f"ALTER TABLE `src_dop_users` ADD COLUMN `global_role` VARCHAR(16) NOT NULL DEFAULT 'user'"
                 ))
             log.info("迁移: src_dop_users 添加 global_role 列")
     except Exception as e:
@@ -498,10 +498,10 @@ async def _run_migration(conn, table_suffix: str = ""):
 
     # ---- src_dop_users: 补 token_epoch (v2.21+，早于该时间签发的登录凭证作废) ----
     try:
-        cols = await _get_existing_columns(conn, "src_dop_users" + table_suffix, is_mysql)
+        cols = await _get_existing_columns(conn, "src_dop_users", is_mysql)
         if cols and "token_epoch" not in cols:
             await conn.execute(text(
-                f"ALTER TABLE `src_dop_users{table_suffix}` ADD COLUMN `token_epoch` INTEGER NOT NULL DEFAULT 0"
+                f"ALTER TABLE `src_dop_users` ADD COLUMN `token_epoch` INTEGER NOT NULL DEFAULT 0"
             ))
             log.info("迁移: src_dop_users 添加 token_epoch 列")
     except Exception as e:
@@ -581,6 +581,27 @@ async def init_db():
                 await _run_migration(conn)
         except Exception as e:
             log.warning(f"自动迁移过程中出现异常（不影响首次建表） | error={str(e)}")
+
+    # 两个环境共用的表（不加后缀）补列：预发和生产谁先升级都能补上
+    try:
+        async with engine.begin() as conn:
+            is_mysql = "mysql" in settings.database.url
+            cols = await _get_existing_columns(conn, "src_dop_release_requests", is_mysql)
+            if cols and "action" not in cols:
+                await conn.execute(text(
+                    "ALTER TABLE src_dop_release_requests ADD COLUMN action VARCHAR(16) NOT NULL DEFAULT 'publish'"
+                ))
+                log.info("迁移: src_dop_release_requests 添加 action 列")
+    except Exception as e:
+        log.warning(f"迁移 src_dop_release_requests.action 失败 | error={str(e)}")
+
+    # v2.23：预发和生产共用用户表；预发首次以新版本启动时把原预发用户并入共用表
+    if IS_PRE:
+        from app.core.user_merge import merge_pre_users
+        try:
+            await merge_pre_users()
+        except Exception as e:
+            log.error(f"预发用户并入共用用户表失败，请检查后重启 | error={str(e)}")
 
 
 # ---------------------------------------------------------------------------

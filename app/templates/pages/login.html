@@ -32,7 +32,6 @@
 <!-- Toast -->
 <div id="toast-container"></div>
 
-<script src="/static/js/app.js"></script>
 <script>
 async function handleLogin(e) {
     e.preventDefault();
@@ -58,7 +57,7 @@ async function handleLogin(e) {
             if (data.data.nickname) {
                 localStorage.setItem('user_nickname', data.data.nickname);
             }
-            window.location.href = '/admin/dashboard';
+            window.location.href = SSO.safeNext(new URLSearchParams(location.search).get('next'));
         } else {
             errEl.textContent = data.msg || '登录失败';
             errEl.style.display = 'block';
@@ -71,5 +70,17 @@ async function handleLogin(e) {
     btn.disabled = false;
     btn.textContent = '登 录';
 }
+
+// 单点登录 (v2.23)：另一个环境已登录时，直接带登录状态回来，不用再输密码
+// （app.js 在 body 末尾加载，等页面脚本都就绪后再执行）
+document.addEventListener('DOMContentLoaded', async () => {
+    const q = new URLSearchParams(location.search);
+    if (q.get('sso') === 'none') return;
+    const other = SSO.otherEnv();
+    const url = other ? AppEnv.urlOf(other) : '';
+    if (!url || !(await SSO.reachable(url))) return;
+    const next = SSO.safeNext(q.get('next'));
+    location.replace(`${url}/sso/issue?to=${encodeURIComponent(AppEnv.info().env)}&next=${encodeURIComponent(next)}`);
+});
 </script>
 {% endblock %}

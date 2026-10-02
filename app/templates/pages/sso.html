@@ -1,0 +1,72 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}单点登录 - OneData Portal{% endblock %}
+
+{% block body %}
+<div class="sso-wait">
+    <div class="sso-dot"></div>
+    <div id="ssoMsg">正在登录…</div>
+</div>
+<style>
+    body { background: var(--ui-frame, #1c1c1e); }
+    .sso-wait { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: #d4d4d8; font-size: 14px; }
+    .sso-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--ui-lime, #d6f36a); animation: ssoPulse 0.9s ease-in-out infinite alternate; }
+    @keyframes ssoPulse { from { transform: scale(0.7); opacity: 0.5; } to { transform: scale(1.15); opacity: 1; } }
+</style>
+<script>
+// app.js 在 body 末尾加载，页面就绪后再执行
+document.addEventListener('DOMContentLoaded', async () => {
+    const mode = {{ sso_mode | tojson }};
+    const q = new URLSearchParams(location.search);
+    const next = SSO.safeNext(q.get('next'));
+    const other = SSO.otherEnv();
+    const otherUrl = other ? AppEnv.urlOf(other) : '';
+    const toLogin = (base) => location.replace(`${base || ''}/login?sso=none&next=${encodeURIComponent(next)}`);
+
+    if (mode === 'exchange') {
+        const ticket = q.get('ticket') || '';
+        history.replaceState(null, '', location.pathname);   // 票据不留在地址栏 / 历史记录里
+        try {
+            const r = await fetch('/api/auth/sso/exchange', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket }),
+            }).then(x => x.json());
+            if (r && r.status) {
+                API.setToken(r.data.token);
+                if (r.data.nickname) localStorage.setItem('user_nickname', r.data.nickname);
+                location.replace(next);
+                return;
+            }
+        } catch (e) { /* 落到登录页 */ }
+        toLogin('');
+        return;
+    }
+
+    // issue / logout 只接受「另一个环境」作为目标，地址取自配置，不信任 URL 参数里的地址
+    if (!otherUrl || q.get('to') !== other) { location.replace('/login?sso=none'); return; }
+
+    if (mode === 'logout') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user_nickname');
+        toLogin(otherUrl);
+        return;
+    }
+
+    // issue
+    const token = localStorage.getItem('token');
+    if (token) {
+        try {
+            const r = await fetch('/api/auth/sso/ticket', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ target_env: other }),
+            }).then(x => x.ok ? x.json() : null);
+            if (r && r.status) {
+                location.replace(`${otherUrl}/sso?ticket=${encodeURIComponent(r.data.ticket)}&next=${encodeURIComponent(next)}`);
+                return;
+            }
+        } catch (e) { /* 回对方登录页 */ }
+    }
+    toLogin(otherUrl);
+});
+</script>
+{% endblock %}

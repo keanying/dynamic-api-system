@@ -141,6 +141,10 @@ async def approve(approval_id: int, body: DecisionBody, db: AsyncSession = Depen
     if action == "delete":
         if not can_delete(cur):
             return R_fail(ErrCode.API_DELETE_FAILED, msg=f"API 当前状态「{cur_label}」不可删除，请驳回该申请")
+        from app.services.release import pre_delete_blocked
+        blocked = await pre_delete_blocked(db, api)
+        if blocked:
+            return R_fail(ErrCode.API_DELETE_FAILED, msg=blocked + "（请驳回该申请）")
         await db.delete(api)
     elif action == "online":
         # 旧版本遗留的上线申请：只允许把「待上线」(审批已通过) 的 API 上线，不能绕过上线审批

@@ -19,7 +19,9 @@ from app.core.runtime_env import t as _t
 
 
 class User(Base):
-    __tablename__ = _t("src_dop_users")
+    # v2.23：预发和生产共用一张用户表（不加 _pre 后缀），账号、密码、全局角色两边一致，
+    # 配合单点登录。项目成员关系仍按环境分别管理（src_dop_project_members[_pre]）。
+    __tablename__ = "src_dop_users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     nickname = Column(String(64), nullable=False, default="")  # 用户名（显示名称）
@@ -47,7 +49,7 @@ class ProjectMember(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     project_id = Column(Integer, ForeignKey(_t("src_dop_projects") + ".id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey(_t("src_dop_users") + ".id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("src_dop_users.id", ondelete="CASCADE"), nullable=False, index=True)
     project_role = Column(String(16), nullable=False, default="developer")
     created_at = Column(DateTime, default=_cst_now)
     updated_at = Column(DateTime, default=_cst_now, onupdate=_cst_now)
@@ -448,6 +450,8 @@ class ReleaseRequest(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     source_env = Column(String(16), nullable=False, default="pre")
     target_env = Column(String(16), nullable=False, default="prod")
+    # publish：发布到生产；delete (v2.23)：删除生产和预发中的该 API（预发不能单独删除已发布到生产的 API）
+    action = Column(String(16), nullable=False, default="publish")
 
     project_code = Column(String(64), nullable=False, index=True)
     project_name = Column(String(128), default="")
@@ -473,3 +477,21 @@ class ReleaseRequest(Base):
 
     created_at = Column(DateTime, default=_cst_now, index=True)
     updated_at = Column(DateTime, default=_cst_now, onupdate=_cst_now)
+
+
+class SsoTicket(Base):
+    """单点登录一次性票据 (v2.23)：预发、生产共用（不加 _pre 后缀）。
+
+    A 环境为已登录用户签发票据 → 浏览器带着票据打开 B 环境 → B 校验后签发自己的登录凭证。
+    只存票据的 SHA-256；有效期很短，用一次即作废。
+    """
+    __tablename__ = "src_dop_sso_tickets"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ticket_hash = Column(String(64), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, nullable=False)
+    source_env = Column(String(16), nullable=False, default="")
+    target_env = Column(String(16), nullable=False, default="")
+    expires_at = Column(Integer, nullable=False)      # unix 秒
+    used_at = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=_cst_now)

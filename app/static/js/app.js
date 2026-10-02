@@ -60,7 +60,7 @@ const API = {
             if (resp.status === 401) {
                 this.token = '';
                 localStorage.removeItem('token');
-                window.location.href = '/login';
+                window.location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);
                 return null;
             }
             const data = await resp.json();
@@ -256,10 +256,19 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ========== 登出 ==========
-function logout() {
+// 单点登录 (v2.23)：退出时顺带退出另一个环境（先跳到对方 /sso/logout 清掉登录，再回本环境登录页）；
+// 另一个环境访问不到时只退出本环境。
+async function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user_nickname');
-    window.location.href = '/login';
+    API.token = '';
+    const other = SSO.otherEnv();
+    const url = other ? AppEnv.urlOf(other) : '';
+    if (url && await SSO.reachable(url)) {
+        window.location.href = `${url}/sso/logout?to=${encodeURIComponent(AppEnv.info().env)}`;
+        return;
+    }
+    window.location.href = '/login?sso=none';
 }
 
 // ========== 分页渲染 ==========
@@ -382,6 +391,42 @@ const AppEnv = {
     isAdminRole(role) { return role === 'super_admin' || role === 'admin'; },
 };
 
+// ========== 单点登录 (v2.23) ==========
+// 预发和生产共用用户表；在一个环境登录后，去另一个环境不用再输密码：
+// 本环境签发一次性票据 → 打开对方 /sso?ticket=... → 对方换成自己的登录凭证。
+const SSO = {
+    safeNext(n) { return (typeof n === 'string' && /^\/(?![\/\\])/.test(n)) ? n : '/admin/dashboard'; },
+    otherEnv() { const e = AppEnv.info(); return e.env ? (e.is_prod ? 'pre' : 'prod') : ''; },
+    // 对方环境在浏览器里能否访问（no-cors 只看网络是否可达）
+    async reachable(url, ms = 1500) {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), ms);
+        try { await fetch(url + '/api/releases/env', { mode: 'no-cors', cache: 'no-store', signal: ctl.signal }); return true; }
+        catch (e) { return false; }
+        finally { clearTimeout(timer); }
+    },
+    // 带登录状态打开另一个环境的页面；win 传入预先打开的新窗口（避免被拦截弹窗）
+    async go(next, win) {
+        const other = this.otherEnv();
+        const url = AppEnv.urlOf(other);
+        if (!url) { if (win) win.close(); return; }
+        let target = `${url}/login?next=${encodeURIComponent(next)}`;
+        try {
+            const r = await API.post('/api/auth/sso/ticket', { target_env: other });
+            if (r && r.status) target = `${url}/sso?ticket=${encodeURIComponent(r.data.ticket)}&next=${encodeURIComponent(next)}`;
+        } catch (e) { /* 退回对方登录页 */ }
+        if (win) win.location = target; else location.href = target;
+    },
+};
+
+// 带 data-sso-next 的链接：新窗口打开另一个环境并自动登录
+document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[data-sso-next]');
+    if (!a || !API.token) return;
+    e.preventDefault();
+    SSO.go(a.dataset.ssoNext, window.open('about:blank', '_blank'));
+});
+
 let _mePromise = null;
 function getMe() {
     if (!_mePromise) _mePromise = API.get('/api/auth/me').then(r => (r && r.data) || {}).catch(() => ({}));
@@ -397,7 +442,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const other = env.is_prod ? 'pre' : 'prod';
     const otherUrl = AppEnv.urlOf(other);
     if (link && otherUrl) {
-        link.href = otherUrl + (env.is_prod ? '/admin/projects' : '/admin/releases');
+        const nextPath = env.is_prod ? '/admin/projects' : '/admin/approvals?tab=release';
+        link.href = otherUrl + nextPath;
+        link.dataset.ssoNext = nextPath;
         link.target = '_blank';
         link.textContent = env.is_prod ? '前往预发 ↗' : '前往生产 ↗';
         link.style.display = '';
@@ -409,7 +456,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const me = await getMe();
         if (me.global_role && !AppEnv.isAdminRole(me.global_role)) {
             banner.innerHTML = '当前为 <b>生产环境</b>，非管理员只能查看。如需修改，请在预发环境修改并验证后「发布到生产」，由生产管理员核对差异后审核上线。'
-                + (otherUrl ? ` <a href="${otherUrl}/admin/projects" target="_blank">前往预发 ↗</a>` : '');
+                + (otherUrl ? ` <a href="${otherUrl}/admin/projects" data-sso-next="/admin/projects" target="_blank">前往预发 ↗</a>` : '');
             banner.style.display = '';
         }
     }
@@ -423,7 +470,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // - 不想处理的 select 加 class="no-ui"
 // ============================================================
 const UISelect = (() => {
-    const SEL = 'select:not([multiple]):not([size]):not(.pill-select):not(.no-ui)';
+    const SEL = 'select:not([multiple]):not([size]):not(.no-ui)';
     const vDesc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
     const iDesc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'selectedIndex');
     const ARROW = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
@@ -476,7 +523,7 @@ const UISelect = (() => {
     // 自适应宽度的下拉（小号 / 顶部信息条）：像原生 select 一样按最长选项定宽，切换选项时不跳动
     let canvas = null;
     function fitWidth(wrap) {
-        if (wrap.style.width || !(wrap.classList.contains('form-select-sm') || wrap.closest('.idbar-field'))) return;
+        if (wrap.style.width || !(wrap.classList.contains('form-select-sm') || wrap.classList.contains('pill-select') || wrap.closest('.idbar-field'))) return;
         const cs = getComputedStyle(wrap);
         if (!cs.font) return;
         canvas = canvas || document.createElement('canvas');
@@ -613,3 +660,75 @@ const UISelect = (() => {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
     return { enhance, refresh, close };
 })();
+
+// ============================================================
+// 配置差异展示 (v2.23)：发布单审核、发布前确认、「对比生产 / 对比预发」共用
+// diff: 后端 diff_snapshots 的结果 {is_new, changed_count, fields:[...]}
+// ============================================================
+const ReleaseDiff = {
+    lines(lines) {
+        return '<div class="diff-block">' + (lines || []).map(l => {
+            let cls = '';
+            if (l.startsWith('+++') || l.startsWith('---')) cls = 'd-meta';
+            else if (l.startsWith('@@')) cls = 'd-hunk';
+            else if (l.startsWith('+')) cls = 'd-add';
+            else if (l.startsWith('-')) cls = 'd-del';
+            return `<div class="${cls}">${escapeHtml(l) || '&nbsp;'}</div>`;
+        }).join('') + '</div>';
+    },
+    val(v) {
+        if (v === null || v === undefined) return '<span class="text-muted">—</span>';
+        if (v === true) return '是';
+        if (v === false) return '否';
+        if (v === '') return '<span class="text-muted">（空）</span>';
+        return escapeHtml(String(v));
+    },
+    // opts: { beforeLabel, afterLabel, newText }
+    render(diff, opts) {
+        opts = opts || {};
+        const bl = opts.beforeLabel || '生产当前', al = opts.afterLabel || '待发布';
+        if (!diff) return '';
+        let html = `<div class="diff-summary">${diff.is_new
+            ? `<span class="badge badge-violet">${escapeHtml(opts.newText || '生产环境还没有该 API，发布后新建')}</span>`
+            : (diff.changed_count
+                ? `<span class="badge badge-warning">${diff.changed_count} 项不同</span>`
+                : '<span class="badge badge-success">完全一致</span>')}</div>`;
+        const changed = diff.fields.filter(f => f.changed);
+        const same = diff.fields.filter(f => !f.changed);
+        const simple = changed.filter(f => !f.multiline);
+        if (simple.length) {
+            html += `<table class="data-table diff-table"><thead><tr><th style="width:160px;">配置项</th><th>${escapeHtml(bl)}</th><th>${escapeHtml(al)}</th></tr></thead><tbody>`
+                 + simple.map(f => `<tr><td>${escapeHtml(f.label)}</td><td class="d-before">${this.val(f.before)}</td><td class="d-after">${this.val(f.after)}</td></tr>`).join('')
+                 + '</tbody></table>';
+        }
+        changed.filter(f => f.multiline).forEach(f => {
+            html += `<div class="diff-field">${escapeHtml(f.label)}</div>` + this.lines(f.diff);
+        });
+        if (same.length && changed.length) {
+            html += `<p class="text-muted text-sm" style="margin-top:12px;">相同：${same.map(f => escapeHtml(f.label)).join('、')}</p>`;
+        }
+        return html;
+    },
+};
+
+// 「对比生产 / 对比预发」：当前环境的 API 与另一环境同名 API 的差异
+async function compareWithOtherEnv(projectId, apiId) {
+    const r = await API.get(`/api/releases/compare?project_id=${projectId}&api_id=${apiId}&_t=${Date.now()}`);
+    if (!r || !r.status) { Toast.error((r && r.msg) || '对比失败'); return; }
+    const d = r.data;
+    const otherLabel = d.other_env === 'prod' ? '生产' : '预发';
+    let body = `<div class="diff-head">${methodBadge(d.method)} <code>${escapeHtml(d.url_path)}</code>
+        <span class="text-muted text-sm">项目 ${escapeHtml(d.project_name)}（${escapeHtml(d.project_code)}）</span></div>`;
+    if (!d.other_project_exists) body += `<div class="note">${otherLabel}环境没有项目「${escapeHtml(d.project_code)}」</div>`;
+    else if (!d.diff) body += `<div class="note">${otherLabel}环境还没有这个 API</div>`;
+    else body += ReleaseDiff.render(d.diff, { beforeLabel: '生产当前', afterLabel: '预发当前', newText: '生产环境还没有该 API' });
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay';
+    ov.style.display = 'flex';
+    ov.innerHTML = `<div class="modal" style="max-width:960px;width:94vw;">
+        <div class="modal-header"><h3>对比${otherLabel} · ${escapeHtml(d.api_name)}</h3><button class="btn-icon" data-x>&times;</button></div>
+        <div class="modal-body" style="max-height:70vh;overflow:auto;">${body}</div>
+        <div class="modal-footer"><button class="btn btn-secondary" data-x>关闭</button></div></div>`;
+    ov.querySelectorAll('[data-x]').forEach(b => b.onclick = () => ov.remove());
+    document.body.appendChild(ov);
+}
