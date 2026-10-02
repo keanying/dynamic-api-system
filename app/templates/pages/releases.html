@@ -81,7 +81,7 @@ function esc(v) { return escapeHtml(v === null || v === undefined ? '' : String(
 
 function relBadge(st) {
     const [t, c, bg] = REL_STATUS[st] || [st, '#52525b', '#f1f1f3'];
-    return `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${bg};color:${c};font-weight:600;">${t}</span>`;
+    return `<span style="font-size:11px;padding:2px 9px;border-radius:999px;background:${bg};color:${c};font-weight:600;">${t}</span>`;
 }
 
 function switchTab(tab) {

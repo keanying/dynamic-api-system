@@ -157,23 +157,23 @@ async function loadApis(page) {
             offline:  ['已下线', '#9a3412', '#ffedd5'],
         };
         const [stLabel, stColor, stBg] = stMap[st] || stMap.draft;
-        const statusBadge = `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${stBg};color:${stColor};font-weight:600;">${stLabel}</span>`;
+        const statusBadge = `<span style="font-size:11px;padding:2px 9px;border-radius:999px;background:${stBg};color:${stColor};font-weight:600;">${stLabel}</span>`;
         const isLocked = !!api.is_locked;
         const lockBadge = isLocked
-            ? `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#fee2e2;color:#b91c1c;font-weight:600;">🔒 已锁定</span>`
+            ? `<span style="font-size:11px;padding:2px 9px;border-radius:999px;background:#fee2e2;color:#b91c1c;font-weight:600;">🔒 已锁定</span>`
             : '';
 
         // 缓存 / 预热 状态标 (v2.13)
         const cacheOn = !!api.cache_enabled;
         const prewarmOn = !!api.cache_prewarm;
         const cacheBadge = cacheOn
-            ? `<span title="已开启缓存，TTL ${api.cache_ttl || 300} 秒" style="font-size:11px;padding:2px 8px;border-radius:4px;background:#ece8fd;color:#5b44c9;font-weight:600;">⚡ 缓存 ${api.cache_ttl || 300}s</span>`
+            ? `<span title="已开启缓存，TTL ${api.cache_ttl || 300} 秒" style="font-size:11px;padding:2px 9px;border-radius:999px;background:#ece8fd;color:#5b44c9;font-weight:600;">⚡ 缓存 ${api.cache_ttl || 300}s</span>`
             : '';
         // 预热依赖缓存，没开缓存时即使标记了预热也不会生效，这里给出提示
         const prewarmBadge = prewarmOn
             ? (cacheOn
-                ? `<span title="已开启自动预热：缓存快过期时后台自动重新查询回填（参数记录按自然日隔离）" style="font-size:11px;padding:2px 8px;border-radius:4px;background:#eaf8c4;color:#3d5a0a;font-weight:600;">🔥 预热</span>`
-                : `<span title="历史遗留配置：勾了预热但没开缓存，预热不会生效，建议编辑该 API 开启缓存或关掉预热" style="font-size:11px;padding:2px 8px;border-radius:4px;background:#fef3c7;color:#92400e;font-weight:600;">🔥 预热(未启用缓存)</span>`)
+                ? `<span title="已开启自动预热：缓存快过期时后台自动重新查询回填（参数记录按自然日隔离）" style="font-size:11px;padding:2px 9px;border-radius:999px;background:#eaf8c4;color:#3d5a0a;font-weight:600;">🔥 预热</span>`
+                : `<span title="历史遗留配置：勾了预热但没开缓存，预热不会生效，建议编辑该 API 开启缓存或关掉预热" style="font-size:11px;padding:2px 9px;border-radius:999px;background:#fef3c7;color:#92400e;font-weight:600;">🔥 预热(未启用缓存)</span>`)
             : '';
 
         // 当前登录用户 id（用于判断"待上线"时是否本人提交，显示上线按钮）
@@ -375,16 +375,15 @@ async function openVariablesDialog() {
     __varTypes = (res && res.data && res.data.var_types) || [];
 
     const html = `
-      <div id="__varsModal" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:9999;">
-        <div style="background:#fff;border-radius:8px;padding:20px;width:860px;max-height:86vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);">
-          <h3 style="margin:0 0 6px;font-size:16px;">项目环境变量</h3>
-          <p style="font-size:12px;color:#71717a;margin:0 0 14px;">
-            供「缓存预热参数模板」引用，写法 <code>\${变量名}</code>。
-            预热时实时求值，这样参数里的时间不会写死过期（例如今天预热就是今天的时间范围）。
-          </p>
+      <div id="__varsModal" class="modal-overlay" style="display:flex;">
+        <div class="modal" style="max-width:880px;width:94%;">
+          <div class="modal-header"><h3>项目环境变量</h3><button class="btn-icon" onclick="document.getElementById('__varsModal').remove()">&times;</button></div>
+          <div class="modal-body" style="max-height:70vh;overflow:auto;">
+          <div class="note" style="margin:0 0 14px;font-size:12.5px;"><span>供「缓存预热参数模板」引用，写法 <code>\${变量名}</code>。
+            预热时实时求值，这样参数里的时间不会写死过期（例如今天预热就是今天的时间范围）。</span></div>
           <div id="__varsList"></div>
-          <div style="border-top:1px solid #e4e4e7;margin-top:14px;padding-top:14px;">
-            <div style="font-size:13px;font-weight:600;margin-bottom:8px;">新增变量</div>
+          <div style="background:#f7f7f8;border-radius:18px;margin-top:14px;padding:16px;">
+            <div style="font-size:13px;font-weight:600;margin-bottom:10px;">新增变量</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
               <div><label style="font-size:11px;color:#71717a;display:block;">变量名</label>
                 <input id="__vName" class="form-input" style="width:150px;" placeholder="TODAY_START"></div>
@@ -404,8 +403,9 @@ async function openVariablesDialog() {
               偏移含义随类型而定：日期类按天，周类按周，月类按月。例：类型「日期」偏移 -1 = 昨天；类型「月初」偏移 -1 = 上月一号。
             </div>
           </div>
-          <div style="text-align:right;margin-top:16px;">
-            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('__varsModal').remove()">关闭</button>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="document.getElementById('__varsModal').remove()">关闭</button>
           </div>
         </div>
       </div>`;

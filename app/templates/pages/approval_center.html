@@ -53,7 +53,7 @@ function switchTab(tab) {
 
 function actionBadge(label) {
     const color = { '上线': '#3d5a0a', '下线': '#b45309', '删除': '#b91c1c' }[label] || '#52525b';
-    return `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;background:${color}1a;color:${color};">${label}</span>`;
+    return `<span style="display:inline-block;padding:2px 9px;border-radius:999px;white-space:nowrap;font-size:12px;background:${color}1a;color:${color};">${label}</span>`;
 }
 
 function statusBadge(st) {

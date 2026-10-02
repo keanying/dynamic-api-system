@@ -162,7 +162,7 @@ async function showLogDetail(logId) {
             <div><span class="text-muted text-sm">创建时间</span><div>${formatDate(log.created_at)}</div></div>
             <div><span class="text-muted text-sm">状态码</span><div>${log.status_code}</div></div>
             <div><span class="text-muted text-sm">调用来源</span><div>${sourceBadge(log.call_source)}</div></div>
-            <div><span class="text-muted text-sm">返回行数</span><div class="font-mono">${log.row_count ?? 0}${log.cache_hit ? ' <span class="badge" style="background:#fef3c7;color:#b45309;padding:1px 7px;border-radius:4px;font-size:11px;">缓存命中</span>' : ''}</div></div>
+            <div><span class="text-muted text-sm">返回行数</span><div class="font-mono">${log.row_count ?? 0}${log.cache_hit ? ' <span class="badge" style="background:#fef3c7;color:#b45309;padding:1px 8px;border-radius:999px;font-size:11px;">缓存命中</span>' : ''}</div></div>
             <div><span class="text-muted text-sm">阶段耗时</span><div class="font-mono" style="font-size:12px;">渲染 ${formatMs(log.render_time_ms || 0)} · 查询 ${formatMs(log.query_time_ms || 0)} · 总 ${formatMs(log.response_time_ms)}</div></div>
             <div style="grid-column: span 2;">
                 <span class="text-muted text-sm">Trace ID（点击复制，可用于在日志文件里 grep）</span>

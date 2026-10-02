@@ -24,7 +24,7 @@
 
         <p><b>2. 新建一个库</b>（仅超级管理员）<br>
         点「新建插件库」，填写库名（英文标识，如 <code>utils</code>），在代码区定义函数，例如：</p>
-        <pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;">def format_money(cents):
+        <pre style="background:#2a2a2d;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;">def format_money(cents):
     return round(cents / 100, 2)
 
 def add_label(rows, prefix):
@@ -34,7 +34,7 @@ def add_label(rows, prefix):
 
         <p><b>3. 在 API 插件里引用</b><br>
         在插件 API 的代码<b>开头</b>用注释声明引用，多个库用逗号分隔：</p>
-        <pre style="background:#282c34;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;"># require: utils
+        <pre style="background:#2a2a2d;color:#abb2bf;padding:12px;border-radius:6px;overflow:auto;"># require: utils
 def main(params, ctx):
     rows = ctx.query("my_db", "SELECT id FROM t")
     rows = add_label(rows, "U-")          # 直接调用库里的函数
@@ -76,7 +76,7 @@ def main(params, ctx):
             <div class="form-group">
                 <label class="form-label">代码（定义函数）</label>
                 <textarea id="libCode" class="form-textarea font-mono" rows="14"
-                    style="background:#282c34;color:#abb2bf;font-size:13px;line-height:1.6;padding:12px;white-space:pre;overflow:auto;tab-size:4;"
+                    style="background:#2a2a2d;color:#abb2bf;font-size:13px;line-height:1.6;padding:12px;white-space:pre;overflow:auto;tab-size:4;"
                     placeholder="def my_func(x):&#10;    return x * 2"></textarea>
             </div>
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
@@ -132,7 +132,7 @@ async function loadLibs() {
                     <div style="display:flex;gap:8px;">${ops}</div>
                 </div>
                 ${l.description ? `<div class="text-sm text-muted" style="margin-bottom:8px;">${escapeHtml(l.description)}</div>` : ''}
-                <pre style="background:#282c34;color:#abb2bf;padding:10px;border-radius:6px;overflow:auto;font-size:12px;max-height:200px;margin:0;">${escapeHtml(l.code || '')}</pre>
+                <pre style="background:#2a2a2d;color:#abb2bf;padding:10px;border-radius:6px;overflow:auto;font-size:12px;max-height:200px;margin:0;">${escapeHtml(l.code || '')}</pre>
             </div>
         </div>`;
     }).join('');

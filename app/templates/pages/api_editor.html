@@ -29,7 +29,7 @@
     .code-editor-container textarea {
         width: 100%;
         min-height: 200px;
-        background: #282c34;
+        background: #2a2a2d;
         color: #abb2bf;
         caret-color: #e4e4e7;
         font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
@@ -53,7 +53,7 @@
         line-height: 1.6;
         white-space: pre;
         overflow: auto;
-        background: #282c34;
+        background: #2a2a2d;
         cursor: text;
     }
     .code-editor-container pre code {
@@ -110,9 +110,12 @@
     }
     .call-url-box code {
         flex: 1;
+        min-width: 0;
         font-size: 12px;
         color: #27272a;
-        word-break: break-all;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         user-select: all;
     }
     .call-url-box .copy-btn {
@@ -178,7 +181,8 @@
     .idbar-name { flex: 1 1 200px; min-width: 180px; }
     .idbar-actions { display: flex; gap: 8px; align-items: center; margin-left: auto; }
     .idbar-sub { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
-    .idbar-sub .call-url-box { margin: 0; flex: 1; min-width: 260px; }
+    .idbar-sub .call-url-box { margin: 0; flex: 1 1 360px; min-width: 260px; }
+    .idbar-sub #ownerBox { flex: 0 0 auto; min-width: 0; }
     .idbar-enable { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); white-space: nowrap; }
 
     .editor-tabs {
@@ -666,14 +670,14 @@
                 </div>
                 <textarea id="apiHtml" class="form-textarea font-mono" rows="14"
                     placeholder='<h1>Hello OneData</h1>&#10;<div id="app"></div>'
-                    style="background:#282c34; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:2; white-space:pre; overflow:auto;"></textarea>
+                    style="background:#2a2a2d; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:2; white-space:pre; overflow:auto;"></textarea>
             </div>
             <div class="form-group">
                 <label class="form-label">CSS</label>
                 <div class="form-hint" style="margin-bottom:6px;">内联到 <code>&lt;head&gt;&lt;style&gt;</code> 中</div>
                 <textarea id="apiCss" class="form-textarea font-mono" rows="8"
                     placeholder="body { font-family: system-ui; padding: 24px; }"
-                    style="background:#282c34; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:2; white-space:pre; overflow:auto;"></textarea>
+                    style="background:#2a2a2d; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:2; white-space:pre; overflow:auto;"></textarea>
             </div>
             <div class="form-group">
                 <label class="form-label">JavaScript</label>
@@ -682,7 +686,7 @@
                 </div>
                 <textarea id="apiJs" class="form-textarea font-mono" rows="12"
                     placeholder="document.getElementById('app').innerText = JSON.stringify(window.__API_PARAMS__);"
-                    style="background:#282c34; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:2; white-space:pre; overflow:auto;"></textarea>
+                    style="background:#2a2a2d; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:2; white-space:pre; overflow:auto;"></textarea>
             </div>
             <div class="text-sm text-muted" style="margin-top:8px;">
                 调用方式：浏览器直接访问
@@ -765,7 +769,7 @@ Header: xpftkey: &lt;项目或API的Key&gt;
                 </div>
                 <textarea id="apiPlugin" class="form-textarea font-mono" rows="18"
                     placeholder="def main(params, ctx):&#10;    # params: 调用参数 dict&#10;    # ctx.query(数据源名, sql, 参数) 查数据&#10;    # ctx.http 调外部 HTTP（requests）&#10;    # ctx.log(msg) 写日志&#10;    rows = ctx.query('my_db', 'SELECT id, name FROM users WHERE id = :id', {'id': params['id']})&#10;    return {'count': len(rows), 'items': rows}"
-                    style="background:#282c34; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:4; white-space:pre; overflow:auto;"></textarea>
+                    style="background:#2a2a2d; color:#abb2bf; font-size:13px; line-height:1.6; padding:14px; tab-size:4; white-space:pre; overflow:auto;"></textarea>
             </div>
             <div class="text-sm text-muted" style="margin-top:4px; line-height:1.8;">
                 <strong>ctx 能力：</strong><br>
@@ -863,32 +867,34 @@ Header: xpftkey: &lt;项目或API的Key&gt;
 
 <!-- ===== 使用教程弹窗 ===== -->
 <div id="tutorialModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(28,28,30,0.55); align-items:center; justify-content:center;">
-  <div style="background:#fff; width:min(860px,94vw); max-height:88vh; border-radius:14px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,0.3);">
-    <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:1px solid #e4e4e7;">
-      <h3 style="margin:0; font-size:17px; font-weight:700; color:#1c1c1e;">SQL 模板 & 多步骤管线 — 使用教程</h3>
-      <button type="button" onclick="closeTutorial()" style="border:none; background:none; font-size:22px; color:#71717a; cursor:pointer; line-height:1;">&times;</button>
+  <div style="background:#fff; width:min(880px,94vw); max-height:88vh; border-radius:28px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 30px 80px rgba(28,28,30,0.35);">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:24px 26px 8px;">
+      <h3 style="margin:0; font-size:19px; font-weight:600; color:#1c1c1e;">SQL 使用教程</h3>
+      <button type="button" class="btn-icon" style="width:36px;height:36px;border-radius:50%;background:#f1f1f3;font-size:18px;" onclick="closeTutorial()">&times;</button>
     </div>
-    <div style="display:flex; gap:6px; padding:12px 22px 0; border-bottom:1px solid #e4e4e7; flex-wrap:wrap;">
+    <div class="tut-tabs">
       <button type="button" class="tut-tab" data-tab="basic"   onclick="switchTutTab('basic')">基础占位符</button>
       <button type="button" class="tut-tab" data-tab="cond"    onclick="switchTutTab('cond')">条件 & 循环</button>
       <button type="button" class="tut-tab" data-tab="like"    onclick="switchTutTab('like')">模糊 & 空值</button>
-      <button type="button" class="tut-tab" data-tab="pipeline" onclick="switchTutTab('pipeline')">多步骤管线</button>
-      <button type="button" class="tut-tab" data-tab="agg"     onclick="switchTutTab('agg')">聚合 & 关联</button>
+      <button type="button" class="tut-tab" data-tab="pipeline" id="tutTabPipeline" onclick="switchTutTab('pipeline')">多步骤管线</button>
+      <button type="button" class="tut-tab" data-tab="agg"     onclick="switchTutTab('agg')">汇总 & 关联</button>
     </div>
-    <div style="padding:20px 22px; overflow:auto;" id="tutBody"></div>
-    <div style="padding:12px 22px; border-top:1px solid #e4e4e7; text-align:right;">
+    <div style="padding:18px 26px; overflow:auto;" id="tutBody"></div>
+    <div style="padding:14px 26px 22px; text-align:right;">
       <button type="button" class="btn btn-secondary" onclick="closeTutorial()">关闭</button>
     </div>
   </div>
 </div>
 <style>
-  .tut-tab{border:none;background:none;padding:8px 14px;font-size:13px;color:#71717a;cursor:pointer;border-bottom:2px solid transparent;font-weight:500;}
-  .tut-tab.active{color:#8f78ee;border-bottom-color:#8f78ee;}
+  .tut-tabs{display:inline-flex; gap:4px; margin:8px 26px 0; padding:4px; background:#f1f1f3; border-radius:999px; flex-wrap:wrap; align-self:flex-start;}
+  .tut-tab{border:none;background:none;padding:7px 16px;font-size:13px;color:#71717a;cursor:pointer;border-radius:999px;font-weight:500;}
+  .tut-tab:hover{color:#1c1c1e;}
+  .tut-tab.active{background:#1c1c1e;color:#fff;}
   #tutBody h4{margin:18px 0 8px;font-size:14px;color:#1c1c1e;}
   #tutBody h4:first-child{margin-top:0;}
   #tutBody p{margin:6px 0;font-size:13px;color:#52525b;line-height:1.7;}
-  #tutBody pre{background:#1c1c1e;color:#e4e4e7;padding:13px 15px;border-radius:8px;font-size:12px;line-height:1.65;overflow:auto;margin:8px 0;font-family:'Fira Code','JetBrains Mono',monospace;}
-  #tutBody code{background:#f1f1f3;color:#be185d;padding:1px 5px;border-radius:3px;font-size:12px;}
+  #tutBody pre{background:#2a2a2d;color:#e4e4e7;padding:14px 16px;border-radius:14px;font-size:12px;line-height:1.65;overflow:auto;margin:8px 0;font-family:'Fira Code','JetBrains Mono',monospace;}
+  #tutBody code{background:#ece8fd;color:#5b44c9;padding:1px 6px;border-radius:6px;font-size:12px;}
   #tutBody pre code{background:none;color:inherit;padding:0;}
   #tutBody table{width:100%;border-collapse:collapse;margin:8px 0;font-size:12.5px;}
   #tutBody th,#tutBody td{border:1px solid #e4e4e7;padding:6px 10px;text-align:left;}
@@ -1109,7 +1115,7 @@ $endif$</code></pre>
     </table>
     <p><strong>数据源</strong>填数据源名（如 <code>"biz_db"</code>）或 id 字符串。<strong>最终返回</strong>给某步加 <code>"is_return": true</code>，不指定则返回最后一步。</p>
   `,
-  agg: `
+  pipeline_ops: `
     <h4>transform 步骤的几种 op</h4>
     <table>
       <tr><th>op</th><th>作用</th></tr>
@@ -1159,10 +1165,48 @@ $endif$</code></pre>
   "select": ["id", "name", { "amount": "\${right.amount or 0}" }] }</code></pre>
     <p><code>join_type</code> 支持 <code>left</code>（默认，保留左表全部）和 <code>inner</code>（仅匹配）。</p>
   `,
+  agg: `
+    <h4>最简单：选表生成 SQL</h4>
+    <p>SQL 模板右上角点 <b>选表生成 SQL</b>，勾选表和字段、关联表、筛选条件、分组汇总，自动生成下面这样的 SQL 和参数。</p>
+
+    <h4>分组汇总</h4>
+    <pre><code>SELECT dept_id,
+       COUNT(*)    AS order_count,
+       SUM(amount) AS total_amount,
+       AVG(amount) AS avg_amount
+  FROM orders
+ WHERE status = :status
+ GROUP BY dept_id
+ ORDER BY total_amount DESC</code></pre>
+
+    <h4>跨数据源关联（数据源切到「多个数据源」）</h4>
+    <p>表名写成 <code>数据源.库.表</code>，不同数据源的表可以直接 JOIN。</p>
+    <pre><code>SELECT u.city_level, SUM(o.amount) AS gmv
+  FROM biz.biz.orders o
+  JOIN selectdb.crm.members u ON u.user_name = o.user_name
+ WHERE o.status = :status
+ GROUP BY u.city_level</code></pre>
+
+    <h4>多个查询结果相加 / 拼成一行</h4>
+    <pre><code>SELECT (SELECT COUNT(*) FROM biz.biz.orders WHERE status = 'paid')
+     + (SELECT COUNT(*) FROM mysql2.mall.orders WHERE status = 'paid') AS total_cnt,
+       (SELECT SUM(amount) FROM biz.biz.orders) AS income</code></pre>
+
+    <h4>可选条件</h4>
+    <pre><code>SELECT * FROM orders
+ WHERE 1 = 1
+   $if(vip != null)$AND vip = :vip$endif$</code></pre>
+    <p>调用时不传 <code>vip</code> 就不加这个条件。</p>
+  `,
 };
+TUTORIAL_CONTENT.pipeline += TUTORIAL_CONTENT.pipeline_ops;
 
 function openTutorial(tab) {
   document.getElementById('tutorialModal').style.display = 'flex';
+  // 多步骤管线只对已在用管线的老 API 展示
+  const pt = document.getElementById('tutTabPipeline');
+  if (pt) pt.style.display = window.__hasPipeline ? '' : 'none';
+  if (tab === 'pipeline' && !window.__hasPipeline) tab = 'agg';
   switchTutTab(tab || 'basic');
 }
 function closeTutorial() {
@@ -1823,8 +1867,8 @@ async function spFetchSqlPreview() {
 
     const exprRows = (d.expressions || []).map(e => {
         const badge = e.kind === 'for'
-            ? `<span class="badge" style="background:#ecfccb;color:#4d7c0f;padding:1px 7px;border-radius:4px;font-size:10.5px;">loop × ${e.iter_count || 0}</span>`
-            : `<span class="badge" style="background:${e.value ? '#eaf8c4' : '#fee2e2'};color:${e.value ? '#3d5a0a' : '#b91c1c'};padding:1px 7px;border-radius:4px;font-size:10.5px;">${e.value ? 'keep' : 'drop'}</span>`;
+            ? `<span class="badge" style="background:#ecfccb;color:#4d7c0f;padding:1px 8px;border-radius:999px;font-size:10.5px;">loop × ${e.iter_count || 0}</span>`
+            : `<span class="badge" style="background:${e.value ? '#eaf8c4' : '#fee2e2'};color:${e.value ? '#3d5a0a' : '#b91c1c'};padding:1px 8px;border-radius:999px;font-size:10.5px;">${e.value ? 'keep' : 'drop'}</span>`;
         return `<tr><td><code style="font-size:11.5px;">${escapeHtml(e.expr)}</code></td><td style="text-align:center;">${badge}</td></tr>`;
     }).join('');
 
