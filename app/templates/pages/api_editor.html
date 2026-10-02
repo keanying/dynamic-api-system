@@ -138,33 +138,35 @@
         background: #fef2f2 !important;
     }
     /* 多步骤管线 - 可视化编排 */
-    .pmode-btn { border:none; background:#fff; padding:5px 12px; font-size:12px; color:#71717a; cursor:pointer; }
-    .pmode-btn.pmode-active { background:#8f78ee; color:#fff; }
-    .step-card { border:1px solid #e4e4e7; border-radius:10px; margin-bottom:10px; background:#fff; overflow:hidden; }
-    .step-card-head { display:flex; align-items:center; gap:10px; padding:10px 14px; background:#f7f7f8; border-bottom:1px solid #e4e4e7; }
-    .step-num { width:22px; height:22px; border-radius:50%; background:#8f78ee; color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-weight:600; }
+    .seg-toggle { display:inline-flex; gap:4px; padding:4px; background:#f1f1f3; border-radius:999px; flex-shrink:0; }
+    .pmode-btn { white-space:nowrap; border:none; background:transparent; padding:6px 14px; font-size:12.5px; color:#71717a; cursor:pointer; border-radius:999px; font-weight:500; }
+    .pmode-btn:hover { color:#1c1c1e; }
+    .pmode-btn.pmode-active { background:#1c1c1e; color:#fff; }
+    .step-card { border:none; border-radius:20px; margin-bottom:12px; background:#f7f7f8; overflow:hidden; }
+    .step-card-head { display:flex; align-items:center; gap:10px; padding:12px 16px 4px; background:transparent; border-bottom:none; }
+    .step-num { width:24px; height:24px; border-radius:50%; background:#1c1c1e; color:#d6f36a; font-size:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-weight:600; }
     .step-card-head .step-name-inp { font-weight:600; font-size:13px; border:1px solid transparent; background:transparent; padding:3px 6px; border-radius:4px; width:140px; }
     .step-card-head .step-name-inp:hover, .step-card-head .step-name-inp:focus { border-color:#d4d4d8; background:#fff; outline:none; }
-    .step-type-badge { font-size:11px; padding:2px 8px; border-radius:4px; background:#ece8fd; color:#5b44c9; }
+    .step-type-badge { font-size:11px; padding:2px 9px; border-radius:999px; background:#ece8fd; color:#5b44c9; }
     .step-type-badge.sql { background:#ece8fd; color:#5b44c9; }
-    .step-card-body { padding:12px 14px; }
+    .step-card-body { padding:10px 16px 14px; }
     .step-field { margin-bottom:10px; }
     .step-field label { display:block; font-size:11px; color:#71717a; margin-bottom:3px; font-weight:500; }
-    .step-field input, .step-field select, .step-field textarea {
-        width:100%; padding:6px 9px; font-size:12.5px; border:1px solid #d4d4d8; border-radius:5px; font-family:inherit;
+    .step-field input, .step-field select, .step-field textarea:not(.ce-ta) {
+        width:100%; padding:7px 12px; font-size:12.5px; border:1px solid #e4e4e7; border-radius:12px; background:#fff; font-family:inherit;
     }
-    .step-field textarea { font-family:'Fira Code','JetBrains Mono',monospace; font-size:12px; line-height:1.55; resize:vertical; }
+    .step-field textarea:not(.ce-ta) { font-family:'Fira Code','JetBrains Mono',monospace; font-size:12px; line-height:1.55; resize:vertical; }
     .step-field .hint { font-size:10.5px; color:#a1a1aa; margin-top:2px; }
     .step-row { display:flex; gap:10px; }
     .step-row > * { flex:1; }
-    .step-icon-btn { border:none; background:none; cursor:pointer; color:#a1a1aa; padding:3px 6px; border-radius:4px; font-size:13px; }
+    .step-icon-btn { border:none; background:none; cursor:pointer; color:#a1a1aa; padding:3px 8px; border-radius:999px; font-size:13px; }
     .step-icon-btn:hover { background:#e4e4e7; color:#52525b; }
     .step-icon-btn.del:hover { background:#fee2e2; color:#dc2626; }
     .kv-row { display:flex; gap:6px; margin-bottom:6px; align-items:center; }
-    .kv-row input { flex:1; padding:5px 8px; font-size:12px; border:1px solid #d4d4d8; border-radius:5px; }
+    .kv-row input { flex:1; padding:6px 12px; font-size:12px; border:1px solid #e4e4e7; border-radius:999px; background:#fff; }
     .kv-row .kv-del { border:none;background:none;color:#d4d4d8;cursor:pointer;font-size:16px;padding:0 4px; }
     .kv-row .kv-del:hover { color:#dc2626; }
-    .return-tag { font-size:10.5px; padding:2px 7px; border-radius:4px; background:#eaf8c4; color:#3d5a0a; cursor:pointer; border:1px solid #d9f09a; }
+    .return-tag { font-size:11px; padding:2px 9px; border-radius:999px; background:#eaf8c4; color:#3d5a0a; cursor:pointer; border:1px solid #d9f09a; }
     .return-tag.off { background:#f1f1f3; color:#a1a1aa; border-color:#e4e4e7; }
 
     /* ===== v2.2 编辑器工作台布局 ===== */
@@ -571,6 +573,7 @@
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px;"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7M14 17.5h7"/></svg>
                     选表生成 SQL
                 </button>
+                <button type="button" class="btn btn-ghost btn-sm" id="usePipelineBtn" onclick="usePipeline()">多步骤管线</button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="openStructurePreview('sql')">渲染预览</button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="openTutorial()">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px;"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -620,7 +623,7 @@
                         引用前序步骤结果。
                         <button type="button" class="btn btn-ghost btn-sm" style="padding:1px 8px;" onclick="openTutorial('pipeline')">查看教程 →</button>
                     </div>
-                    <div class="seg-toggle" style="display:flex; border:1px solid #d4d4d8; border-radius:6px; overflow:hidden;">
+                    <div class="seg-toggle">
                         <button type="button" id="modeBtnVisual" class="pmode-btn pmode-active" onclick="switchPipelineMode('visual')">可视化编排</button>
                         <button type="button" id="modeBtnJson" class="pmode-btn" onclick="switchPipelineMode('json')">JSON 模式</button>
                     </div>
@@ -1329,9 +1332,11 @@ function onApiTypeChange() {
     _single.className = type === 'federated' ? 'btn btn-ghost btn-sm' : 'btn btn-sm';
     _multi.className = type === 'federated' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
   }
-  // 多步骤管线已由「多个数据源」SQL 取代：只对已经配置了管线的老 API 显示
+  // 多步骤管线默认收起：已配置管线的 API 直接显示，新 API 点 SQL 卡片上的「多步骤管线」打开
   const _pc = document.getElementById('pipelineCard');
   if (_pc && !window.__hasPipeline) _pc.style.display = 'none';
+  const _pb = document.getElementById('usePipelineBtn');
+  if (_pb) _pb.style.display = (type === 'sql' && !window.__hasPipeline) ? '' : 'none';
   // 插件模式下"从 SQL 解析"无意义，隐藏
   const parseBtn = document.getElementById('parseSqlParamsBtn');
   if (parseBtn) parseBtn.style.display = (type === 'sql' || type === 'federated') ? '' : 'none';
@@ -3639,6 +3644,16 @@ function applyQueryWizard() {
     renderParams();
     closeQueryWizard();
     Toast.success(added ? `已生成 SQL，并添加 ${added} 个参数` : '已生成 SQL');
+}
+
+// 打开多步骤管线（新 API 默认不显示管线卡片）
+function usePipeline() {
+    window.__hasPipeline = true;
+    onApiTypeChange();
+    const cb = document.getElementById('pipelineEnabled');
+    if (cb && !cb.checked) { cb.checked = true; togglePipelineMode(); }
+    const card = document.getElementById('pipelineCard');
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // 「单个数据源 / 多个数据源」切换 = 在 sql 与 federated 两种类型之间切换
