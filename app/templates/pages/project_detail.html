@@ -183,22 +183,25 @@ async function loadApis(page) {
         const ib = (action, icon, tip, cls = '') =>
             `<button class="icon-act ${cls}" data-action="${action}" data-tip="${tip}" aria-label="${tip}"><img src="/static/img/icons/${icon}.png" alt=""></button>`;
         // 生命周期操作按钮（按状态）—— 锁定时禁止提交上线
+        // 状态提示图标（不可点击，悬停看说明）
+        const sicon = (icon, tip) =>
+            `<span class="icon-act icon-act-static" data-tip="${tip}" aria-label="${tip}" tabindex="0"><img src="/static/img/icons/${icon}.png" alt=""></span>`;
         let lifecycleBtns = '';
         if (isLocked) {
             lifecycleBtns = '';
         } else if (st === 'draft' || st === 'offline') {
             lifecycleBtns = ib('submit', 'online', '提交上线');
         } else if (st === 'pending') {
-            lifecycleBtns = `<button class="icon-act icon-act-text" data-action="withdraw" data-tip="撤回审核" aria-label="撤回">撤回</button>`;
+            lifecycleBtns = sicon('pending', '审核中') + ib('withdraw', 'withdraw', '撤回审核');
         } else if (st === 'approved') {
             // 待上线：提交者可点「上线」；其他人看到提示
             const canPublish = (api.approval_submitter_id && myId && api.approval_submitter_id === myId)
                                || (window.__ME__ && window.__ME__.is_super_admin);
             if (canPublish) {
                 lifecycleBtns = ib('publish', 'online', '上线')
-                    + `<button class="icon-act icon-act-text" data-action="withdraw" data-tip="撤回审核" aria-label="撤回">撤回</button>`;
+                    + ib('withdraw', 'withdraw', '撤回审核');
             } else {
-                lifecycleBtns = `<span class="icon-act-note">待发起者上线</span>`;
+                lifecycleBtns = sicon('pending', '会审通过，待发起者上线');
             }
         } else if (st === 'online') {
             lifecycleBtns = ib('offline', 'offline', '下线');
