@@ -137,9 +137,53 @@ def _check_ddl(sql: str) -> bool:
     return False
 
 
-def _build_cache_key(api_id: int, params: dict) -> str:
-    """构建缓存 key"""
+# ---- 只读防护 (v2.20) ----
+# 原来只在「模板原文的开头」查 DDL 关键字，存在多种绕过：用 $if$ 包一层、
+# 「SELECT 1; DELETE ...」多语句（驱动默认允许多语句，实测会真的执行）、
+# REPLACE / LOAD / INTO OUTFILE 等不在名单里的写法。
+# 现在对「渲染后真正要执行的 SQL」检查，单 SQL / 管线 / 插件三条路径统一在 _execute_mysql 里拦。
+_EXTRA_FORBIDDEN_START = ("REPLACE", "LOAD", "RENAME", "LOCK", "UNLOCK", "HANDLER")
+_OUTFILE_RE = re.compile(r"\bINTO\s+(OUTFILE|DUMPFILE)\b", re.IGNORECASE)
+_DML_WORD_RE = re.compile(r"\b(INSERT|UPDATE|DELETE|REPLACE)\b", re.IGNORECASE)
+_LOCKING_READ_RE = re.compile(r"\bFOR\s+UPDATE\b", re.IGNORECASE)
+
+
+def _code_only(sql: str) -> str:
+    """把字符串字面量和注释替换成空格，只留 SQL 代码部分做检查。"""
+    from app.services.sql_template import split_literals
+    parts = split_literals(sql or "")
+    return "".join(p if i % 2 == 0 else " " for i, p in enumerate(parts))
+
+
+def _readonly_violation(sql: str):
+    """检查即将执行的 SQL 是否只读；违规返回原因，否则返回 None。"""
+    code = _code_only(sql).strip()
+    body = code.rstrip("; \t\r\n")
+    if ";" in body:
+        return "不允许一次执行多条 SQL 语句"
+    if _check_ddl(body):
+        return "禁止执行 DDL 操作"
+    head = _strip_leading_comments(body).upper()
+    for kw in _EXTRA_FORBIDDEN_START:
+        if re.match(rf"^\s*\(?\s*{kw}\b", head):
+            return f"禁止执行 {kw} 语句"
+    if _OUTFILE_RE.search(body):
+        return "禁止 SELECT ... INTO OUTFILE / DUMPFILE"
+    if re.match(r"^\s*WITH\b", head) and _DML_WORD_RE.search(_LOCKING_READ_RE.sub(" ", body)):
+        return "禁止在 WITH 语句中执行写操作"
+    return None
+
+
+def _build_cache_key(api_id: int, params: dict, version=None) -> str:
+    """构建缓存 key。
+
+    v2.20: 带上 API 版本号。修改 SQL 等配置会使 version 自增，旧缓存随之失效；
+    原来修改后重新上线，调用方在缓存过期前（可能长达数小时）拿到的仍是旧 SQL 的结果。
+    key 前缀仍是 api:{id}:，「清除缓存」按前缀删除不受影响。
+    """
     param_str = json.dumps(params, sort_keys=True, default=str)
+    if version is not None:
+        param_str = f"v{version}|{param_str}"
     param_hash = hashlib.md5(param_str.encode()).hexdigest()
     return f"{settings.redis.key_prefix}api:{api_id}:{param_hash}"
 
@@ -910,7 +954,7 @@ async def execute_api(
         # 数据同步（写入类）API 不走缓存
         _is_sync = (getattr(api_config, "api_type", "sql") or "sql").lower() == "sync"
         if api_config.cache_enabled and not _is_sync:
-            cache_key = _build_cache_key(api_config.id, params)
+            cache_key = _build_cache_key(api_config.id, params, getattr(api_config, "version", None))
             # 开了自动预热的 API：记下这次的参数组合，供后台调度器定期回填缓存。
             # 放在缓存命中判断之前，保证命中时也会刷新 last_seen（表示这个参数还活跃）。
             # 注意：即使配了「预热参数覆盖」也要记录 —— 覆盖是以历史参数为底，
@@ -1152,6 +1196,14 @@ async def _get_mysql_pool(datasource: DataSource, password: str):
             autocommit=True,
         )
         _mysql_pools[key] = pool
+        # 同一数据源修改配置后 key 会变（含 updated_at），旧池不会再被使用，关闭它（v2.20：原来一直泄漏）
+        stale_prefix = f"{datasource.id}:"
+        for old_key in [k for k in _mysql_pools if k != key and k.startswith(stale_prefix)]:
+            old = _mysql_pools.pop(old_key)
+            try:
+                old.close()
+            except Exception:  # noqa: BLE001
+                pass
         log.info(
             f"业务数据源连接池已创建 | ds={datasource.name} | "
             f"{datasource.host}:{datasource.port}/{datasource.database_name} | maxsize={max(2, size)} | driver={MYSQL_DRIVER}"
@@ -1194,6 +1246,12 @@ async def _execute_mysql(
 
     if _is_debug():
         log.debug(f"MySQL 查询 | host={datasource.host}:{datasource.port} | db={datasource.database_name} | timeout={timeout}s")
+
+    # 只读防护：检查渲染后真正要执行的 SQL（v2.20），在建池/借连接之前做
+    violation = _readonly_violation(sql)
+    if violation:
+        log.warning(f"拦截非只读 SQL | ds={datasource.name} | 原因={violation} | sql={sql[:200]}")
+        raise Exception(violation)
 
     pool = await _get_mysql_pool(datasource, password)
 
@@ -1368,6 +1426,14 @@ def format_as_json(data):
             return data
     return data
 
+# 开放数据 API 不应能执行的 Redis 管理/破坏性命令（v2.20）
+_REDIS_FORBIDDEN = frozenset({
+    "FLUSHALL", "FLUSHDB", "CONFIG", "SHUTDOWN", "DEBUG", "SLAVEOF", "REPLICAOF", "MIGRATE",
+    "MODULE", "ACL", "CLIENT", "CLUSTER", "FAILOVER", "SAVE", "BGSAVE", "BGREWRITEAOF",
+    "SWAPDB", "SCRIPT", "EVAL", "EVALSHA", "FUNCTION", "FCALL", "MONITOR", "SYNC", "PSYNC",
+})
+
+
 async def _execute_redis_command(
     datasource: DataSource,
     password: str,
@@ -1387,9 +1453,11 @@ async def _execute_redis_command(
     )
 
     try:
-        # 简单替换参数
+        # 简单替换参数。按名称长度倒序替换（v2.20）：原来按字典顺序，
+        # 先替换 :id 会把 :id2 改成「值+2」
         command = command_template
-        for k, v in params.items():
+        for k in sorted(params, key=len, reverse=True):
+            v = params[k]
             command = command.replace(f":{k}", str(v) if v is not None else "")
 
         parts = command.strip().split()
@@ -1398,6 +1466,8 @@ async def _execute_redis_command(
 
         cmd = parts[0].upper()
         args = parts[1:]
+        if cmd in _REDIS_FORBIDDEN:
+            raise Exception(f"禁止通过 API 执行 Redis 管理命令: {cmd}")
 
         log.debug(f"Redis 命令 | cmd={cmd} | args={args}")
 

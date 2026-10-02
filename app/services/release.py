@@ -158,6 +158,10 @@ async def apply_release(db, snapshot: Dict[str, Any], project_code: str, method:
 
     if (snapshot.get("api_type") or "sql") == "sync" and not is_super_admin(approver):
         raise ReleaseError("数据同步类 API 只能由超级管理员发布到生产")
+    from app.api.api_configs import plugin_edit_denied
+    if ((snapshot.get("api_type") or "sql") == "plugin" or (snapshot.get("plugin_code") or "").strip()) \
+            and plugin_edit_denied(approver):
+        raise ReleaseError("插件类 API 只能由超级管理员发布到生产")
 
     ds_id = None
     ds_name = snapshot.get("datasource_name") or ""

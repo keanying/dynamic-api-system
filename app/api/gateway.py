@@ -63,9 +63,13 @@ async def _verify_api_key(
       - True  -> 取 api_config.api_key 或 project.api_key 作为期望值进行比对；
                  如果两者都没配置，记一条告警并放行（保持向后兼容，避免误锁库）。
     """
+    # 数据同步（写库）类 API (v2.20)：不允许关闭 Key 校验，也不允许「未配置 Key 即放行」，
+    # 否则任何人都能调用它往业务库写数据
+    is_sync = (getattr(api_config, "api_type", "sql") or "sql").lower() == "sync"
+
     # 显式关闭则直接放行
     require_flag = getattr(api_config, "require_api_key", True)
-    if require_flag is False:
+    if require_flag is False and not is_sync:
         log.debug(f"API Key 校验已关闭（require_api_key=False） | api_id={api_config.id}")
         return True
 
@@ -78,6 +82,9 @@ async def _verify_api_key(
     expected_key = api_config.api_key or project.api_key
 
     if not expected_key:
+        if is_sync:
+            log.warning(f"数据同步 API 未配置 API Key，拒绝调用 | api_id={api_config.id}")
+            return False
         log.debug(f"API Key 未配置，跳过认证 | api_id={api_config.id}")
         return True
 

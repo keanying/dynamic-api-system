@@ -292,10 +292,12 @@ function connStatusDot(status) {
     return `<span class="status-dot ${status}"></span>${status === 'connected' ? '正常' : status === 'error' ? '异常' : '未测试'}`;
 }
 
+// v2.20: 同时转义引号。原实现借 textContent→innerHTML，不转义 " 和 '，
+// 用在属性里（如 data-api-name="${escapeHtml(name)}"）时名称带引号即可跳出属性注入脚本
+const _HTML_ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/[&<>"']/g, c => _HTML_ESC[c]);
 }
 
 function jsonPretty(obj) {

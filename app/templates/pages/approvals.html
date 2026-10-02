@@ -104,11 +104,11 @@ async function loadApprovals() {
         <div class="card mb-16">
             <div class="card-body">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                    <div style="font-weight:600;font-size:15px;">${a.api_name}</div>
+                    <div style="font-weight:600;font-size:15px;">${escapeHtml(a.api_name || '')}</div>
                     <span style="font-size:12px;padding:3px 10px;border-radius:4px;background:#f1f5f9;color:#475569;">${OVERALL_LABEL[a.overall_status]||a.overall_status}</span>
                 </div>
                 <div class="text-sm text-muted" style="margin-bottom:10px;line-height:1.8;">
-                    提交人：${a.submitter ? a.submitter.nickname : '?'}　|　会审研发：${a.reviewer ? a.reviewer.nickname : '?'}<br>
+                    提交人：${a.submitter ? escapeHtml(a.submitter.nickname || '') : '?'}　|　会审研发：${a.reviewer ? escapeHtml(a.reviewer.nickname || '') : '?'}<br>
                     ${a.remark ? '说明：'+escapeHtml(a.remark)+'<br>' : ''}
                     提交时间：${a.created_at ? new Date(a.created_at).toLocaleString() : ''}
                 </div>

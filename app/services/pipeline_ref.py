@@ -153,10 +153,18 @@ def resolve(value: Any, ctx: dict) -> Any:
 import ast as _ast
 import operator as _op
 
+def _safe_pow(a, b):
+    """乘方加上限 (v2.20)：原来不限制，9 ** 9 ** 9 这类式子会在事件循环里算很久，
+    期间整个进程的所有请求都被卡住。业务算术用不到这么大的指数。"""
+    if abs(b) > 100 or (abs(a) > 1e6 and abs(b) > 10):
+        raise RefError(f"compute 乘方过大：{a!r} ** {b!r}")
+    return _op.pow(a, b)
+
+
 _ALLOWED_BINOPS = {
     _ast.Add: _op.add, _ast.Sub: _op.sub, _ast.Mult: _op.mul,
     _ast.Div: _op.truediv, _ast.FloorDiv: _op.floordiv,
-    _ast.Mod: _op.mod, _ast.Pow: _op.pow,
+    _ast.Mod: _op.mod, _ast.Pow: _safe_pow,
 }
 _ALLOWED_UNARY = {_ast.UAdd: _op.pos, _ast.USub: _op.neg}
 

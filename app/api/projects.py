@@ -279,6 +279,12 @@ async def export_project(
     )
     apis = apis_result.scalars().all()
 
+    from app.models.models import DataSource
+    ds_ids = list({x.datasource_id for x in apis if x.datasource_id})
+    ds_names = {}
+    if ds_ids:
+        dr = await db.execute(select(DataSource.id, DataSource.name).where(DataSource.id.in_(ds_ids)))
+        ds_names = dict(dr.all())
     export_data = {
         "project": {
             "code": project.code,
@@ -308,6 +314,20 @@ async def export_project(
             "rate_limit_enabled": api.rate_limit_enabled,
             "rate_limit_qps": api.rate_limit_qps,
             "max_rows": api.max_rows,
+            # v2.20：补齐原来漏掉的字段——流水线 / HTML 页面 / 插件类 API 原来导出后内容全丢
+            "api_type": api.api_type or "sql",
+            "datasource_name": ds_names.get(api.datasource_id, ""),
+            "pipeline_steps": api.pipeline_steps or "",
+            "html_content": api.html_content or "",
+            "css_content": api.css_content or "",
+            "js_content": api.js_content or "",
+            "plugin_code": getattr(api, "plugin_code", "") or "",
+            "require_api_key": bool(api.require_api_key) if api.require_api_key is not None else True,
+            "cache_prewarm": bool(getattr(api, "cache_prewarm", False)),
+            "prewarm_param_overrides": getattr(api, "prewarm_param_overrides", "") or "",
+            "prewarm_stop_daily": bool(getattr(api, "prewarm_stop_daily", False)),
+            "sync_tables": getattr(api, "sync_tables", "") or "",
+            "status": getattr(api, "status", "draft") or "draft",
             "parameters": [
                 {
                     "name": p.name,
@@ -316,6 +336,7 @@ async def export_project(
                     "default_value": p.default_value,
                     "description": p.description,
                     "sort_order": p.sort_order,
+                    "item_schema": getattr(p, "item_schema", "") or "",
                 }
                 for p in params
             ],

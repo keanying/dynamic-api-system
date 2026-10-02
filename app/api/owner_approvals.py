@@ -132,14 +132,25 @@ async def approve(approval_id: int, body: DecisionBody, db: AsyncSession = Depen
     if not await can_approve(db, user, api):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="只有责任人或管理员可审批")
 
-    # 执行动作
+    # 执行动作。v2.20：按 API「当前」状态重新校验——申请到审批之间状态可能已变化，
+    # 原来不校验，会出现「申请删除时是草稿、期间上线了、审批通过后直接删掉线上接口」
+    from app.services.api_lifecycle import can_delete, can_transition, STATUS_LABELS
     action = appr.action
+    cur = getattr(api, "status", "draft") or "draft"
+    cur_label = STATUS_LABELS.get(cur, cur)
     if action == "delete":
+        if not can_delete(cur):
+            return R_fail(ErrCode.API_DELETE_FAILED, msg=f"API 当前状态「{cur_label}」不可删除，请驳回该申请")
         await db.delete(api)
     elif action == "online":
+        # 旧版本遗留的上线申请：只允许把「待上线」(审批已通过) 的 API 上线，不能绕过上线审批
+        if not can_transition("publish", cur):
+            return R_fail(ErrCode.API_UPDATE_FAILED, msg=f"API 当前状态「{cur_label}」不可上线，请驳回该申请")
         api.status = "online"
         api.updated_at = cst_now()
     elif action == "offline":
+        if not can_transition("offline", cur):
+            return R_fail(ErrCode.API_UPDATE_FAILED, msg=f"API 当前状态「{cur_label}」不可下线，请驳回该申请")
         api.status = "offline"
         api.updated_at = cst_now()
     else:

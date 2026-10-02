@@ -154,6 +154,12 @@ async def update_datasource(
         log.warning(f"更新数据源失败: 数据源不存在 | ds_id={ds_id}")
         return R_fail(ErrCode.DS_NOT_FOUND)
 
+    # v2.20：原来无权限校验——任何登录用户都能改任意数据源的地址/账号/密码，
+    # 把所有引用它的 API 的查询导向别处。现与删除保持一致：管理员及以上，或数据源创建人
+    from app.core.permissions import is_admin_or_above
+    if not is_admin_or_above(_user) and getattr(ds, "created_by", None) != _user.id:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="仅管理员或该数据源的创建人可修改数据源")
+
     if req.name is not None:
         ds.name = req.name
     if req.type is not None:

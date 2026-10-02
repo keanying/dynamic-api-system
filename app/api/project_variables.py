@@ -78,9 +78,9 @@ async def create_variable(
     _user=Depends(get_current_user),
 ):
     """新增环境变量。"""
-    from app.core.permissions import is_project_member
-    if not await is_project_member(db, _user, project_id):
-        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="你不是该项目成员")
+    from app.core.permissions import can_edit_project_resources
+    if not await can_edit_project_resources(db, _user, project_id):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="只有项目管理员/研发可修改项目变量")
 
     name = (req.name or "").strip()
     if not name:
@@ -123,9 +123,9 @@ async def update_variable(
     _user=Depends(get_current_user),
 ):
     """修改环境变量。"""
-    from app.core.permissions import is_project_member
-    if not await is_project_member(db, _user, project_id):
-        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="你不是该项目成员")
+    from app.core.permissions import can_edit_project_resources
+    if not await can_edit_project_resources(db, _user, project_id):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="只有项目管理员/研发可修改项目变量")
 
     r = await db.execute(
         select(ProjectVariable).where(
@@ -172,9 +172,9 @@ async def delete_variable(
     _user=Depends(get_current_user),
 ):
     """删除环境变量。"""
-    from app.core.permissions import is_project_member
-    if not await is_project_member(db, _user, project_id):
-        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="你不是该项目成员")
+    from app.core.permissions import can_edit_project_resources
+    if not await can_edit_project_resources(db, _user, project_id):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="只有项目管理员/研发可修改项目变量")
 
     r = await db.execute(
         select(ProjectVariable).where(

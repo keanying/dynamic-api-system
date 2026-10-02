@@ -362,9 +362,9 @@
     }
 
     function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        // 同时转义引号（v2.20），可安全用于属性
+        if (text === null || text === undefined) return '';
+        return String(text).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
     }
 
     // ===== 创建/编辑弹窗 =====

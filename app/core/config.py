@@ -74,6 +74,8 @@ class SecurityConfig:
     ip_whitelist: List[str] = field(default_factory=list)
     max_request_body: int = 1048576
     max_array_length: int = 100
+    # 谁可以创建/修改插件类 API (v2.20+)：super_admin（默认）/ developer（项目研发即可，旧行为）
+    plugin_editor: str = "super_admin"
 
 
 @dataclass
@@ -256,6 +258,7 @@ def load_config() -> FullConfig:
             ip_whitelist=sec_raw.get("ip_whitelist", []),
             max_request_body=sec_raw.get("max_request_body", 1048576),
             max_array_length=sec_raw.get("max_array_length", 100),
+            plugin_editor=sec_raw.get("plugin_editor", "super_admin"),
         ),
         query=QueryConfig(
             default_max_rows=query_raw.get("default_max_rows", 10000),
