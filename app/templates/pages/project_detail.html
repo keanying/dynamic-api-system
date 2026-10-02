@@ -69,7 +69,13 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
             项目成员
         </button>
-        <button class="btn btn-primary" onclick="location.href='/admin/projects/{{ project_id }}/apis/new'">
+        {% if app_env and app_env.is_pre %}
+        <button class="btn btn-secondary" onclick="openSyncPanel()" title="和生产逐个对比，生产改过的可以拉取到预发">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
+            同步生产<span class="sync-dot" id="syncDot" style="display:none;"></span>
+        </button>
+        {% endif %}
+        <button class="btn btn-primary" id="createApiBtn" onclick="location.href='/admin/projects/{{ project_id }}/apis/new'">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             创建 API
         </button>
@@ -135,6 +141,11 @@ async function loadApis(page) {
     if (!data || !data.data) return;
 
     const { items, total, page_size } = data.data;
+    // 生产 (v2.24)：只有项目管理员 / 超管可以改动 API，其他人只读
+    const PROD_RO = !!data.data.prod_readonly;
+    const IS_PROD = !!(window.APP_ENV && window.APP_ENV.is_prod);
+    const cb = document.getElementById('createApiBtn');
+    if (cb) cb.style.display = PROD_RO ? 'none' : '';
     const container = document.getElementById('apiList');
     const empty = document.getElementById('apiEmpty');
 
@@ -187,7 +198,15 @@ async function loadApis(page) {
         const sicon = (icon, tip) =>
             `<span class="icon-act icon-act-static" data-tip="${tip}" aria-label="${tip}" tabindex="0"><img src="/static/img/icons/${icon}.png" alt=""></span>`;
         let lifecycleBtns = '';
-        if (isLocked) {
+        if (PROD_RO) {
+            lifecycleBtns = '';
+        } else if (IS_PROD && (st === 'draft' || st === 'offline')) {
+            // 生产：管理员直接上线（上线后自动锁定）
+            lifecycleBtns = ib('go-online', 'online', '上线');
+        } else if (IS_PROD && st === 'online') {
+            // 生产：发布过来的 API 是「上线 + 锁定」，管理员可直接下线
+            lifecycleBtns = ib('offline', 'offline', '下线');
+        } else if (isLocked) {
             lifecycleBtns = '';
         } else if (st === 'draft' || st === 'offline') {
             lifecycleBtns = ib('submit', 'online', '提交上线');
@@ -211,19 +230,19 @@ async function loadApis(page) {
             }
         }
         // 锁/解锁按钮（独立于上下线）
-        const lockBtn = isLocked ? ib('unlock', 'unlock', '解锁') : ib('lock', 'lock', '锁定');
+        const lockBtn = PROD_RO ? '' : (isLocked ? ib('unlock', 'unlock', '解锁') : ib('lock', 'lock', '锁定'));
         // 只读：编辑按钮在 审核中/待上线/已上线/锁定 时变"查看"
-        const readonly = (st === 'online' || st === 'pending' || st === 'approved' || isLocked);
+        const readonly = PROD_RO || (st === 'online' || st === 'pending' || st === 'approved' || isLocked);
         const editBtn = `<a href="/admin/projects/${PROJECT_ID}/apis/${api.id}" class="icon-act" data-tip="${readonly ? '查看' : '编辑'}" aria-label="${readonly ? '查看' : '编辑'}"><img src="/static/img/icons/${readonly ? 'view' : 'edit'}.png" alt=""></a>`;
         // 删除：仅 draft/offline 可删
-        const delBtn = (st === 'draft' || st === 'offline') ? ib('delete', 'delete', '删除', 'icon-act-danger') : '';
+        const delBtn = (!PROD_RO && (st === 'draft' || st === 'offline')) ? ib('delete', 'delete', '删除', 'icon-act-danger') : '';
 
         return `
         <div class="api-card" data-api-id="${api.id}" data-api-name="${escapeHtml(api.name)}" data-call-url="${escapeHtml(fullUrl)}" data-status="${st}">
             <div class="api-header">
                 <div class="api-name" title="${escapeHtml(api.name)}">${escapeHtml(api.name)}</div>
                 <label class="switch" title="${api.is_enabled ? '禁用' : '启用'}">
-                    <input type="checkbox" ${api.is_enabled ? 'checked' : ''} data-action="toggle">
+                    <input type="checkbox" ${api.is_enabled ? 'checked' : ''} ${PROD_RO ? 'disabled' : ''} data-action="toggle">
                     <span class="slider"></span>
                 </label>
             </div>
@@ -268,9 +287,9 @@ async function loadApis(page) {
                 ${editBtn}
                 ${lifecycleBtns}
                 ${lockBtn}
-                ${ib('transfer', 'transfer', '转交责任人')}
+                ${PROD_RO ? '' : ib('transfer', 'transfer', '转交责任人')}
                 ${cacheOn ? ib('clear-cache', 'clear-cache', '清除缓存') : ''}
-                ${ib('copy-api', 'copy', '复制 API')}
+                ${PROD_RO ? '' : ib('copy-api', 'copy', '复制 API')}
                 ${delBtn}
             </div>
         </div>
@@ -281,15 +300,27 @@ async function loadApis(page) {
     decorateEnv();
 }
 
-// 跨环境 (v2.23)：预发卡片标出「已在生产」及版本，并可对比生产；生产卡片可对比预发
+// 跨环境：预发卡片标出生产版本和同步状态 (v2.24)，并可对比生产；生产卡片可对比预发
 window.__prodPresence = {};
+window.__syncItems = [];
+async function loadSyncStatus() {
+    const r = await API.get(`/api/releases/sync-status?project_id=${PROJECT_ID}&_t=${Date.now()}`);
+    const d = (r && r.status && r.data) || { items: [] };
+    window.__syncData = d;
+    window.__syncItems = d.items || [];
+    window.__prodPresence = {};
+    window.__syncItems.forEach(it => {
+        if (it.pre_api_id && it.prod_api_id) window.__prodPresence[it.pre_api_id] = { version: it.prod_version, status: it.prod_status, state: it.state, label: it.state_label };
+    });
+    const pending = window.__syncItems.filter(it => ['prod_ahead', 'prod_only', 'both', 'diverged'].includes(it.state)).length;
+    const dot = document.getElementById('syncDot');
+    if (dot) { dot.textContent = pending || ''; dot.style.display = pending ? '' : 'none'; }
+    return d;
+}
 async function decorateEnv() {
     const env = AppEnv.info();
     if (!env.env) return;
-    if (env.is_pre) {
-        const r = await API.get(`/api/releases/prod-presence?project_id=${PROJECT_ID}&_t=${Date.now()}`);
-        window.__prodPresence = (r && r.data) || {};
-    }
+    if (env.is_pre) await loadSyncStatus();
     document.querySelectorAll('#apiList .api-card').forEach(card => {
         const id = card.dataset.apiId;
         const actions = card.querySelector('.api-actions');
@@ -298,12 +329,80 @@ async function decorateEnv() {
             const p = window.__prodPresence[id];
             if (!p) return;
             const tags = card.querySelector('.api-tags');
-            if (tags) tags.insertAdjacentHTML('afterbegin', `<span class="badge badge-prod" title="生产环境已有该 API">生产 v${p.version}</span>`);
+            if (tags) tags.insertAdjacentHTML('afterbegin', `<span class="badge badge-prod" title="生产环境已有该 API">生产 v${p.version}</span>`
+                + (p.state !== 'same' ? syncStateBadge(p.state, p.label) : ''));
             actions.insertAdjacentHTML('afterbegin', '<button class="icon-act" data-action="compare" data-tip="对比生产" aria-label="对比生产"><img src="/static/img/icons/compare.png" alt=""></button>');
         } else {
             actions.insertAdjacentHTML('afterbegin', '<button class="icon-act" data-action="compare" data-tip="对比预发" aria-label="对比预发"><img src="/static/img/icons/compare.png" alt=""></button>');
         }
     });
+}
+
+// 同步生产面板 (v2.24)：类似 git status，列出每个 API 与生产的差异来源，可勾选拉取
+const SYNC_PULLABLE = ['prod_ahead', 'prod_only', 'both', 'diverged', 'pre_ahead'];
+async function openSyncPanel() {
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay';
+    ov.style.display = 'flex';
+    ov.innerHTML = `<div class="modal" style="max-width:1080px;width:95vw;">
+        <div class="modal-header"><h3>同步生产</h3><button class="btn-icon" data-x>&times;</button></div>
+        <div class="modal-body" style="max-height:70vh;overflow:auto;" id="__syncBody"><div class="text-muted">加载中…</div></div>
+        <div class="modal-footer"><span class="text-muted text-sm" id="__syncSel" style="margin-right:auto;"></span>
+            <button class="btn btn-secondary" data-x>关闭</button>
+            <button class="btn btn-primary" id="__syncPull" disabled>拉取所选</button></div></div>`;
+    ov.querySelectorAll('[data-x]').forEach(b => b.onclick = () => ov.remove());
+    document.body.appendChild(ov);
+    let filter = 'todo';
+    const render = async () => {
+        const d = await loadSyncStatus();
+        const body = ov.querySelector('#__syncBody');
+        if (d.prod_project_exists === false) {
+            body.innerHTML = '<div class="note">生产环境还没有这个项目。发布第一个 API 到生产时会自动创建。</div>';
+            return;
+        }
+        const items = d.items || [];
+        const counts = d.counts || {};
+        const todoStates = ['prod_ahead', 'prod_only', 'both', 'diverged'];
+        const todo = items.filter(i => todoStates.includes(i.state)).length;
+        const tabs = [['todo', '需要处理', todo], ['all', '全部', items.length],
+            ...['prod_ahead', 'prod_only', 'both', 'diverged', 'pre_ahead', 'pre_only', 'same'].filter(k => counts[k])
+                .map(k => [k, items.find(i => i.state === k).state_label, counts[k]])];
+        const shown = items.filter(i => filter === 'all' ? true : filter === 'todo' ? todoStates.includes(i.state) : i.state === filter);
+        body.innerHTML = `<div class="sync-tabs">${tabs.map(([k, l, n]) => `<button data-f="${k}" class="${k === filter ? 'active' : ''}">${escapeHtml(l)}<i>${n}</i></button>`).join('')}</div>`
+            + (shown.length ? `<table class="data-table sync-list"><thead><tr>
+                <th style="width:36px;"><input type="checkbox" id="__syncAll"></th><th>API</th><th style="width:130px;">状态</th>
+                <th style="width:70px;">生产</th><th style="width:70px;">预发</th><th style="width:170px;">上次同步</th><th style="width:60px;"></th></tr></thead><tbody>`
+                + shown.map(i => `<tr>
+                    <td>${SYNC_PULLABLE.includes(i.state) && d.can_pull ? `<input type="checkbox" class="__sc" data-m="${escapeHtml(i.method)}" data-u="${escapeHtml(i.url_path)}">` : ''}</td>
+                    <td><div style="font-weight:600;">${escapeHtml(i.name || '')}</div><div class="text-sm" style="display:flex;gap:6px;align-items:center;margin-top:2px;">${methodBadge(i.method)}<code>${escapeHtml(i.url_path)}</code></div></td>
+                    <td>${syncStateBadge(i.state, i.state_label)}</td>
+                    <td>${i.prod_version ? 'v' + i.prod_version : '—'}</td>
+                    <td>${i.pre_version ? 'v' + i.pre_version : '—'}</td>
+                    <td class="text-sm text-muted">${i.base_at ? escapeHtml(i.base_at) + '<br>' + (i.base_source === 'pull' ? '拉取生产' : '发布到生产') : '—'}</td>
+                    <td>${i.pre_api_id && i.prod_api_id && i.state !== 'same' ? `<button class="icon-act" data-cmp="${i.pre_api_id}" data-tip="对比"><img src="/static/img/icons/compare.png" alt=""></button>` : ''}</td>
+                </tr>`).join('') + '</tbody></table>'
+              : '<div class="empty-state" style="padding:36px 0;"><h3>都已同步</h3></div>');
+        body.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; render(); });
+        body.querySelectorAll('[data-cmp]').forEach(b => b.onclick = () => compareWithOtherEnv(PROJECT_ID, +b.dataset.cmp, () => { render(); loadApis(); }));
+        const pullBtn = ov.querySelector('#__syncPull'), selInfo = ov.querySelector('#__syncSel');
+        const upd = () => {
+            const n = body.querySelectorAll('.__sc:checked').length;
+            pullBtn.disabled = !n;
+            selInfo.textContent = n ? `已选 ${n} 个` : '';
+        };
+        body.querySelectorAll('.__sc').forEach(c => c.onchange = upd);
+        const all = body.querySelector('#__syncAll');
+        if (all) all.onchange = () => { body.querySelectorAll('.__sc').forEach(c => c.checked = all.checked); upd(); };
+        upd();
+        pullBtn.onclick = async () => {
+            const sel = [...body.querySelectorAll('.__sc:checked')].map(c => ({ method: c.dataset.m, url_path: c.dataset.u }));
+            if (!sel.length) return;
+            pullBtn.disabled = true;
+            if (await pullFromProd(PROJECT_ID, sel)) loadApis();
+            render();
+        };
+    };
+    render();
 }
 
 // 事件委托：所有 api-card 的按钮统一处理（避免 inline onclick 中嵌入 JSON 的 quote 坑）
@@ -347,7 +446,9 @@ async function decorateEnv() {
         } else if (action === 'release') {
             releaseToProd(apiId, apiName);
         } else if (action === 'compare') {
-            compareWithOtherEnv(PROJECT_ID, apiId);
+            compareWithOtherEnv(PROJECT_ID, apiId, () => loadApis());
+        } else if (action === 'go-online') {
+            goOnlineInProd(apiId, apiName);
         }
     });
     container.addEventListener('change', async (e) => {
@@ -661,19 +762,28 @@ async function releaseToProd(apiId, apiName) {
     if (!c || !c.status) { Toast.error((c && c.msg) || '读取生产配置失败'); return; }
     const d = c.data;
     const same = d.diff && !d.diff.is_new && !d.diff.changed_count;
+    const st = d.sync_state;
     let diffHtml = !d.other_project_exists
-        ? `<div class="note">生产环境没有项目「${escapeHtml(d.project_code)}」，需先在生产创建同编码项目，否则审核时会失败。</div>`
-        : ReleaseDiff.render(d.diff, { beforeLabel: '生产当前', afterLabel: '本次发布', newText: '生产环境还没有该 API，审核通过后新建' });
+        ? `<div class="note">生产环境还没有项目「${escapeHtml(d.project_code)}」，审核通过后会按预发的项目自动创建（项目 Key、成员、环境变量一并带过去）。</div>`
+          + ReleaseDiff.render(d.diff, { beforeLabel: '生产', afterLabel: '本次发布', newText: '生产环境还没有该 API，审核通过后新建' })
+        : ReleaseDiff.render(d.diff, { beforeLabel: `生产 ${d.other_version ? 'v' + d.other_version : ''}`, afterLabel: '本次发布（预发）', newText: '生产环境还没有该 API，审核通过后新建' });
+    // 同步检查 (v2.24)：生产改过而预发没拉取时，发布会覆盖生产的改动
+    let syncNote = '';
+    if (st === 'prod_ahead') syncNote = `<div class="note note-danger" style="margin-bottom:12px;">生产在上次同步后有新的改动，预发还是旧内容，直接发布会把生产的改动覆盖掉。请先「拉取生产到预发」。</div>`;
+    else if (st === 'both') syncNote = `<div class="note note-danger" style="margin-bottom:12px;">生产和预发在上次同步后都改过。发布会用预发的内容覆盖生产上的改动，请核对下方差异。
+        <label style="display:flex;gap:6px;align-items:center;margin-top:8px;font-weight:600;"><input type="checkbox" id="__relForce"> 我已核对，用预发覆盖生产</label></div>`;
+    const blocked = st === 'prod_ahead' || same;
     const ov = document.createElement('div');
     ov.className = 'modal-overlay';
     ov.style.display = 'flex';
-    ov.innerHTML = `<div class="modal" style="max-width:960px;width:94vw;">
+    ov.innerHTML = `<div class="modal" style="max-width:1180px;width:95vw;">
         <div class="modal-header"><h3>发布到生产 · ${escapeHtml(apiName)}</h3><button class="btn-icon" data-x>&times;</button></div>
         <div class="modal-body" style="max-height:66vh;overflow:auto;">
             <div class="diff-head">${methodBadge(d.method)} <code>${escapeHtml(d.url_path)}</code>
                 ${d.other_version ? `<span class="badge badge-prod">生产 v${d.other_version}</span>` : ''}</div>
+            ${syncNote}
             ${diffHtml}
-            ${same ? '<div class="note" style="margin-top:10px;">与生产完全一致，一般不需要再发布。</div>' : ''}
+            ${same ? '<div class="note" style="margin-top:10px;">与生产完全一致，不需要发布。</div>' : ''}
             <div class="form-group" style="margin-top:16px;">
                 <label class="form-label">发布说明（会展示给生产审核人）</label>
                 <textarea class="form-textarea" rows="3" id="__relRemark" placeholder="本次发布改了什么（可选）"></textarea>
@@ -681,12 +791,19 @@ async function releaseToProd(apiId, apiName) {
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" data-x>取消</button>
-            <button class="btn btn-primary" data-ok>提交发布单</button>
+            ${st === 'prod_ahead' && d.can_pull ? '<button class="btn btn-secondary" data-pull>拉取生产到预发</button>' : ''}
+            <button class="btn btn-primary" data-ok ${blocked ? 'disabled' : ''}>提交发布单</button>
         </div></div>`;
     ov.querySelectorAll('[data-x]').forEach(b => b.onclick = () => ov.remove());
+    const pb = ov.querySelector('[data-pull]');
+    if (pb) pb.onclick = async () => {
+        if (await pullFromProd(PROJECT_ID, [{ method: d.method, url_path: d.url_path }])) { ov.remove(); loadApis(); }
+    };
     ov.querySelector('[data-ok]').onclick = async () => {
         const remark = ov.querySelector('#__relRemark').value;
-        const r = await API.post('/api/releases', { project_id: PROJECT_ID, api_id: apiId, remark });
+        const fc = ov.querySelector('#__relForce');
+        if (fc && !fc.checked) { Toast.warning('请先核对差异并勾选确认'); return; }
+        const r = await API.post('/api/releases', { project_id: PROJECT_ID, api_id: apiId, remark, force: !!(fc && fc.checked) });
         if (!r || !r.status) { Toast.error((r && r.msg) || '提交失败'); return; }
         ov.remove();
         Toast.success(r.msg || '发布单已提交');
@@ -722,6 +839,15 @@ function offlineApi(apiId, apiName) {
             setTimeout(loadApis, 350);
         } else { Toast.error(r.msg || "下线失败"); setTimeout(loadApis, 350); }
     });
+}
+
+// 生产直接上线 (v2.24)：项目管理员 / 超管，上线后自动锁定
+async function goOnlineInProd(apiId, apiName) {
+    if (!await confirmAsync('上线 API', `确定在生产上线「${apiName}」吗？上线后会自动锁定。`, { okText: '上线', danger: false })) return;
+    const r = await API.post(`/api/projects/${PROJECT_ID}/apis/${apiId}/go-online`, {});
+    if (r && r.status) Toast.success(r.msg || '已上线');
+    else Toast.error((r && r.msg) || '上线失败');
+    setTimeout(loadApis, 350);
 }
 
 console.log('%c[OneData] project_detail 版本: v2.11.8 (延迟刷新修复状态不同步)', 'color:#3d5a0a;font-weight:bold;');

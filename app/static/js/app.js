@@ -455,7 +455,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (env.is_prod && banner && API.token) {
         const me = await getMe();
         if (me.global_role && !AppEnv.isAdminRole(me.global_role)) {
-            banner.innerHTML = '当前为 <b>生产环境</b>，非管理员只能查看。如需修改，请在预发环境修改并验证后「发布到生产」，由生产管理员核对差异后审核上线。'
+            banner.innerHTML = '当前为 <b>生产环境</b>，只有项目管理员和超级管理员可以编辑、上线、下线 API。研发请在预发修改并验证后「发布到生产」，由生产管理员核对差异后审核上线。'
                 + (otherUrl ? ` <a href="${otherUrl}/admin/projects" data-sso-next="/admin/projects" target="_blank">前往预发 ↗</a>` : '');
             banner.style.display = '';
         }
@@ -676,6 +676,20 @@ const ReleaseDiff = {
             return `<div class="${cls}">${escapeHtml(l) || '&nbsp;'}</div>`;
         }).join('') + '</div>';
     },
+    // 左右并排 (v2.24)：左生产、右预发 / 待发布；rows 为后端 split_rows 的结果
+    split(rows, bl, al) {
+        const seg = (parts) => (parts || []).map(([t, hl]) => hl ? `<mark>${escapeHtml(t)}</mark>` : escapeHtml(t)).join('');
+        const body = (rows || []).map(r => {
+            if (r.t === 'skip') return `<tr class="sd-skip"><td colspan="4">⋯ ${r.n} 行相同 ⋯</td></tr>`;
+            const lc = r.t === 'del' || r.t === 'chg' ? 'sd-del' : (r.t === 'add' ? 'sd-empty' : '');
+            const rc = r.t === 'add' || r.t === 'chg' ? 'sd-add' : (r.t === 'del' ? 'sd-empty' : '');
+            return `<tr><td class="sd-ln ${lc}">${r.ln || ''}</td><td class="sd-code ${lc}">${r.l ? seg(r.l) || '&nbsp;' : ''}</td>`
+                 + `<td class="sd-ln ${rc}">${r.rn || ''}</td><td class="sd-code ${rc}">${r.r ? seg(r.r) || '&nbsp;' : ''}</td></tr>`;
+        }).join('');
+        return `<div class="sd-wrap"><table class="sd-table"><colgroup><col style="width:44px"><col><col style="width:44px"><col></colgroup>`
+             + `<thead><tr><th colspan="2"><span class="sd-dot sd-dot-l"></span>${escapeHtml(bl)}</th><th colspan="2"><span class="sd-dot sd-dot-r"></span>${escapeHtml(al)}</th></tr></thead>`
+             + `<tbody>${body}</tbody></table></div>`;
+    },
     val(v) {
         if (v === null || v === undefined) return '<span class="text-muted">—</span>';
         if (v === true) return '是';
@@ -702,7 +716,7 @@ const ReleaseDiff = {
                  + '</tbody></table>';
         }
         changed.filter(f => f.multiline).forEach(f => {
-            html += `<div class="diff-field">${escapeHtml(f.label)}</div>` + this.lines(f.diff);
+            html += `<div class="diff-field">${escapeHtml(f.label)}</div>` + (f.split ? this.split(f.split, bl, al) : this.lines(f.diff));
         });
         if (same.length && changed.length) {
             html += `<p class="text-muted text-sm" style="margin-top:12px;">相同：${same.map(f => escapeHtml(f.label)).join('、')}</p>`;
@@ -711,25 +725,76 @@ const ReleaseDiff = {
     },
 };
 
-// 「对比生产 / 对比预发」：当前环境的 API 与另一环境同名 API 的差异
-async function compareWithOtherEnv(projectId, apiId) {
+// 同步状态徽标 (v2.24)
+const SYNC_TIPS = {
+    same: '预发和生产一致',
+    pre_ahead: '生产没动过，预发有新的改动：待发布到生产',
+    prod_ahead: '生产在上次同步后改过，预发还是旧内容：可拉取生产',
+    both: '生产和预发在上次同步后都改过，请核对差异',
+    diverged: '和生产不一致（没有同步记录，分不清是哪边改的）',
+    prod_only: '生产有、预发没有：可拉取到预发',
+    pre_only: '还没发布到生产',
+};
+function syncStateBadge(state, label) {
+    return `<span class="sync-state ss-${state}" title="${escapeHtml(SYNC_TIPS[state] || '')}">${escapeHtml(label || state)}</span>`;
+}
+
+// 拉取生产到预发 (v2.24)：items=[{method, url_path}]；预发也改过的需确认覆盖。返回是否有成功拉取的
+async function pullFromProd(projectId, items, overwrite) {
+    const r = await API.post('/api/releases/pull', { project_id: projectId, items, overwrite: !!overwrite });
+    if (!r || !r.status) { Toast.error((r && r.msg) || '拉取失败'); return false; }
+    const res = r.data.results || [];
+    const needOw = res.filter(x => x.need_overwrite);
+    const failed = res.filter(x => !x.ok && !x.need_overwrite);
+    if (failed.length) Toast.error(failed.map(x => `${x.url_path}：${x.msg}`).join('；'));
+    if (needOw.length && !overwrite) {
+        const ok = await confirmAsync('覆盖预发的改动？',
+            `${needOw.map(x => x.url_path).join('、')} 在预发也有还没发布到生产的改动，拉取后这些改动会被生产的内容覆盖。`,
+            { okText: '覆盖并拉取' });
+        if (ok) return (await pullFromProd(projectId, needOw.map(x => ({ method: x.method, url_path: x.url_path })), true)) || r.data.ok_count > 0;
+    }
+    if (r.data.ok_count) Toast.success(r.msg || '已拉取');
+    else if (!failed.length && !needOw.length) Toast.info('已是最新');
+    return r.data.ok_count > 0;
+}
+
+// 「对比生产 / 对比预发」：当前环境的 API 与另一环境同名 API 的差异（左生产 / 右预发）
+async function compareWithOtherEnv(projectId, apiId, onPulled) {
     const r = await API.get(`/api/releases/compare?project_id=${projectId}&api_id=${apiId}&_t=${Date.now()}`);
     if (!r || !r.status) { Toast.error((r && r.msg) || '对比失败'); return; }
     const d = r.data;
     const otherLabel = d.other_env === 'prod' ? '生产' : '预发';
+    const verOf = (env) => {
+        const v = env === 'prod' ? (d.other_env === 'prod' ? d.other_version : d.version) : (d.other_env === 'pre' ? d.other_version : d.version);
+        return v ? `v${v}` : '—';
+    };
     let body = `<div class="diff-head">${methodBadge(d.method)} <code>${escapeHtml(d.url_path)}</code>
         <span class="text-muted text-sm">项目 ${escapeHtml(d.project_name)}（${escapeHtml(d.project_code)}）</span></div>`;
+    if (d.sync_state) {
+        body += `<div class="sync-bar">${syncStateBadge(d.sync_state, d.sync_state_label)}
+            <span>${escapeHtml(SYNC_TIPS[d.sync_state] || '')}</span>
+            <span style="margin-left:auto;">生产 <b>${verOf('prod')}</b> · 预发 <b>${verOf('pre')}</b>${d.base_at
+                ? ` · 上次同步 ${escapeHtml(d.base_at)}（${d.base_source === 'pull' ? '拉取生产' : '发布到生产'}）` : ''}</span></div>`;
+    }
     if (!d.other_project_exists) body += `<div class="note">${otherLabel}环境没有项目「${escapeHtml(d.project_code)}」</div>`;
     else if (!d.diff) body += `<div class="note">${otherLabel}环境还没有这个 API</div>`;
-    else body += ReleaseDiff.render(d.diff, { beforeLabel: '生产当前', afterLabel: '预发当前', newText: '生产环境还没有该 API' });
+    else body += ReleaseDiff.render(d.diff, { beforeLabel: `生产 ${verOf('prod')}`, afterLabel: `预发 ${verOf('pre')}`, newText: '生产环境还没有该 API' });
     const ov = document.createElement('div');
     ov.className = 'modal-overlay';
     ov.style.display = 'flex';
-    ov.innerHTML = `<div class="modal" style="max-width:960px;width:94vw;">
+    ov.innerHTML = `<div class="modal" style="max-width:1180px;width:95vw;">
         <div class="modal-header"><h3>对比${otherLabel} · ${escapeHtml(d.api_name)}</h3><button class="btn-icon" data-x>&times;</button></div>
-        <div class="modal-body" style="max-height:70vh;overflow:auto;">${body}</div>
-        <div class="modal-footer"><button class="btn btn-secondary" data-x>关闭</button></div></div>`;
+        <div class="modal-body" style="max-height:72vh;overflow:auto;">${body}</div>
+        <div class="modal-footer"><button class="btn btn-secondary" data-x>关闭</button>
+        ${d.can_pull ? '<button class="btn btn-primary" data-pull>拉取生产到预发</button>' : ''}</div></div>`;
     ov.querySelectorAll('[data-x]').forEach(b => b.onclick = () => ov.remove());
+    const pb = ov.querySelector('[data-pull]');
+    if (pb) pb.onclick = async () => {
+        if (await pullFromProd(projectId, [{ method: d.method, url_path: d.url_path }])) {
+            ov.remove();
+            if (typeof onPulled === 'function') onPulled(); else location.reload();
+        }
+    };
     document.body.appendChild(ov);
 }
 

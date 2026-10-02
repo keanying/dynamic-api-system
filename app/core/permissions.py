@@ -85,6 +85,22 @@ async def can_edit_project_resources(db: AsyncSession, user: User, project_id: i
     return role in (PROJ_MANAGER, PROJ_DEVELOPER)
 
 
+PROD_READONLY_MSG = "生产环境只有项目管理员或超级管理员可以操作；研发请在预发修改，再「发布到生产」"
+
+
+async def prod_readonly(db: AsyncSession, user: User, project_id: int) -> bool:
+    """生产环境 (v2.24)：只有项目管理员 / 超管可以编辑、上线、下线等改动 API 的操作，其他人只读。"""
+    from app.core.runtime_env import IS_PROD
+    if not IS_PROD:
+        return False
+    return not await is_project_manager(db, user, project_id)
+
+
+async def prod_write_denied(db: AsyncSession, user: User, project_id: int):
+    """生产环境里当前用户不能改动 API 时返回提示语，否则 None。"""
+    return PROD_READONLY_MSG if await prod_readonly(db, user, project_id) else None
+
+
 # ============================================================
 # FastAPI 依赖
 # ============================================================

@@ -78,7 +78,7 @@
 
 <!-- 发布单详情 / 差异 -->
 <div class="modal-overlay" id="relModal" style="display:none;">
-    <div class="modal" style="max-width:960px;width:94vw;">
+    <div class="modal" style="max-width:1180px;width:95vw;">
         <div class="modal-header">
             <h3 id="relTitle">发布单</h3>
             <button class="btn-icon" onclick="closeRelModal()">&times;</button>
@@ -244,8 +244,8 @@ function renderRelDiff(d) {
         ? '对比对象：<b>生产当前配置</b>（实时）'
         : '对比对象：<b>发布当时的生产配置</b>';
     return `<p class="text-sm" style="margin-bottom:10px;">${basis}</p>`
-        + ReleaseDiff.render(d.diff, { beforeLabel: '生产当前', afterLabel: '待发布', newText: '生产环境还没有该 API，审核通过将新建' })
-        + '<p class="text-muted text-sm" style="margin-top:10px;">API Key 按环境分别管理，不随发布同步；数据源按名称对应到生产同名数据源。</p>';
+        + ReleaseDiff.render(d.diff, { beforeLabel: d.diff_basis === 'live' ? '生产当前' : '发布前的生产', afterLabel: '待发布（预发）', newText: '生产环境还没有该 API，审核通过将新建' })
+        + '<p class="text-muted text-sm" style="margin-top:10px;">左边生产、右边预发。API Key 随发布一起带到生产；数据源按名称对应到生产同名数据源；审核通过后生产中的该 API 为「上线 + 锁定」。</p>';
 }
 
 async function openRelease(id) {
@@ -267,7 +267,7 @@ async function openRelease(id) {
     }
     head += '</div>';
     if (d.diff_basis === 'live' && d.prod_project_exists === false) {
-        head += `<div class="note" style="margin-bottom:10px;">生产环境不存在项目「${esc(d.project_code)}」，需先在生产创建同编码项目才能发布。</div>`;
+        head += `<div class="note" style="margin-bottom:10px;">生产环境还没有项目「${esc(d.project_code)}」，审核通过后会按预发的项目自动创建（项目 Key、成员、环境变量一并带过去）。</div>`;
     }
     document.getElementById('relDetail').innerHTML = head + renderRelDiff(d);
 

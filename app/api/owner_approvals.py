@@ -207,6 +207,10 @@ async def transfer(body: TransferBody, db: AsyncSession = Depends(get_db, scope=
     api = ar.scalar_one_or_none()
     if not api:
         return R_fail(ErrCode.API_NOT_FOUND, msg="API 不存在")
+    from app.core.permissions import prod_write_denied
+    _denied = await prod_write_denied(db, user, api.project_id)
+    if _denied:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=_denied)
     ok, msg = await transfer_owner(db, user, api, body.new_owner_id)
     if not ok:
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=msg)
