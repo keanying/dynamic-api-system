@@ -1935,3 +1935,39 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
     .lp-hero p { display: none; }
     .lp-card { width: 100%; }
 }
+
+/* ---------- 日期选框（参考 antd DatePicker） ---------- */
+.ui-date { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 16px;
+           background: #fff; border: 1px solid #e4e4e7; border-radius: 999px; cursor: pointer; user-select: none; outline: none;
+           font-size: 13px; color: var(--ui-ink); transition: border-color 0.15s, box-shadow 0.15s; }
+.ui-date:hover { border-color: #d4d4d8; }
+.ui-date:focus-visible, .ui-date.is-open { border-color: var(--ui-ink); box-shadow: 0 0 0 3px rgba(183, 167, 245, 0.35); }
+.ui-date.is-disabled { opacity: 0.55; cursor: not-allowed; background: #f4f4f5; }
+.ui-date-native { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; opacity: 0 !important; pointer-events: none !important; }
+.ui-date-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.ui-date-text.is-placeholder { color: var(--ui-muted); }
+.ui-date-icon { display: flex; color: #71717a; }
+.ui-date-clear { display: none; width: 18px; height: 18px; border: none; border-radius: 50%; background: #e4e4e7; color: #52525b;
+                 font-size: 13px; line-height: 18px; padding: 0; cursor: pointer; }
+.ui-date.has-value:hover .ui-date-clear { display: inline-block; }
+.ui-date.has-value:hover .ui-date-icon { display: none; }
+
+.ui-date-panel { position: fixed; z-index: 10050; display: none; width: 288px; padding: 12px; background: #fff;
+                 border: 1px solid var(--ui-line); border-radius: 20px; box-shadow: 0 16px 40px rgba(28, 28, 30, 0.16); animation: uiSelIn 0.12s ease; }
+.ui-date-head { display: flex; align-items: center; gap: 2px; margin-bottom: 8px; }
+.ui-date-head button { width: 28px; height: 28px; border: none; background: none; border-radius: 50%; cursor: pointer; color: #71717a; font-size: 15px; }
+.ui-date-head button:hover { background: #f4f4f5; color: var(--ui-ink); }
+.ui-date-title { flex: 1; text-align: center; font-weight: 600; font-size: 14px; }
+.ui-date-week, .ui-date-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.ui-date-week span { font-size: 12px; color: var(--ui-muted); padding: 4px 0; }
+.ui-day { height: 34px; line-height: 34px; border-radius: 50%; font-size: 13px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.ui-day:hover { background: #f4f4f5; }
+.ui-day.is-other { color: #c4c4c8; }
+.ui-day.is-today { box-shadow: inset 0 0 0 1px var(--ui-ink); }
+.ui-day.is-selected { background: var(--ui-lime); color: var(--ui-ink); font-weight: 600; box-shadow: none; }
+.ui-day.is-disabled { color: #d4d4d8; cursor: not-allowed; background: none; }
+.ui-date-foot { display: flex; justify-content: space-between; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ui-line); }
+.ui-date-foot button { border: none; background: none; cursor: pointer; font-size: 13px; padding: 4px 10px; border-radius: 999px; color: var(--ui-ink); }
+.ui-date-foot button:hover:not(:disabled) { background: #f4f4f5; }
+.ui-date-foot [data-act="today"] { color: #5b44c9; font-weight: 600; }
+.ui-date-foot button:disabled { color: #c4c4c8; cursor: not-allowed; }
