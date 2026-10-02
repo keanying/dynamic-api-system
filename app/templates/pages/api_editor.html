@@ -8,18 +8,18 @@
         position: relative;
         border-radius: 8px;
         overflow: hidden;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #e4e4e7;
     }
     .code-editor-toolbar {
         display: flex;
         justify-content: space-between;
         align-items: center;
         padding: 8px 12px;
-        background: #1e293b;
-        border-bottom: 1px solid #334155;
+        background: #27272a;
+        border-bottom: 1px solid #3f3f46;
     }
     .code-editor-toolbar span {
-        color: #94a3b8;
+        color: #a1a1aa;
         font-size: 12px;
     }
     .code-editor-container {
@@ -31,7 +31,7 @@
         min-height: 200px;
         background: #282c34;
         color: #abb2bf;
-        caret-color: #e2e8f0;
+        caret-color: #e4e4e7;
         font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
         font-size: 13px;
         line-height: 1.6;
@@ -75,7 +75,7 @@
     .test-result-wrapper {
         border-radius: 8px;
         overflow: hidden;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #e4e4e7;
         margin-top: 12px;
     }
     .test-result-header {
@@ -83,8 +83,8 @@
         justify-content: space-between;
         align-items: center;
         padding: 8px 12px;
-        background: #1e293b;
-        color: #94a3b8;
+        background: #27272a;
+        color: #a1a1aa;
         font-size: 12px;
     }
     .test-result-body pre {
@@ -103,15 +103,15 @@
         align-items: center;
         gap: 8px;
         padding: 10px 14px;
-        background: #f1f5f9;
+        background: #f1f1f3;
         border-radius: 8px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #e4e4e7;
         margin-top: 6px;
     }
     .call-url-box code {
         flex: 1;
         font-size: 12px;
-        color: #1e293b;
+        color: #27272a;
         word-break: break-all;
         user-select: all;
     }
@@ -121,48 +121,48 @@
         font-size: 12px;
         cursor: pointer;
         background: #fff;
-        border: 1px solid #cbd5e1;
+        border: 1px solid #d4d4d8;
         border-radius: 4px;
-        color: #475569;
+        color: #52525b;
         transition: all 0.2s;
     }
     .call-url-box .copy-btn:hover {
-        background: #e2e8f0;
-        color: #1e293b;
+        background: #e4e4e7;
+        color: #27272a;
     }
     .param-validation-error {
         border: 2px solid #ef4444 !important;
         background: #fef2f2 !important;
     }
     /* 多步骤管线 - 可视化编排 */
-    .pmode-btn { border:none; background:#fff; padding:5px 12px; font-size:12px; color:#64748b; cursor:pointer; }
-    .pmode-btn.pmode-active { background:#4f46e5; color:#fff; }
-    .step-card { border:1px solid #e2e8f0; border-radius:10px; margin-bottom:10px; background:#fff; overflow:hidden; }
-    .step-card-head { display:flex; align-items:center; gap:10px; padding:10px 14px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
-    .step-num { width:22px; height:22px; border-radius:50%; background:#4f46e5; color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-weight:600; }
+    .pmode-btn { border:none; background:#fff; padding:5px 12px; font-size:12px; color:#71717a; cursor:pointer; }
+    .pmode-btn.pmode-active { background:#8f78ee; color:#fff; }
+    .step-card { border:1px solid #e4e4e7; border-radius:10px; margin-bottom:10px; background:#fff; overflow:hidden; }
+    .step-card-head { display:flex; align-items:center; gap:10px; padding:10px 14px; background:#f7f7f8; border-bottom:1px solid #e4e4e7; }
+    .step-num { width:22px; height:22px; border-radius:50%; background:#8f78ee; color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-weight:600; }
     .step-card-head .step-name-inp { font-weight:600; font-size:13px; border:1px solid transparent; background:transparent; padding:3px 6px; border-radius:4px; width:140px; }
-    .step-card-head .step-name-inp:hover, .step-card-head .step-name-inp:focus { border-color:#cbd5e1; background:#fff; outline:none; }
-    .step-type-badge { font-size:11px; padding:2px 8px; border-radius:4px; background:#ede9fe; color:#6d28d9; }
-    .step-type-badge.sql { background:#dbeafe; color:#1d4ed8; }
+    .step-card-head .step-name-inp:hover, .step-card-head .step-name-inp:focus { border-color:#d4d4d8; background:#fff; outline:none; }
+    .step-type-badge { font-size:11px; padding:2px 8px; border-radius:4px; background:#ece8fd; color:#5b44c9; }
+    .step-type-badge.sql { background:#ece8fd; color:#5b44c9; }
     .step-card-body { padding:12px 14px; }
     .step-field { margin-bottom:10px; }
-    .step-field label { display:block; font-size:11px; color:#64748b; margin-bottom:3px; font-weight:500; }
+    .step-field label { display:block; font-size:11px; color:#71717a; margin-bottom:3px; font-weight:500; }
     .step-field input, .step-field select, .step-field textarea {
-        width:100%; padding:6px 9px; font-size:12.5px; border:1px solid #cbd5e1; border-radius:5px; font-family:inherit;
+        width:100%; padding:6px 9px; font-size:12.5px; border:1px solid #d4d4d8; border-radius:5px; font-family:inherit;
     }
     .step-field textarea { font-family:'Fira Code','JetBrains Mono',monospace; font-size:12px; line-height:1.55; resize:vertical; }
-    .step-field .hint { font-size:10.5px; color:#94a3b8; margin-top:2px; }
+    .step-field .hint { font-size:10.5px; color:#a1a1aa; margin-top:2px; }
     .step-row { display:flex; gap:10px; }
     .step-row > * { flex:1; }
-    .step-icon-btn { border:none; background:none; cursor:pointer; color:#94a3b8; padding:3px 6px; border-radius:4px; font-size:13px; }
-    .step-icon-btn:hover { background:#e2e8f0; color:#475569; }
+    .step-icon-btn { border:none; background:none; cursor:pointer; color:#a1a1aa; padding:3px 6px; border-radius:4px; font-size:13px; }
+    .step-icon-btn:hover { background:#e4e4e7; color:#52525b; }
     .step-icon-btn.del:hover { background:#fee2e2; color:#dc2626; }
     .kv-row { display:flex; gap:6px; margin-bottom:6px; align-items:center; }
-    .kv-row input { flex:1; padding:5px 8px; font-size:12px; border:1px solid #cbd5e1; border-radius:5px; }
-    .kv-row .kv-del { border:none;background:none;color:#cbd5e1;cursor:pointer;font-size:16px;padding:0 4px; }
+    .kv-row input { flex:1; padding:5px 8px; font-size:12px; border:1px solid #d4d4d8; border-radius:5px; }
+    .kv-row .kv-del { border:none;background:none;color:#d4d4d8;cursor:pointer;font-size:16px;padding:0 4px; }
     .kv-row .kv-del:hover { color:#dc2626; }
-    .return-tag { font-size:10.5px; padding:2px 7px; border-radius:4px; background:#dcfce7; color:#15803d; cursor:pointer; border:1px solid #bbf7d0; }
-    .return-tag.off { background:#f1f5f9; color:#94a3b8; border-color:#e2e8f0; }
+    .return-tag { font-size:10.5px; padding:2px 7px; border-radius:4px; background:#eaf8c4; color:#3d5a0a; cursor:pointer; border:1px solid #d9f09a; }
+    .return-tag.off { background:#f1f1f3; color:#a1a1aa; border-color:#e4e4e7; }
 
     /* ===== v2.2 编辑器工作台布局 ===== */
     .editor-idbar {
@@ -193,7 +193,7 @@
         border-radius: 8px 8px 0 0; transition: color var(--transition), background var(--transition);
         display: inline-flex; align-items: center; gap: 6px;
     }
-    .editor-tab:hover { color: var(--color-text); background: rgba(48,86,224,0.05); }
+    .editor-tab:hover { color: var(--color-text); background: rgba(143,120,238,0.05); }
     .editor-tab.active { color: var(--color-primary); font-weight: 600; }
     .editor-tab.active::after {
         content: ''; position: absolute; left: 8px; right: 8px; bottom: -2px;
@@ -201,7 +201,7 @@
     }
     .editor-tab .tab-count {
         min-width: 17px; height: 17px; line-height: 17px; padding: 0 5px;
-        border-radius: 9px; background: #e8edf7; color: var(--color-text-secondary);
+        border-radius: 9px; background: #ececee; color: var(--color-text-secondary);
         font-size: 10.5px; font-family: var(--font-mono); text-align: center;
     }
     .editor-tab.active .tab-count { background: var(--color-primary); color: #fff; }
@@ -219,15 +219,15 @@
     }
     /* 右侧常驻测试面板 */
     .test-dock { border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); box-shadow: var(--shadow-sm); overflow: hidden; }
-    .test-dock-head { padding: 12px 14px; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; justify-content: space-between; background: linear-gradient(180deg, #fbfcfe, #f5f8fc); }
+    .test-dock-head { padding: 12px 14px; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; justify-content: space-between; background: linear-gradient(180deg, #f7f7f8, #f4f4f5); }
     .test-dock-head h3 { font-size: 14px; margin: 0; }
     .test-dock-body { padding: 12px 14px; }
     .test-dock-section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.4px; color: var(--color-text-secondary); margin: 0 0 6px; display: flex; align-items: center; justify-content: space-between; }
     .test-dock textarea { width: 100%; font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--color-border); border-radius: 8px; padding: 9px 11px; resize: vertical; }
     .test-dock-result { margin-top: 12px; }
-    .test-dock-result pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; font-size: 11.5px; line-height: 1.55; max-height: 320px; overflow: auto; margin: 0; white-space: pre-wrap; }
+    .test-dock-result pre { background: #1c1c1e; color: #e4e4e7; padding: 12px; border-radius: 8px; font-size: 11.5px; line-height: 1.55; max-height: 320px; overflow: auto; margin: 0; white-space: pre-wrap; }
     .test-dock-meta { font-size: 11.5px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
-    .test-dock-meta .m-ok { color: #16a34a; font-weight: 600; }
+    .test-dock-meta .m-ok { color: #4d7c0f; font-weight: 600; }
     .test-dock-meta .m-err { color: #dc2626; font-weight: 600; }
     .test-dock-empty { padding: 26px 10px; text-align: center; color: var(--color-text-muted); font-size: 12.5px; }
     @keyframes paneIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
@@ -239,21 +239,21 @@
     }
     .param-help-item {
         border: 1px solid var(--color-border); border-radius: var(--radius-sm);
-        padding: 10px 12px; background: #fbfcfe; font-size: 12px; line-height: 1.55;
+        padding: 10px 12px; background: #f7f7f8; font-size: 12px; line-height: 1.55;
         color: var(--color-text-secondary);
     }
     .param-help-item code {
-        font-family: var(--font-mono); background: #eef2ff; color: var(--color-primary);
+        font-family: var(--font-mono); background: #ece8fd; color: var(--color-primary);
         padding: 1px 5px; border-radius: 4px; font-size: 11.5px;
     }
     .param-help-item b { color: var(--color-text); display: block; margin-bottom: 2px; font-size: 12.5px; }
     .schema-summary { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
     .schema-chip {
         font-family: var(--font-mono); font-size: 10.5px;
-        background: #f0f4fc; border: 1px solid #dbe4f5; color: #3b5bd6;
+        background: #f4f4f5; border: 1px solid #e4e4e7; color: #8f78ee;
         padding: 1px 7px; border-radius: 10px; cursor: pointer; white-space: nowrap;
     }
-    .schema-chip:hover { background: #e3ebfa; }
+    .schema-chip:hover { background: #ececee; }
     .schema-chip .req { color: var(--color-danger); font-weight: 700; }
     .schema-cols {
         display: flex; gap: 8px; margin-bottom: 4px; padding: 0 2px;
@@ -272,22 +272,22 @@
     .sp-tab.active::after { content:''; position:absolute; left:8px; right:8px; bottom:-1px; height:2px;
         background:var(--color-primary); border-radius:2px; }
     .sp-pane { display:none; } .sp-pane.active { display:block; }
-    .sp-section-title { font-size:12px; color:#64748b; margin:12px 0 6px; font-weight:600; }
+    .sp-section-title { font-size:12px; color:#71717a; margin:12px 0 6px; font-weight:600; }
     .sp-section-title:first-child { margin-top:0; }
     .sp-tree { font-family:var(--font-mono); font-size:12px; line-height:1.9; }
-    .sp-tree .t-name { color:#1d4ed8; font-weight:600; }
-    .sp-tree .t-type { color:#0e7490; }
+    .sp-tree .t-name { color:#5b44c9; font-weight:600; }
+    .sp-tree .t-type { color:#5b44c9; }
     .sp-tree .t-req { color:var(--color-danger); font-weight:700; margin-left:2px; }
-    .sp-tree .t-desc { color:#94a3b8; margin-left:8px; font-family:inherit; }
-    .sp-tree .t-path { color:#a78bfa; font-size:11px; margin-left:8px; cursor:pointer; }
+    .sp-tree .t-desc { color:#a1a1aa; margin-left:8px; font-family:inherit; }
+    .sp-tree .t-path { color:#b7a7f5; font-size:11px; margin-left:8px; cursor:pointer; }
     .sp-tree .t-path:hover { text-decoration:underline; }
-    .sp-code { background:#0f172a; color:#e2e8f0; padding:12px 14px; border-radius:6px;
+    .sp-code { background:#1c1c1e; color:#e4e4e7; padding:12px 14px; border-radius:6px;
         font-size:12px; line-height:1.6; max-height:280px; overflow:auto; margin:0; white-space:pre-wrap;
         font-family:var(--font-mono); }
     .sp-bind-table { width:100%; border-collapse:collapse; font-size:12px; }
-    .sp-bind-table th { text-align:left; padding:5px 8px; color:#64748b; font-weight:600; border-bottom:1px solid #e2e8f0; font-size:11px; }
-    .sp-bind-table td { padding:5px 8px; border-bottom:1px solid #f1f5f9; font-family:var(--font-mono); vertical-align:top; }
-    .sp-note { font-size:11.5px; color:#94a3b8; margin-top:6px; }
+    .sp-bind-table th { text-align:left; padding:5px 8px; color:#71717a; font-weight:600; border-bottom:1px solid #e4e4e7; font-size:11px; }
+    .sp-bind-table td { padding:5px 8px; border-bottom:1px solid #f1f1f3; font-family:var(--font-mono); vertical-align:top; }
+    .sp-note { font-size:11.5px; color:#a1a1aa; margin-top:6px; }
 
 </style>
 {% endblock %}
@@ -342,7 +342,7 @@
         </div>
         <div class="idbar-sub">
             <div class="call-url-box">
-                <span style="font-size:11px; color:#64748b; white-space:nowrap;">调用地址:</span>
+                <span style="font-size:11px; color:#71717a; white-space:nowrap;">调用地址:</span>
                 <code id="fullCallUrl">{{ gateway_prefix }}/{{ project_code | default(project_id) }}/api/users</code>
                 <button type="button" class="copy-btn" onclick="copyCallUrl()">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
@@ -350,8 +350,8 @@
                 </button>
             </div>
             <div class="call-url-box" id="ownerBox" style="display:none;">
-                <span style="font-size:11px; color:#64748b; white-space:nowrap;">责任人:</span>
-                <code id="ownerName" style="color:#0f766e;">-</code>
+                <span style="font-size:11px; color:#71717a; white-space:nowrap;">责任人:</span>
+                <code id="ownerName" style="color:#3d5a0a;">-</code>
                 <button type="button" class="copy-btn" onclick="openTransferDialog()" title="转交责任人">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
                     转交
@@ -548,11 +548,11 @@
         </div>
         <div class="card-body">
             <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                <div style="flex:1 1 260px; min-width:240px; max-height:320px; overflow:auto; border:1px solid #e2e8f0; border-radius:6px; padding:8px; font-size:12.5px;" id="catalogTree">
+                <div style="flex:1 1 260px; min-width:240px; max-height:320px; overflow:auto; border:1px solid #e4e4e7; border-radius:6px; padding:8px; font-size:12.5px;" id="catalogTree">
                     <div class="text-muted">加载中...</div>
                 </div>
                 <div style="flex:2 1 360px; min-width:280px;">
-                    <pre id="federatedPlan" style="display:none; max-height:320px; overflow:auto; background:#0f172a; color:#e2e8f0; padding:10px; border-radius:6px; font-size:12px; white-space:pre-wrap;"></pre>
+                    <pre id="federatedPlan" style="display:none; max-height:320px; overflow:auto; background:#1c1c1e; color:#e4e4e7; padding:10px; border-radius:6px; font-size:12px; white-space:pre-wrap;"></pre>
                 </div>
             </div>
         </div>
@@ -573,16 +573,16 @@
         </div>
         <div class="card-body">
             <div style="display:flex; justify-content:flex-end; gap:6px; margin-bottom:8px;">
-                <button type="button" class="btn btn-ghost btn-sm" style="color:#64748b;" onclick="previewRenderedSql()">预览渲染</button>
+                <button type="button" class="btn btn-ghost btn-sm" style="color:#71717a;" onclick="previewRenderedSql()">预览渲染</button>
             </div>
             <div id="sqlEditorMount"></div>
             <textarea id="apiSql" style="display:none;"></textarea>
             <div class="text-sm text-muted" style="margin-top:8px;">
                 支持
-                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">:param</code>
-                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">#{var}</code>
-                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">$if$</code>
-                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">$for$</code>
+                <code style="background:#f1f1f3;padding:1px 5px;border-radius:3px;font-size:11px;">:param</code>
+                <code style="background:#f1f1f3;padding:1px 5px;border-radius:3px;font-size:11px;">#{var}</code>
+                <code style="background:#f1f1f3;padding:1px 5px;border-radius:3px;font-size:11px;">$if$</code>
+                <code style="background:#f1f1f3;padding:1px 5px;border-radius:3px;font-size:11px;">$for$</code>
                 等语法 — 点右上角「使用教程」查看完整说明和示例。
             </div>
         </div>
@@ -602,21 +602,21 @@
         </div>
         <div class="card-body">
             <!-- 关闭状态提示 -->
-            <div id="pipelineDisabledHint" style="padding:20px; text-align:center; color:#94a3b8; font-size:13px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px;">
-                当前为<strong style="color:#475569;">单数据源</strong>模式，使用上方 SQL 模板。<br>
-                需要在一个 API 内查询<strong style="color:#475569;">多个数据库</strong>并做聚合/关联时，打开右上角开关。
+            <div id="pipelineDisabledHint" style="padding:20px; text-align:center; color:#a1a1aa; font-size:13px; background:#f7f7f8; border:1px dashed #d4d4d8; border-radius:8px;">
+                当前为<strong style="color:#52525b;">单数据源</strong>模式，使用上方 SQL 模板。<br>
+                需要在一个 API 内查询<strong style="color:#52525b;">多个数据库</strong>并做聚合/关联时，打开右上角开关。
             </div>
 
             <!-- 开启状态：可视化编排 + JSON 模式切换 -->
             <div id="pipelineEditor" style="display:none;">
                 <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-                    <div style="font-size:12.5px; color:#475569;">
+                    <div style="font-size:12.5px; color:#52525b;">
                         每步可查询不同数据源，用
-                        <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;">${'$'}{步骤名.*.字段}</code>
+                        <code style="background:#f1f1f3;padding:1px 5px;border-radius:3px;font-size:11px;">${'$'}{步骤名.*.字段}</code>
                         引用前序步骤结果。
                         <button type="button" class="btn btn-ghost btn-sm" style="padding:1px 8px;" onclick="openTutorial('pipeline')">查看教程 →</button>
                     </div>
-                    <div class="seg-toggle" style="display:flex; border:1px solid #cbd5e1; border-radius:6px; overflow:hidden;">
+                    <div class="seg-toggle" style="display:flex; border:1px solid #d4d4d8; border-radius:6px; overflow:hidden;">
                         <button type="button" id="modeBtnVisual" class="pmode-btn pmode-active" onclick="switchPipelineMode('visual')">可视化编排</button>
                         <button type="button" id="modeBtnJson" class="pmode-btn" onclick="switchPipelineMode('json')">JSON 模式</button>
                     </div>
@@ -625,7 +625,7 @@
                 <!-- ===== 可视化编排 ===== -->
                 <div id="pipelineVisual">
                     <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
-                        <span style="font-size:12px;color:#64748b;align-self:center;">快速模板：</span>
+                        <span style="font-size:12px;color:#71717a;align-self:center;">快速模板：</span>
                         <button type="button" class="btn btn-ghost btn-sm" onclick="loadTemplate('compute')">两步求和</button>
                         <button type="button" class="btn btn-ghost btn-sm" onclick="loadTemplate('dynamic')">动态条件</button>
                         <button type="button" class="btn btn-ghost btn-sm" onclick="loadTemplate('join')">跨库关联</button>
@@ -686,7 +686,7 @@
             </div>
             <div class="text-sm text-muted" style="margin-top:8px;">
                 调用方式：浏览器直接访问
-                <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:11px;" id="htmlCallHint">
+                <code style="background:#f1f1f3;padding:1px 5px;border-radius:3px;font-size:11px;" id="htmlCallHint">
                     {{ gateway_prefix }}/{{ project_code | default(project_id) }}/...
                 </code>
                 即可看到渲染后的页面。
@@ -728,7 +728,7 @@
 
             <div class="form-group">
                 <label class="form-label">调用示例</label>
-                <pre style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:6px;font-size:12px;line-height:1.6;overflow:auto;margin:0;" id="syncCurlDemo">POST &lt;上方的调用地址&gt;
+                <pre style="background:#1c1c1e;color:#e4e4e7;padding:12px;border-radius:6px;font-size:12px;line-height:1.6;overflow:auto;margin:0;" id="syncCurlDemo">POST &lt;上方的调用地址&gt;
 Header: xpftkey: &lt;项目或API的Key&gt;
 
 {
@@ -862,13 +862,13 @@ Header: xpftkey: &lt;项目或API的Key&gt;
 </form>
 
 <!-- ===== 使用教程弹窗 ===== -->
-<div id="tutorialModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(15,23,42,0.55); align-items:center; justify-content:center;">
+<div id="tutorialModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(28,28,30,0.55); align-items:center; justify-content:center;">
   <div style="background:#fff; width:min(860px,94vw); max-height:88vh; border-radius:14px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,0.3);">
-    <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:1px solid #e2e8f0;">
-      <h3 style="margin:0; font-size:17px; font-weight:700; color:#0f172a;">SQL 模板 & 多步骤管线 — 使用教程</h3>
-      <button type="button" onclick="closeTutorial()" style="border:none; background:none; font-size:22px; color:#64748b; cursor:pointer; line-height:1;">&times;</button>
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:1px solid #e4e4e7;">
+      <h3 style="margin:0; font-size:17px; font-weight:700; color:#1c1c1e;">SQL 模板 & 多步骤管线 — 使用教程</h3>
+      <button type="button" onclick="closeTutorial()" style="border:none; background:none; font-size:22px; color:#71717a; cursor:pointer; line-height:1;">&times;</button>
     </div>
-    <div style="display:flex; gap:6px; padding:12px 22px 0; border-bottom:1px solid #e2e8f0; flex-wrap:wrap;">
+    <div style="display:flex; gap:6px; padding:12px 22px 0; border-bottom:1px solid #e4e4e7; flex-wrap:wrap;">
       <button type="button" class="tut-tab" data-tab="basic"   onclick="switchTutTab('basic')">基础占位符</button>
       <button type="button" class="tut-tab" data-tab="cond"    onclick="switchTutTab('cond')">条件 & 循环</button>
       <button type="button" class="tut-tab" data-tab="like"    onclick="switchTutTab('like')">模糊 & 空值</button>
@@ -876,23 +876,23 @@ Header: xpftkey: &lt;项目或API的Key&gt;
       <button type="button" class="tut-tab" data-tab="agg"     onclick="switchTutTab('agg')">聚合 & 关联</button>
     </div>
     <div style="padding:20px 22px; overflow:auto;" id="tutBody"></div>
-    <div style="padding:12px 22px; border-top:1px solid #e2e8f0; text-align:right;">
+    <div style="padding:12px 22px; border-top:1px solid #e4e4e7; text-align:right;">
       <button type="button" class="btn btn-secondary" onclick="closeTutorial()">关闭</button>
     </div>
   </div>
 </div>
 <style>
-  .tut-tab{border:none;background:none;padding:8px 14px;font-size:13px;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;font-weight:500;}
-  .tut-tab.active{color:#4f46e5;border-bottom-color:#4f46e5;}
-  #tutBody h4{margin:18px 0 8px;font-size:14px;color:#0f172a;}
+  .tut-tab{border:none;background:none;padding:8px 14px;font-size:13px;color:#71717a;cursor:pointer;border-bottom:2px solid transparent;font-weight:500;}
+  .tut-tab.active{color:#8f78ee;border-bottom-color:#8f78ee;}
+  #tutBody h4{margin:18px 0 8px;font-size:14px;color:#1c1c1e;}
   #tutBody h4:first-child{margin-top:0;}
-  #tutBody p{margin:6px 0;font-size:13px;color:#475569;line-height:1.7;}
-  #tutBody pre{background:#0f172a;color:#e2e8f0;padding:13px 15px;border-radius:8px;font-size:12px;line-height:1.65;overflow:auto;margin:8px 0;font-family:'Fira Code','JetBrains Mono',monospace;}
-  #tutBody code{background:#f1f5f9;color:#be185d;padding:1px 5px;border-radius:3px;font-size:12px;}
+  #tutBody p{margin:6px 0;font-size:13px;color:#52525b;line-height:1.7;}
+  #tutBody pre{background:#1c1c1e;color:#e4e4e7;padding:13px 15px;border-radius:8px;font-size:12px;line-height:1.65;overflow:auto;margin:8px 0;font-family:'Fira Code','JetBrains Mono',monospace;}
+  #tutBody code{background:#f1f1f3;color:#be185d;padding:1px 5px;border-radius:3px;font-size:12px;}
   #tutBody pre code{background:none;color:inherit;padding:0;}
   #tutBody table{width:100%;border-collapse:collapse;margin:8px 0;font-size:12.5px;}
-  #tutBody th,#tutBody td{border:1px solid #e2e8f0;padding:6px 10px;text-align:left;}
-  #tutBody th{background:#f8fafc;color:#334155;}
+  #tutBody th,#tutBody td{border:1px solid #e4e4e7;padding:6px 10px;text-align:left;}
+  #tutBody th{background:#f7f7f8;color:#3f3f46;}
 </style>
 {% endblock %}
 
@@ -1240,7 +1240,7 @@ function validateSyncTables() {
     const n = Object.keys(obj).length;
     const total = Object.values(obj).reduce((s, a) => s + a.length, 0);
     hint.textContent = `格式正确：${n} 张表、共 ${total} 个字段`;
-    hint.style.color = '#0f766e';
+    hint.style.color = '#3d5a0a';
     return true;
 }
 
@@ -1286,7 +1286,7 @@ function onApiTypeChange() {
   const _sqlHint = document.getElementById('sqlModeHint');
   if (type === 'federated') {
     if (typeof _setSqlEditorDisabled === 'function') _setSqlEditorDisabled(false);
-    if (_sqlHint) { _sqlHint.textContent = '多数据源 SQL'; _sqlHint.style.color = '#0f766e'; }
+    if (_sqlHint) { _sqlHint.textContent = '多数据源 SQL'; _sqlHint.style.color = '#3d5a0a'; }
     if (!window.__catalogsLoaded) loadCatalogs();
   } else if (type === 'sql' && _sqlHint && _sqlHint.textContent === '多数据源 SQL') {
     _sqlHint.textContent = '单数据源查询'; _sqlHint.style.color = '';
@@ -1459,7 +1459,7 @@ async function openTransferDialog() {
       <div id="__transferModal" class="modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:9999;">
         <div style="background:#fff;border-radius:8px;padding:20px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
           <h3 style="margin:0 0 12px;font-size:16px;">转交责任人</h3>
-          <p style="font-size:12px;color:#64748b;margin:0 0 10px;">当前责任人：<b>${document.getElementById('ownerName').textContent}</b></p>
+          <p style="font-size:12px;color:#71717a;margin:0 0 10px;">当前责任人：<b>${document.getElementById('ownerName').textContent}</b></p>
           <select id="__newOwner" class="form-select" style="width:100%;margin-bottom:14px;">
             <option value="">选择新责任人…</option>${opts}
           </select>
@@ -1508,7 +1508,7 @@ function syncPrewarmAvailability() {
 async function previewPrewarmOverrides() {
     const tpl = document.getElementById('prewarmOverrides').value.trim();
     const el = document.getElementById('prewarmPreview');
-    if (!tpl) { el.textContent = '未配置覆盖（将直接用历史请求参数预热）'; el.style.color = '#64748b'; return; }
+    if (!tpl) { el.textContent = '未配置覆盖（将直接用历史请求参数预热）'; el.style.color = '#71717a'; return; }
     const res = await API.post(`/api/projects/${PROJECT_ID}/variables/preview-template`, { template: tpl });
     if (res && res.status) {
         const p = res.data.params;
@@ -1519,7 +1519,7 @@ async function previewPrewarmOverrides() {
         } else {
             el.textContent = '将覆盖这些字段: ' + JSON.stringify(p);
         }
-        el.style.color = '#0f766e';
+        el.style.color = '#3d5a0a';
     } else {
         el.textContent = (res && res.msg) || '预览失败';
         el.style.color = '#b91c1c';
@@ -1813,7 +1813,7 @@ async function spFetchSqlPreview() {
     const exprRows = (d.expressions || []).map(e => {
         const badge = e.kind === 'for'
             ? `<span class="badge" style="background:#ecfccb;color:#4d7c0f;padding:1px 7px;border-radius:4px;font-size:10.5px;">loop × ${e.iter_count || 0}</span>`
-            : `<span class="badge" style="background:${e.value ? '#dcfce7' : '#fee2e2'};color:${e.value ? '#15803d' : '#b91c1c'};padding:1px 7px;border-radius:4px;font-size:10.5px;">${e.value ? 'keep' : 'drop'}</span>`;
+            : `<span class="badge" style="background:${e.value ? '#eaf8c4' : '#fee2e2'};color:${e.value ? '#3d5a0a' : '#b91c1c'};padding:1px 7px;border-radius:4px;font-size:10.5px;">${e.value ? 'keep' : 'drop'}</span>`;
         return `<tr><td><code style="font-size:11.5px;">${escapeHtml(e.expr)}</code></td><td style="text-align:center;">${badge}</td></tr>`;
     }).join('');
 
@@ -1826,8 +1826,8 @@ async function spFetchSqlPreview() {
         <table class="sp-bind-table"><thead><tr><th>表达式</th><th style="width:90px;text-align:center;">结果</th></tr></thead><tbody>${exprRows}</tbody></table>` : ''}
         ${bindRows ? `<div class="sp-section-title">:{表达式} 自动生成的绑定值(参数化,防注入)</div>
         <table class="sp-bind-table"><thead><tr><th style="width:140px;">占位符</th><th>值</th></tr></thead><tbody>${bindRows}</tbody></table>` : ''}
-        <div class="sp-section-title" style="color:#0f766e;">✦ 参数已填充的 SQL(可直接复制到数据库执行验证)</div>
-        <pre class="sp-code" style="background:#052e2b;color:#5eead4;">${escapeHtml(d.preview_sql || d.rendered_sql || '')}</pre>
+        <div class="sp-section-title" style="color:#3d5a0a;">✦ 参数已填充的 SQL(可直接复制到数据库执行验证)</div>
+        <pre class="sp-code" style="background:#1c1c1e;color:#d6f36a;">${escapeHtml(d.preview_sql || d.rendered_sql || '')}</pre>
         <div class="sp-section-title">模板 SQL(:占位符 将参数化提交到数据库)</div>
         <pre class="sp-code">${escapeHtml(d.rendered_sql || '')}</pre>
         <div class="sp-note">上方为参数填充后的样子,方便直接拿去数据库跑;真实执行走参数化绑定(防注入),结果一致。参数来自「在线测试」页的 JSON,为空时按参数定义示例生成。</div>`;
@@ -2440,7 +2440,7 @@ function renderStepCards() {
     // 渲染前销毁旧的步骤编辑器实例引用（DOM 将被重建）
     stepSqlEditors = {};
     if (pipelineState.length === 0) {
-        box.innerHTML = '<div style="padding:24px;text-align:center;color:#94a3b8;font-size:13px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;">还没有步骤。点下方按钮添加，或上方选一个快速模板。</div>';
+        box.innerHTML = '<div style="padding:24px;text-align:center;color:#a1a1aa;font-size:13px;background:#f7f7f8;border:1px dashed #d4d4d8;border-radius:8px;">还没有步骤。点下方按钮添加，或上方选一个快速模板。</div>';
         return;
     }
     box.innerHTML = pipelineState.map((s,i) => renderOneStep(s,i)).join('');
@@ -2859,7 +2859,7 @@ function togglePipelineMode() {
         // 否则会把 onApiTypeChange() 刚隐藏的 SQL 卡又显示出来。
         const _type = (document.getElementById('apiType')?.value) || 'sql';
         if(sqlCard) sqlCard.style.display = (_type === 'sql' || _type === 'federated') ? '' : 'none';
-        if(hint){ hint.textContent = _type === 'federated' ? '多数据源 SQL' : '单数据源查询'; hint.style.color = _type === 'federated' ? '#0f766e' : ''; }
+        if(hint){ hint.textContent = _type === 'federated' ? '多数据源 SQL' : '单数据源查询'; hint.style.color = _type === 'federated' ? '#3d5a0a' : ''; }
         _setSqlEditorDisabled(_type !== 'sql' && _type !== 'federated');
     }
 }
@@ -2953,7 +2953,7 @@ function showSqlPreviewModal(data) {
 
     const exprRows = (data.expressions || []).map(e => {
         const kindBadge = {
-            'if':     '<span style="display:inline-block; padding:1px 6px; background:#eef2ff; color:#3730a3; border-radius:3px; font-size:10px; margin-right:6px; font-family:var(--font-mono);">if</span>',
+            'if':     '<span style="display:inline-block; padding:1px 6px; background:#ece8fd; color:#5b44c9; border-radius:3px; font-size:10px; margin-right:6px; font-family:var(--font-mono);">if</span>',
             'elseif': '<span style="display:inline-block; padding:1px 6px; background:#fef3c7; color:#92400e; border-radius:3px; font-size:10px; margin-right:6px; font-family:var(--font-mono);">elseif</span>',
             'for':    '<span style="display:inline-block; padding:1px 6px; background:#ecfccb; color:#4d7c0f; border-radius:3px; font-size:10px; margin-right:6px; font-family:var(--font-mono);">for</span>',
         }[e.kind] || '';
@@ -2961,17 +2961,17 @@ function showSqlPreviewModal(data) {
         if (e.kind === 'for') {
             resultCell = `<span class="badge" style="background:#ecfccb; color:#4d7c0f; padding:2px 8px; border-radius:4px; font-size:11px;">loop × ${e.iter_count || 0}</span>`;
         } else {
-            resultCell = `<span class="badge" style="background:${e.value ? '#dcfce7' : '#fee2e2'}; color:${e.value ? '#15803d' : '#b91c1c'}; padding:2px 8px; border-radius:4px; font-size:11px;">${e.value ? 'keep' : 'drop'}</span>`;
+            resultCell = `<span class="badge" style="background:${e.value ? '#eaf8c4' : '#fee2e2'}; color:${e.value ? '#3d5a0a' : '#b91c1c'}; padding:2px 8px; border-radius:4px; font-size:11px;">${e.value ? 'keep' : 'drop'}</span>`;
         }
         return `<tr>
             <td>${kindBadge}<code style="font-size:11.5px;">${escapeHtml(e.expr)}</code></td>
             <td style="text-align:center;">${resultCell}</td>
         </tr>`;
-    }).join('') || '<tr><td colspan="2" style="color:#94a3b8; text-align:center; padding:8px;">（无控制块）</td></tr>';
+    }).join('') || '<tr><td colspan="2" style="color:#a1a1aa; text-align:center; padding:8px;">（无控制块）</td></tr>';
 
     const placeholders = (data.placeholders || []).map(p =>
-        `<code style="background:#eef2ff; color:#3730a3; padding:2px 7px; border-radius:4px; margin-right:4px; font-size:11.5px;">:${escapeHtml(p)}</code>`
-    ).join('') || '<span style="color:#94a3b8;">（无）</span>';
+        `<code style="background:#ece8fd; color:#5b44c9; padding:2px 7px; border-radius:4px; margin-right:4px; font-size:11.5px;">:${escapeHtml(p)}</code>`
+    ).join('') || '<span style="color:#a1a1aa;">（无）</span>';
 
     const html = `
         <div class="modal-overlay" id="__sqlPreviewModal" style="display:flex;">
@@ -2982,27 +2982,27 @@ function showSqlPreviewModal(data) {
                 </div>
                 <div class="modal-body">
                     <div style="margin-bottom: 14px;">
-                        <div style="font-size:12px; color:#64748b; margin-bottom:6px; font-weight:500;">条件块求值</div>
+                        <div style="font-size:12px; color:#71717a; margin-bottom:6px; font-weight:500;">条件块求值</div>
                         <table style="width:100%; border-collapse:collapse; font-size:12px;">
-                            <thead><tr style="border-bottom:1px solid #e2e8f0;">
-                                <th style="text-align:left; padding:6px 0; color:#64748b; font-weight:500;">表达式</th>
-                                <th style="text-align:center; padding:6px 0; width:80px; color:#64748b; font-weight:500;">结果</th>
+                            <thead><tr style="border-bottom:1px solid #e4e4e7;">
+                                <th style="text-align:left; padding:6px 0; color:#71717a; font-weight:500;">表达式</th>
+                                <th style="text-align:center; padding:6px 0; width:80px; color:#71717a; font-weight:500;">结果</th>
                             </tr></thead>
                             <tbody>${exprRows}</tbody>
                         </table>
                     </div>
                     <div style="margin-bottom: 14px;">
-                        <div style="font-size:12px; color:#64748b; margin-bottom:6px; font-weight:500;">渲染后占位符</div>
+                        <div style="font-size:12px; color:#71717a; margin-bottom:6px; font-weight:500;">渲染后占位符</div>
                         <div>${placeholders}</div>
                     </div>
                     <div style="margin-bottom:14px;">
-                        <div style="font-size:12px; color:#0f766e; margin-bottom:6px; font-weight:600;">✦ 参数已填充的 SQL（可直接复制到数据库执行验证）</div>
-                        <pre style="background:#052e2b; color:#5eead4; padding:14px; border-radius:6px; font-size:12px; line-height:1.6; max-height:300px; overflow:auto; margin:0; white-space:pre-wrap;">${escapeHtml(data.preview_sql || data.rendered_sql || '')}</pre>
-                        <div style="font-size:11px; color:#94a3b8; margin-top:5px;">注：这是把参数值填进去后的样子，方便你直接拿去数据库跑。真实执行走参数化绑定（防注入），结果一致。</div>
+                        <div style="font-size:12px; color:#3d5a0a; margin-bottom:6px; font-weight:600;">✦ 参数已填充的 SQL（可直接复制到数据库执行验证）</div>
+                        <pre style="background:#1c1c1e; color:#d6f36a; padding:14px; border-radius:6px; font-size:12px; line-height:1.6; max-height:300px; overflow:auto; margin:0; white-space:pre-wrap;">${escapeHtml(data.preview_sql || data.rendered_sql || '')}</pre>
+                        <div style="font-size:11px; color:#a1a1aa; margin-top:5px;">注：这是把参数值填进去后的样子，方便你直接拿去数据库跑。真实执行走参数化绑定（防注入），结果一致。</div>
                     </div>
                     <div>
-                        <div style="font-size:12px; color:#64748b; margin-bottom:6px; font-weight:500;">模板 SQL（含 :参数 占位符，真实提交形式）</div>
-                        <pre style="background:#0f172a; color:#e2e8f0; padding:14px; border-radius:6px; font-size:12px; line-height:1.6; max-height:220px; overflow:auto; margin:0; white-space:pre-wrap;">${escapeHtml(data.rendered_sql || '')}</pre>
+                        <div style="font-size:12px; color:#71717a; margin-bottom:6px; font-weight:500;">模板 SQL（含 :参数 占位符，真实提交形式）</div>
+                        <pre style="background:#1c1c1e; color:#e4e4e7; padding:14px; border-radius:6px; font-size:12px; line-height:1.6; max-height:220px; overflow:auto; margin:0; white-space:pre-wrap;">${escapeHtml(data.rendered_sql || '')}</pre>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -3493,7 +3493,7 @@ async function runTest() {
         document.getElementById('testMeta').innerHTML = `
             <span>类型: <strong>HTML 页面</strong></span> &nbsp;|&nbsp;
             <span>路径: <strong>${gatewayUrl}</strong></span> &nbsp;|&nbsp;
-            <span style="color:#22c55e;font-weight:600;">已在新标签打开预览</span>
+            <span style="color:#84cc16;font-weight:600;">已在新标签打开预览</span>
         `;
         const outputEl = document.getElementById('testOutput');
         outputEl.className = '';
@@ -3527,7 +3527,7 @@ async function runTest() {
 
     document.getElementById('testResult').style.display = 'block';
     const statusStr = result?.status === true
-        ? '<span style="color:#22c55e;font-weight:600;">成功</span>'
+        ? '<span style="color:#84cc16;font-weight:600;">成功</span>'
         : '<span style="color:#ef4444;font-weight:600;">失败</span>';
     const finalTrace = (result && result.trace_id) ? result.trace_id : traceId;
     document.getElementById('testMeta').innerHTML = `

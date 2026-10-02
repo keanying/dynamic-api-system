@@ -7,6 +7,13 @@
 {% endblock %}
 
 {% block content %}
+<div class="page-head">
+    <h1>调用日志 <span class="count" id="logCount">-</span></h1>
+    <div class="actions">
+        <button class="btn btn-secondary" onclick="showSlowQueries()">慢查询</button>
+        <button class="btn btn-secondary" onclick="cleanupLogs()">清理日志</button>
+    </div>
+</div>
 <div class="toolbar">
     <div class="toolbar-left">
         <select class="form-select" id="logStatus" onchange="loadLogs(1)" style="width: 120px;">
@@ -21,10 +28,6 @@
         </select>
         <input type="date" class="form-input" id="logStartDate" onchange="loadLogs(1)" style="width: 150px;">
         <input type="date" class="form-input" id="logEndDate" onchange="loadLogs(1)" style="width: 150px;">
-    </div>
-    <div class="toolbar-right">
-        <button class="btn btn-ghost btn-sm" onclick="showSlowQueries()">慢查询</button>
-        <button class="btn btn-ghost btn-sm" onclick="cleanupLogs()">清理日志</button>
     </div>
 </div>
 
@@ -50,9 +53,7 @@
                 <tbody id="logTable"></tbody>
             </table>
         </div>
-        <div id="logEmpty" class="empty-state" style="display:none; padding: 30px;">
-            <p>暂无日志记录</p>
-        </div>
+        <div id="logEmpty" class="empty-block" style="display:none;">暂无日志记录</div>
         <div class="pagination" id="logPagination"></div>
     </div>
 </div>
@@ -113,6 +114,7 @@ async function loadLogs(page) {
     if (!data || !data.data) return;
 
     const { items, total, page_size } = data.data;
+    document.getElementById('logCount').textContent = compactNum(total);
     const tbody = document.getElementById('logTable');
     const empty = document.getElementById('logEmpty');
 
@@ -126,17 +128,17 @@ async function loadLogs(page) {
     empty.style.display = 'none';
     tbody.innerHTML = items.map(log => `
         <tr>
-            <td>${log.id}</td>
-            <td>${formatDate(log.created_at)}</td>
-            <td>${escapeHtml(log.api_name || '-')}</td>
+            <td class="text-muted nowrap">${log.id}</td>
+            <td class="nowrap">${formatDate(log.created_at)}</td>
+            <td class="cell-ellipsis" style="max-width:180px;" title="${escapeHtml(log.api_name || '')}">${escapeHtml(log.api_name || '-')}</td>
             <td>${methodBadge(log.method)}</td>
-            <td class="font-mono text-sm">${escapeHtml(log.url_path)}</td>
-            <td>${formatMs(log.response_time_ms)}${log.is_slow_query ? ' <span class="badge badge-warning">慢</span>' : ''}</td>
+            <td class="font-mono text-sm cell-ellipsis" style="max-width:240px;" title="${escapeHtml(log.url_path)}">${escapeHtml(log.url_path)}</td>
+            <td class="nowrap">${formatMs(log.response_time_ms)}${log.is_slow_query ? ' <span class="badge badge-warning">慢</span>' : ''}</td>
             <td>${statusBadge(log.response_status)}</td>
             <td class="font-mono text-sm">${escapeHtml(log.client_ip)}</td>
             <td>${sourceBadge(log.call_source)}</td>
-            <td class="font-mono text-sm" title="${escapeHtml(log.trace_id || '')}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;" onclick="copyTrace('${escapeHtml(log.trace_id || '')}')">${log.trace_id ? escapeHtml(log.trace_id.slice(0, 12)) + '…' : '-'}</td>
-            <td><button class="btn btn-ghost btn-sm" onclick="showLogDetail(${log.id})">详情</button></td>
+            <td class="font-mono text-sm" title="${escapeHtml(log.trace_id || '')}" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;" onclick="copyTrace('${escapeHtml(log.trace_id || '')}')">${log.trace_id ? escapeHtml(log.trace_id.slice(0, 8)) + '…' : '-'}</td>
+            <td class="nowrap"><button class="btn btn-ghost btn-sm" onclick="showLogDetail(${log.id})">详情</button></td>
         </tr>
     `).join('');
 
@@ -164,7 +166,7 @@ async function showLogDetail(logId) {
             <div><span class="text-muted text-sm">阶段耗时</span><div class="font-mono" style="font-size:12px;">渲染 ${formatMs(log.render_time_ms || 0)} · 查询 ${formatMs(log.query_time_ms || 0)} · 总 ${formatMs(log.response_time_ms)}</div></div>
             <div style="grid-column: span 2;">
                 <span class="text-muted text-sm">Trace ID（点击复制，可用于在日志文件里 grep）</span>
-                <div class="font-mono" style="word-break:break-all;cursor:pointer;color:#2563eb;" onclick="copyTrace('${escapeHtml(log.trace_id || '')}')">${escapeHtml(log.trace_id || '-')}</div>
+                <div class="font-mono" style="word-break:break-all;cursor:pointer;color:#8f78ee;" onclick="copyTrace('${escapeHtml(log.trace_id || '')}')">${escapeHtml(log.trace_id || '-')}</div>
             </div>
         </div>
         ${log.request_params ? `<div class="mb-16"><span class="text-muted text-sm">请求参数</span><div class="test-result" style="margin-top:6px;">${escapeHtml(jsonPretty(log.request_params))}</div></div>` : ''}

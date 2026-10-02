@@ -7,11 +7,10 @@
 {% endblock %}
 
 {% block content %}
-<div class="toolbar">
-    <div class="toolbar-left">
+<div class="page-head">
+    <h1>项目 <span class="count" id="projCount">-</span></h1>
+    <div class="actions">
         <input type="text" class="search-input" id="searchInput" placeholder="搜索项目..." oninput="debounceSearch()">
-    </div>
-    <div class="toolbar-right">
         <button class="btn btn-secondary" id="delApprovalBtn" onclick="openDelApprovals()">
             删除审批 <span id="delApprovalCount" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:0 6px;font-size:11px;margin-left:4px;"></span>
         </button>
@@ -27,7 +26,7 @@
     <div class="modal" style="max-width:600px;">
         <div class="modal-header"><h3>删除项目审批</h3><button class="btn-icon" onclick="closeDelApprovals()">&times;</button></div>
         <div class="modal-body" id="delApprBody">
-            <div style="color:#94a3b8;padding:20px;text-align:center;">加载中...</div>
+            <div style="color:#a1a1aa;padding:20px;text-align:center;">加载中...</div>
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeDelApprovals()">关闭</button>
@@ -99,6 +98,7 @@ async function loadProjects(page) {
     if (!data || !data.data) return;
 
     const { items, total, page_size } = data.data;
+    document.getElementById('projCount').textContent = total;
     const container = document.getElementById('projectList');
     const empty = document.getElementById('projectEmpty');
 
@@ -112,18 +112,26 @@ async function loadProjects(page) {
     empty.style.display = 'none';
     container.innerHTML = items.map(p => `
         <div class="project-card">
-            <div class="card-title">${escapeHtml(p.name)}</div>
-            <div class="card-desc" style="margin-bottom:4px;"><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px;color:#475569;">${escapeHtml(p.code)}</code> ${escapeHtml(p.description || '')}</div>
-            <div class="card-meta">
-                <span>API: <strong>${p.api_count}</strong></span>
-                <span>调用: <strong>${p.total_calls.toLocaleString()}</strong></span>
-                <span>更新: ${formatDate(p.updated_at)}</span>
+            <div class="pc-top">
+                <span class="avatar av-${p.id % 3}">${escapeHtml((p.name || '?').slice(0, 1))}</span>
+                <div class="pc-title">
+                    <a class="card-title" href="/admin/projects/${p.id}">${escapeHtml(p.name)}</a>
+                    <code class="code-chip">${escapeHtml(p.code)}</code>
+                </div>
             </div>
-            <div class="card-actions">
-                <a href="/admin/projects/${p.id}" class="btn btn-primary btn-sm">进入项目</a>
-                <button class="btn btn-secondary btn-sm" onclick="editProject(${p.id})">编辑</button>
-                <button class="btn btn-ghost btn-sm" onclick="exportProject(${p.id})">导出</button>
-                <button class="btn btn-ghost btn-sm" style="color: var(--color-danger);" onclick="deleteProject(${p.id}, '${escapeHtml(p.name)}')">删除</button>
+            ${p.description ? `<div class="card-desc">${escapeHtml(p.description)}</div>` : ''}
+            <div class="pc-stats">
+                <div><b>${p.api_count}</b><span>接口</span></div>
+                <div><b>${compactNum(p.total_calls)}</b><span>累计调用</span></div>
+            </div>
+            <div class="pc-foot">
+                <span class="text-sm text-muted">更新于 ${(formatDate(p.updated_at) || "").split(" ")[0]}</span>
+                <div class="card-actions">
+                    <button class="btn btn-ghost btn-sm" onclick="editProject(${p.id})">编辑</button>
+                    <button class="btn btn-ghost btn-sm" onclick="exportProject(${p.id})">导出</button>
+                    <button class="btn btn-ghost btn-sm" style="color: var(--color-danger);" onclick="deleteProject(${p.id}, '${escapeHtml(p.name)}')">删除</button>
+                    <a href="/admin/projects/${p.id}" class="btn btn-primary btn-sm">进入</a>
+                </div>
             </div>
         </div>
     `).join('');
@@ -238,15 +246,15 @@ async function refreshDelApprovalCount() {
 async function openDelApprovals() {
     document.getElementById('delApprModal').style.display = 'flex';
     const body = document.getElementById('delApprBody');
-    body.innerHTML = '<div style="color:#94a3b8;padding:20px;text-align:center;">加载中...</div>';
+    body.innerHTML = '<div style="color:#a1a1aa;padding:20px;text-align:center;">加载中...</div>';
     const r = await API.get('/api/projects/deletion-requests/list?status=pending');
     const items = (r.data && r.data.items) || [];
     if (!items.length) {
-        body.innerHTML = '<div style="color:#94a3b8;padding:20px;text-align:center;">暂无待审批的删除申请</div>';
+        body.innerHTML = '<div style="color:#a1a1aa;padding:20px;text-align:center;">暂无待审批的删除申请</div>';
         return;
     }
     body.innerHTML = items.map(it => `
-        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:10px;">
+        <div style="border:1px solid #e4e4e7;border-radius:8px;padding:14px;margin-bottom:10px;">
             <div style="font-weight:600;margin-bottom:6px;">${escapeHtml(it.project_name)}</div>
             <div class="text-sm text-muted" style="margin-bottom:10px;">
                 发起人：${escapeHtml(it.requester)}　|　申请时间：${it.created_at ? new Date(it.created_at).toLocaleString() : ''}

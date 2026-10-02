@@ -11,11 +11,9 @@
 {% endblock %}
 
 {% block content %}
-<div class="toolbar">
-    <div class="toolbar-left">
-        <h2 style="font-size:18px;font-weight:700;">上线审批中心</h2>
-    </div>
-    <div class="toolbar-right">
+<div class="page-head">
+    <h1>上线审批</h1>
+    <div class="actions">
         <select class="form-select" id="statusFilter" onchange="loadApprovals()" style="width:140px;">
             <option value="pending">进行中</option>
             <option value="approved">已通过</option>
@@ -28,7 +26,7 @@
 </div>
 
 <div id="apprList"></div>
-<div id="apprEmpty" style="display:none; text-align:center; padding:60px; color:#94a3b8;">暂无审批单</div>
+<div id="apprEmpty" class="empty-block" style="display:none;">暂无审批单</div>
 
 <!-- 审批决定弹窗 -->
 <div class="modal-overlay" id="decideModal" style="display:none;">
@@ -60,7 +58,7 @@ let MY_ID = null, MY_ROLE = null, IS_SUPER = false;
 document.getElementById('bcProject').textContent = PROJECT_NAME || '项目';
 
 const DEC_LABEL = {pending:'待定', approved:'已通过', rejected:'已驳回'};
-const DEC_COLOR = {pending:'#92400e', approved:'#166534', rejected:'#dc2626'};
+const DEC_COLOR = {pending:'#92400e', approved:'#3d5a0a', rejected:'#dc2626'};
 const OVERALL_LABEL = {pending:'进行中', approved:'已通过', rejected:'已驳回', withdrawn:'已撤回'};
 
 async function loadMe() {
@@ -105,7 +103,7 @@ async function loadApprovals() {
             <div class="card-body">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                     <div style="font-weight:600;font-size:15px;">${escapeHtml(a.api_name || '')}</div>
-                    <span style="font-size:12px;padding:3px 10px;border-radius:4px;background:#f1f5f9;color:#475569;">${OVERALL_LABEL[a.overall_status]||a.overall_status}</span>
+                    <span style="font-size:12px;padding:3px 10px;border-radius:4px;background:#f1f1f3;color:#52525b;">${OVERALL_LABEL[a.overall_status]||a.overall_status}</span>
                 </div>
                 <div class="text-sm text-muted" style="margin-bottom:10px;line-height:1.8;">
                     提交人：${a.submitter ? escapeHtml(a.submitter.nickname || '') : '?'}　|　会审研发：${a.reviewer ? escapeHtml(a.reviewer.nickname || '') : '?'}<br>

@@ -7,13 +7,14 @@
 {% endblock %}
 
 {% block content %}
-<div class="toolbar">
-    <div class="toolbar-left">
-        <button class="btn btn-sm" id="tabPending" onclick="switchTab('pending')">待我审批</button>
-        <button class="btn btn-ghost btn-sm" id="tabMine" onclick="switchTab('mine')">我发起的</button>
-    </div>
-    <div class="toolbar-right">
-        <button class="btn btn-ghost btn-sm" onclick="reload()">刷新</button>
+<div class="page-head">
+    <h1>审批中心</h1>
+    <div class="actions">
+        <div class="seg">
+            <button class="btn btn-sm" id="tabPending" onclick="switchTab('pending')">待我审批</button>
+            <button class="btn btn-ghost btn-sm" id="tabMine" onclick="switchTab('mine')">我发起的</button>
+        </div>
+        <button class="btn btn-secondary" onclick="reload()">刷新</button>
     </div>
 </div>
 
@@ -32,7 +33,7 @@
                 </tr>
             </thead>
             <tbody id="apprBody">
-                <tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:24px;">加载中…</td></tr>
+                <tr><td colspan="7" style="text-align:center;color:#a1a1aa;padding:24px;">加载中…</td></tr>
             </tbody>
         </table>
     </div>
@@ -51,25 +52,25 @@ function switchTab(tab) {
 }
 
 function actionBadge(label) {
-    const color = { '上线': '#0f766e', '下线': '#b45309', '删除': '#b91c1c' }[label] || '#475569';
+    const color = { '上线': '#3d5a0a', '下线': '#b45309', '删除': '#b91c1c' }[label] || '#52525b';
     return `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;background:${color}1a;color:${color};">${label}</span>`;
 }
 
 function statusBadge(st) {
-    const m = { pending: ['待处理','#b45309'], approved: ['已通过','#0f766e'], rejected: ['已驳回','#b91c1c'],
-                cancelled: ['已撤回','#64748b'], withdrawn: ['已撤回','#64748b'] };
-    const [txt, c] = m[st] || [st, '#475569'];
+    const m = { pending: ['待处理','#b45309'], approved: ['已通过','#3d5a0a'], rejected: ['已驳回','#b91c1c'],
+                cancelled: ['已撤回','#71717a'], withdrawn: ['已撤回','#71717a'] };
+    const [txt, c] = m[st] || [st, '#52525b'];
     return `<span style="color:${c};font-size:12px;">${txt}</span>`;
 }
 
 async function reload() {
     const body = document.getElementById('apprBody');
-    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:24px;">加载中…</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#a1a1aa;padding:24px;">加载中…</td></tr>';
     const url = currentTab === 'pending' ? '/api/owner-approvals/center/pending' : '/api/owner-approvals/center/mine';
     const res = await API.get(url);
     const items = (res && res.data && res.data.items) || [];
     if (!items.length) {
-        body.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:24px;">${currentTab==='pending'?'暂无待审批事项':'你还没有发起过申请'}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#a1a1aa;padding:24px;">${currentTab==='pending'?'暂无待审批事项':'你还没有发起过申请'}</td></tr>`;
         return;
     }
     body.innerHTML = items.map(it => {
@@ -96,8 +97,8 @@ async function reload() {
             <td>${escapeHtml(it.api_name || '')}</td>
             <td>${escapeHtml(it.project_name || '')}</td>
             <td>${people}</td>
-            <td style="max-width:220px;color:#64748b;font-size:12px;">${escapeHtml((it.reason||it.decide_comment||'').slice(0,60))}</td>
-            <td style="color:#94a3b8;font-size:12px;">${escapeHtml(it.created_at || '')}</td>
+            <td style="max-width:220px;color:#71717a;font-size:12px;">${escapeHtml((it.reason||it.decide_comment||'').slice(0,60))}</td>
+            <td style="color:#a1a1aa;font-size:12px;">${escapeHtml(it.created_at || '')}</td>
             <td style="text-align:right;">${actions}</td>
         </tr>`;
     }).join('');

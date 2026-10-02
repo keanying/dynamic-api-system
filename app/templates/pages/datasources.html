@@ -7,8 +7,9 @@
 {% endblock %}
 
 {% block content %}
-<div class="toolbar">
-    <div class="toolbar-left">
+<div class="page-head">
+    <h1>数据源 <span class="count" id="dsCount">-</span></h1>
+    <div class="actions">
         <input type="text" class="search-input" id="dsSearch" placeholder="搜索数据源..." oninput="debounceDsSearch()">
         <select class="form-select" id="dsTypeFilter" onchange="loadDatasources()" style="width: 140px;">
             <option value="all">全部类型</option>
@@ -19,8 +20,6 @@
             <option value="postgresql">PostgreSQL</option>
             <option value="redis">Redis</option>
         </select>
-    </div>
-    <div class="toolbar-right">
         <button class="btn btn-secondary" id="dsDelApprBtn" onclick="openDsDelApprovals()" style="display:none;">
             删除审批 <span id="dsDelApprCount" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:0 6px;font-size:11px;margin-left:4px;"></span>
         </button>
@@ -175,6 +174,7 @@ async function loadDatasources() {
     if (!data || !data.data) return;
 
     const { items } = data.data;
+    document.getElementById('dsCount').textContent = data.data.total ?? items.length;
     const container = document.getElementById('dsList');
     const empty = document.getElementById('dsEmpty');
 
@@ -196,11 +196,11 @@ async function loadDatasources() {
             </div>
             <div class="ds-meta">
                 <span>${connStatusDot(ds.status)}</span>
-                <span style="cursor:${ds.api_count>0?'pointer':'default'};${ds.api_count>0?'color:#2563eb;text-decoration:underline;':''}" ${ds.api_count>0?`onclick="showUsage(${ds.id}, '${escapeHtml(ds.name)}')"`:''}>关联 API: ${ds.api_count}</span>
+                <span style="cursor:${ds.api_count>0?'pointer':'default'};${ds.api_count>0?'color:#8f78ee;text-decoration:underline;':''}" ${ds.api_count>0?`onclick="showUsage(${ds.id}, '${escapeHtml(ds.name)}')"`:''}>关联 API: ${ds.api_count}</span>
                 <span>最后测试: ${ds.last_test_at ? formatDate(ds.last_test_at) : '未测试'}</span>
             </div>
             <div class="ds-meta" style="margin-top:4px;">
-                <span style="font-size:12px;color:#94a3b8;">创建人: ${escapeHtml(ds.created_by_name || '—')}</span>
+                <span style="font-size:12px;color:#a1a1aa;">创建人: ${escapeHtml(ds.created_by_name || '—')}</span>
             </div>
             <div class="ds-actions">
                 <button class="btn btn-secondary btn-sm" onclick="testDs(${ds.id})">测试连接</button>
@@ -372,12 +372,12 @@ async function showUsage(id, name) {
     if (d.projects && d.projects.length) {
         html += '<div style="margin-bottom:10px;">';
         d.projects.forEach(p => {
-            html += `<div style="padding:6px 0;border-bottom:1px solid #f1f5f9;"><b>${escapeHtml(p.project_name)}</b> — ${p.api_count} 个 API</div>`;
+            html += `<div style="padding:6px 0;border-bottom:1px solid #f1f1f3;"><b>${escapeHtml(p.project_name)}</b> — ${p.api_count} 个 API</div>`;
         });
         html += '</div>';
         html += '<p style="color:#dc2626;font-size:13px;">⚠ 存在引用，不可删除。请先在相关项目中解除这些 API 的关联。</p>';
     } else {
-        html += '<p style="color:#16a34a;">无 API 引用，可以删除。</p>';
+        html += '<p style="color:#4d7c0f;">无 API 引用，可以删除。</p>';
     }
     showInfoModal('数据源使用情况', html);
 }
@@ -427,12 +427,12 @@ async function openDsDelApprovals() {
     const items = (r.data && r.data.items) || [];
     let html;
     if (!items.length) {
-        html = '<div style="color:#94a3b8;padding:16px;text-align:center;">暂无待审批的删除申请</div>';
+        html = '<div style="color:#a1a1aa;padding:16px;text-align:center;">暂无待审批的删除申请</div>';
     } else {
         html = items.map(it => `
-            <div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:10px;">
+            <div style="border:1px solid #e4e4e7;border-radius:8px;padding:12px;margin-bottom:10px;">
                 <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(it.datasource_name)}</div>
-                <div style="font-size:12px;color:#64748b;margin-bottom:8px;">发起人：${escapeHtml(it.requester)}　|　${it.created_at?new Date(it.created_at).toLocaleString():''}</div>
+                <div style="font-size:12px;color:#71717a;margin-bottom:8px;">发起人：${escapeHtml(it.requester)}　|　${it.created_at?new Date(it.created_at).toLocaleString():''}</div>
                 <div style="display:flex;gap:8px;">
                     <button class="btn btn-ghost btn-sm" style="color:#dc2626;" onclick="decideDsDel(${it.id},'approve','${escapeHtml(it.datasource_name)}')">批准删除</button>
                     <button class="btn btn-secondary btn-sm" onclick="decideDsDel(${it.id},'reject')">驳回</button>

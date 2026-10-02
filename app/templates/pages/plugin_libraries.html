@@ -7,12 +7,9 @@
 {% endblock %}
 
 {% block content %}
-<div class="toolbar">
-    <div class="toolbar-left">
-        <h2 style="font-size:18px;font-weight:700;">插件库</h2>
-        <span class="text-sm text-muted" style="margin-left:12px;">可复用的 Python 函数集，供 API 插件引用</span>
-    </div>
-    <div class="toolbar-right">
+<div class="page-head">
+    <h1>插件库 <span class="count" id="libCount">-</span></h1>
+    <div class="actions">
         <button class="btn btn-secondary" onclick="toggleTutorial()">使用教程</button>
         <button class="btn btn-primary" id="newLibBtn" onclick="openLib()" style="display:none;">+ 新建插件库</button>
     </div>
@@ -53,7 +50,7 @@ def main(params, ctx):
 </div>
 
 <div id="libList"></div>
-<div id="libEmpty" style="display:none; text-align:center; padding:60px; color:#94a3b8;">暂无插件库</div>
+<div id="libEmpty" class="empty-block" style="display:none;">暂无插件库</div>
 
 <!-- 编辑弹窗 -->
 <div class="modal-overlay" id="libModal" style="display:none;">
@@ -115,6 +112,7 @@ async function loadLibs() {
     const list = document.getElementById('libList');
     const empty = document.getElementById('libEmpty');
     const items = (data.data && data.data.items) || [];
+    document.getElementById('libCount').textContent = items.length;
     if (!items.length) { list.innerHTML = ''; empty.style.display = 'block'; return; }
     empty.style.display = 'none';
     list.innerHTML = items.map(l => {
@@ -128,7 +126,7 @@ async function loadLibs() {
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                     <div>
                         <span style="font-weight:600;font-size:15px;">${escapeHtml(l.title || l.name)}</span>
-                        <code style="margin-left:8px;background:#f1f5f9;padding:2px 8px;border-radius:4px;font-size:12px;"># require: ${escapeHtml(l.name)}</code>
+                        <code style="margin-left:8px;background:#f1f1f3;padding:2px 8px;border-radius:4px;font-size:12px;"># require: ${escapeHtml(l.name)}</code>
                         ${l.is_enabled ? '' : '<span style="color:#dc2626;font-size:11px;margin-left:8px;">已禁用</span>'}
                     </div>
                     <div style="display:flex;gap:8px;">${ops}</div>
