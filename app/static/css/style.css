@@ -1857,3 +1857,41 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
 .sidebar-nav { padding: 8px 10px; }
 .sidebar .nav-item { padding: 11px 14px; gap: 10px; }
 .sidebar-footer { margin-left: 10px; margin-right: 10px; padding: 12px; }
+
+/* 编辑器：当前生效的 API Key */
+.key-effective { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; color: var(--ui-muted); }
+.key-effective code { font-family: var(--font-mono); font-size: 12px; background: #f1f1f3; color: var(--ui-ink); padding: 2px 8px; border-radius: 999px; }
+
+/* 分页栏始终在页面底部：内容区至少撑满可视高度，分页 margin-top:auto 落到底部 */
+.page-content { display: flex; flex-direction: column; min-height: calc(100vh - 24px - var(--topbar-height)); }
+.page-content-inner { flex: 1; display: flex; flex-direction: column; }
+.page-content-inner > .pagination { margin-top: auto; }
+
+/* ---------- 交互按钮：圆点扩散 + 文字滑动（参考 InteractiveHoverButton） ---------- */
+.btn.ihb { position: relative; overflow: hidden; isolation: isolate; }
+.btn.ihb:not(.ihb-icon) { padding-left: 34px; }
+.ihb-dot { position: absolute; left: 16px; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%;
+           z-index: 0; transform: scale(1); transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1); pointer-events: none; }
+.btn.ihb-icon .ihb-dot { left: 26px; transform: scale(0); }
+.ihb-label { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px;
+             transition: transform 0.3s ease, opacity 0.3s ease; }
+.ihb-hover { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 6px;
+             transform: translateX(48px); opacity: 0; transition: transform 0.3s ease, opacity 0.3s ease; pointer-events: none; white-space: nowrap; }
+.btn.ihb:hover:not(:disabled) .ihb-dot { transform: scale(60); }
+.btn.ihb:hover:not(:disabled) .ihb-label { transform: translateX(48px); opacity: 0; }
+.btn.ihb:hover:not(:disabled) .ihb-hover { transform: translateX(0); opacity: 1; }
+/* 各类按钮的圆点 / 悬停文字颜色 */
+.btn-secondary.ihb .ihb-dot { background: var(--ui-ink); }
+.btn-secondary.ihb .ihb-hover { color: #fff; }
+.btn-primary.ihb .ihb-dot { background: var(--ui-lime); }
+.btn-primary.ihb .ihb-hover { color: var(--ui-ink); }
+.btn-lime.ihb .ihb-dot, .btn-success.ihb .ihb-dot { background: var(--ui-ink); }
+.btn-lime.ihb .ihb-hover, .btn-success.ihb .ihb-hover { color: var(--ui-lime); }
+.btn-danger.ihb .ihb-dot { background: #7f1d1d; }
+.btn-danger.ihb .ihb-hover { color: #fff; }
+/* 圆点铺满后按钮本身不再变色，避免和动画叠加 */
+.btn.ihb:hover:not(:disabled) { transform: none; }
+.btn.ihb:disabled .ihb-dot { opacity: 0.6; }
+@media (prefers-reduced-motion: reduce) {
+    .ihb-dot, .ihb-label, .ihb-hover { transition: none; }
+}
