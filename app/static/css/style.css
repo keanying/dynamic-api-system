@@ -2036,3 +2036,46 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
 #confirmModal { z-index: 1200; }
 .key-effective:empty { display: none; }
 .sync-dot { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 2px; border-radius: 999px; background: #f97316; color: #fff; font-size: 11px; font-weight: 700; line-height: 1; }
+
+/* ---------- 左上角系统标识 (v2.24)：柠檬绿图标块 + 墨色标志，和底部用户卡、页面主色呼应 ---------- */
+.sidebar .logo { gap: 11px; }
+.sidebar .logo-icon, .brand-tile {
+    position: relative; overflow: hidden; flex-shrink: 0;
+    width: 40px; height: 40px; border-radius: 13px;
+    background: linear-gradient(145deg, #e6fb8f 0%, var(--ui-lime, #d6f36a) 55%, #bfe24a 100%);
+    box-shadow: 0 6px 18px rgba(214, 243, 106, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    transition: transform .25s ease, box-shadow .25s ease;
+}
+/* 原标志按形状染成墨色，不再是蓝色 */
+.logo-mark {
+    width: 24px; height: 16px; display: block; background: var(--ui-ink, #1c1c1e);
+    -webkit-mask: url(/static/img/logo.png) center / contain no-repeat;
+            mask: url(/static/img/logo.png) center / contain no-repeat;
+}
+/* 右上角紫色小圆点 */
+.sidebar .logo-icon::before, .brand-tile::before {
+    content: ''; position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--ui-violet-deep, #8f78ee); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55);
+}
+/* 悬停：一道高光扫过 */
+.sidebar .logo-icon::after, .brand-tile::after {
+    content: ''; position: absolute; top: -20%; bottom: -20%; left: -60%; width: 40%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+    transform: skewX(-20deg); transition: left .6s ease;
+}
+.sidebar .logo:hover .logo-icon, .lp-brand:hover .brand-tile { transform: translateY(-1px) rotate(-4deg); box-shadow: 0 10px 24px rgba(214, 243, 106, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.55); }
+.sidebar .logo:hover .logo-icon::after, .lp-brand:hover .brand-tile::after { left: 130%; }
+.sidebar .logo-words { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+.sidebar .logo-text { font-size: 16px; font-weight: 700; letter-spacing: 0.06em; color: #fff; }
+.sidebar .logo-sub {
+    margin-top: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; white-space: nowrap;
+    background: linear-gradient(90deg, var(--ui-lime, #d6f36a), var(--ui-violet, #b7a7f5));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.sidebar.collapsed .logo-words { display: none; }
+@media (prefers-reduced-motion: reduce) {
+    .sidebar .logo-icon, .sidebar .logo-icon::after, .brand-tile, .brand-tile::after { transition: none; }
+}
+.brand-tile { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 11px; }
+.brand-tile::before { top: 5px; right: 5px; width: 5px; height: 5px; }
+.brand-tile .logo-mark { width: 21px; height: 14px; }
