@@ -179,44 +179,44 @@ async function loadApis(page) {
         // 当前登录用户 id（用于判断"待上线"时是否本人提交，显示上线按钮）
         const myId = (window.__ME__ && window.__ME__.id) || null;
 
+        // 操作按钮统一用图标 (v2.24)：title / data-tip 给出文字提示
+        const ib = (action, icon, tip, cls = '') =>
+            `<button class="icon-act ${cls}" data-action="${action}" data-tip="${tip}" aria-label="${tip}"><img src="/static/img/icons/${icon}.png" alt=""></button>`;
         // 生命周期操作按钮（按状态）—— 锁定时禁止提交上线
+        // 状态提示图标（不可点击，悬停看说明）
+        const sicon = (icon, tip) =>
+            `<span class="icon-act icon-act-static" data-tip="${tip}" aria-label="${tip}" tabindex="0"><img src="/static/img/icons/${icon}.png" alt=""></span>`;
         let lifecycleBtns = '';
         if (isLocked) {
-            lifecycleBtns = `<span class="text-muted text-sm" style="align-self:center;">已锁定</span>`;
+            lifecycleBtns = '';
         } else if (st === 'draft' || st === 'offline') {
-            lifecycleBtns = `<button class="btn btn-primary btn-sm" data-action="submit">提交上线</button>`;
+            lifecycleBtns = ib('submit', 'online', '提交上线');
         } else if (st === 'pending') {
-            lifecycleBtns = `<button class="btn btn-ghost btn-sm" data-action="withdraw">撤回</button>
-                             <span class="text-muted text-sm" style="align-self:center;">审核中…</span>`;
+            lifecycleBtns = sicon('pending', '审核中') + ib('withdraw', 'withdraw', '撤回审核');
         } else if (st === 'approved') {
             // 待上线：提交者可点「上线」；其他人看到提示
             const canPublish = (api.approval_submitter_id && myId && api.approval_submitter_id === myId)
                                || (window.__ME__ && window.__ME__.is_super_admin);
             if (canPublish) {
-                lifecycleBtns = `<button class="btn btn-primary btn-sm" data-action="publish">上线</button>
-                                 <button class="btn btn-ghost btn-sm" data-action="withdraw">撤回</button>`;
+                lifecycleBtns = ib('publish', 'online', '上线')
+                    + ib('withdraw', 'withdraw', '撤回审核');
             } else {
-                lifecycleBtns = `<span class="text-muted text-sm" style="align-self:center;">会审通过，待发起者上线</span>`;
+                lifecycleBtns = sicon('pending', '会审通过，待发起者上线');
             }
         } else if (st === 'online') {
-            lifecycleBtns = `<button class="btn btn-ghost btn-sm" style="color:#9a3412;" data-action="offline">下线</button>`;
+            lifecycleBtns = ib('offline', 'offline', '下线');
             // 预发环境 (v2.18+)：已上线验证过的 API 可发布到生产，由生产管理员核对差异后审核
             if (window.APP_ENV && window.APP_ENV.is_pre) {
-                lifecycleBtns += `<button class="btn btn-primary btn-sm" data-action="release" title="提交到生产环境，由生产管理员核对差异后审核上线">发布到生产</button>`;
+                lifecycleBtns += ib('release', 'release', '发布到生产');
             }
         }
         // 锁/解锁按钮（独立于上下线）
-        const lockBtn = isLocked
-            ? `<button class="btn btn-ghost btn-sm" data-action="unlock">解锁</button>`
-            : `<button class="btn btn-ghost btn-sm" data-action="lock">锁定</button>`;
+        const lockBtn = isLocked ? ib('unlock', 'unlock', '解锁') : ib('lock', 'lock', '锁定');
         // 只读：编辑按钮在 审核中/待上线/已上线/锁定 时变"查看"
-        const editBtn = (st === 'online' || st === 'pending' || st === 'approved' || isLocked)
-            ? `<a href="/admin/projects/${PROJECT_ID}/apis/${api.id}" class="btn btn-secondary btn-sm">查看</a>`
-            : `<a href="/admin/projects/${PROJECT_ID}/apis/${api.id}" class="btn btn-secondary btn-sm">编辑</a>`;
+        const readonly = (st === 'online' || st === 'pending' || st === 'approved' || isLocked);
+        const editBtn = `<a href="/admin/projects/${PROJECT_ID}/apis/${api.id}" class="icon-act" data-tip="${readonly ? '查看' : '编辑'}" aria-label="${readonly ? '查看' : '编辑'}"><img src="/static/img/icons/${readonly ? 'view' : 'edit'}.png" alt=""></a>`;
         // 删除：仅 draft/offline 可删
-        const delBtn = (st === 'draft' || st === 'offline')
-            ? `<button class="btn btn-ghost btn-sm" style="color: var(--color-danger);" data-action="delete">删除</button>`
-            : '';
+        const delBtn = (st === 'draft' || st === 'offline') ? ib('delete', 'delete', '删除', 'icon-act-danger') : '';
 
         return `
         <div class="api-card" data-api-id="${api.id}" data-api-name="${escapeHtml(api.name)}" data-call-url="${escapeHtml(fullUrl)}" data-status="${st}">
@@ -268,9 +268,9 @@ async function loadApis(page) {
                 ${editBtn}
                 ${lifecycleBtns}
                 ${lockBtn}
-                <button class="btn btn-ghost btn-sm" data-action="transfer" title="转交责任人">转交</button>
-                ${cacheOn ? `<button class="btn btn-ghost btn-sm" data-action="clear-cache" title="清除该 API 的缓存及预热参数记录">清除缓存</button>` : ''}
-                <button class="btn btn-ghost btn-sm" data-action="copy-api">复制</button>
+                ${ib('transfer', 'transfer', '转交责任人')}
+                ${cacheOn ? ib('clear-cache', 'clear-cache', '清除缓存') : ''}
+                ${ib('copy-api', 'copy', '复制 API')}
                 ${delBtn}
             </div>
         </div>
@@ -299,9 +299,9 @@ async function decorateEnv() {
             if (!p) return;
             const tags = card.querySelector('.api-tags');
             if (tags) tags.insertAdjacentHTML('afterbegin', `<span class="badge badge-prod" title="生产环境已有该 API">生产 v${p.version}</span>`);
-            actions.insertAdjacentHTML('afterbegin', '<button class="btn btn-ghost btn-sm" data-action="compare" title="与生产当前配置对比">对比生产</button>');
+            actions.insertAdjacentHTML('afterbegin', '<button class="icon-act" data-action="compare" data-tip="对比生产" aria-label="对比生产"><img src="/static/img/icons/compare.png" alt=""></button>');
         } else {
-            actions.insertAdjacentHTML('afterbegin', '<button class="btn btn-ghost btn-sm" data-action="compare" title="与预发当前配置对比">对比预发</button>');
+            actions.insertAdjacentHTML('afterbegin', '<button class="icon-act" data-action="compare" data-tip="对比预发" aria-label="对比预发"><img src="/static/img/icons/compare.png" alt=""></button>');
         }
     });
 }
