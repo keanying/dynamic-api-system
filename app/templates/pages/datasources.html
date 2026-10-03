@@ -190,8 +190,8 @@ async function loadDatasources() {
             <div class="ds-header">
                 <div class="ds-icon ${ds.type}">${ds.type.toUpperCase().substring(0, 2)}</div>
                 <div class="ds-info">
-                    <div class="ds-name">${escapeHtml(ds.name)}</div>
-                    <div class="ds-conn">${escapeHtml(ds.host)}:${ds.port}${ds.database_name ? '/' + escapeHtml(ds.database_name) : ''}</div>
+                    <div class="ds-name" title="${escapeHtml(ds.name)}">${escapeHtml(ds.name)}</div>
+                    <div class="ds-conn" title="${escapeHtml(ds.host)}:${ds.port}${ds.database_name ? '/' + escapeHtml(ds.database_name) : ''}">${escapeHtml(ds.host)}:${ds.port}${ds.database_name ? '/' + escapeHtml(ds.database_name) : ''}</div>
                 </div>
             </div>
             <div class="ds-meta">

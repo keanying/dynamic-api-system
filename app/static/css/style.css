@@ -2091,9 +2091,15 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
 .brand-tile { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 11px; }
 .brand-tile::before { top: 5px; right: 5px; width: 5px; height: 5px; }
 .brand-tile .logo-mark { width: 21px; height: 14px; }
-/* 项目卡片底栏：按钮加了圆点后放不下时换行，按钮靠右 */
-.pc-foot { flex-wrap: wrap; row-gap: 8px; }
-.pc-foot .card-actions { margin-left: auto; gap: 4px; }
+/* 项目卡片底栏 (v2.24)：固定两行（更新时间一行、按钮一行靠右），始终贴在卡片底部，同一行卡片高度、底栏位置一致 */
+.project-grid { align-items: stretch; }
+.project-card { min-width: 0; }
+.project-card .pc-top, .project-card .pc-title { min-width: 0; }
+.project-card .card-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-card .card-desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; min-height: 20px; }
+.pc-foot { margin-top: auto; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.pc-foot > .text-sm { white-space: nowrap; }
+.pc-foot .card-actions { justify-content: flex-end; gap: 4px; flex-wrap: nowrap; }
 .pc-foot .ihb.ihb-sm:not(.ihb-icon) { padding: 5px 10px 5px 21px; }
 .pc-foot .ihb-sm .ihb-dot { left: 9px; }
 /* 从生产同步全部 (v2.24) */
@@ -2124,3 +2130,15 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
 /* 同步全部：进度条和统计固定，只有项目列表滚动 */
 .pa-list { max-height: 46vh; overflow-y: auto; scrollbar-width: none; }
 .pa-list::-webkit-scrollbar { display: none; }
+
+/* 数据源卡片 (v2.24)：地址过长时省略（悬停看完整地址），图标不被挤压；同一行卡片等高、按钮贴底 */
+#dsList { align-items: stretch; }
+#dsList .ds-card { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.ds-card .ds-icon { flex-shrink: 0; }
+.ds-card .ds-info { min-width: 0; }
+.ds-card .ds-name, .ds-card .ds-conn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-card .ds-meta { flex-wrap: wrap; row-gap: 4px; }
+.ds-card .ds-actions { margin-top: auto; flex-wrap: wrap; }
+.project-card .pc-title { flex: 1 1 auto; overflow: hidden; }
+.project-card .pc-title .card-title { max-width: 100%; }
+.project-card .pc-top .avatar { flex-shrink: 0; }
