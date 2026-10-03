@@ -121,6 +121,8 @@ def mask_key(k: str) -> str:
 
 def _inline(a: str, b: str):
     """一对改动行的行内差异：返回 (左片段, 右片段)，片段为 [文本, 是否改动]。"""
+    if len(a) + len(b) > 4000:   # 超长行（压缩过的 JS 等）逐字符比对太慢，整行高亮
+        return [[a, True]], [[b, True]]
     sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
     if sm.ratio() < 0.5:      # 大半行都变了，整行高亮比零碎的字符高亮好读
         return [[a, True]], [[b, True]]
@@ -146,7 +148,8 @@ def split_rows(a_lines: List[str], b_lines: List[str], context: int = 3) -> List
     连续相同的大段只保留前后 context 行，中间折叠为 {"t": "skip", "n": 行数}。
     """
     rows: List[Dict[str, Any]] = []
-    sm = difflib.SequenceMatcher(None, a_lines, b_lines, autojunk=False)
+    # 行数很多时打开 autojunk（difflib 的启发式加速），否则对比大文件会很慢
+    sm = difflib.SequenceMatcher(None, a_lines, b_lines, autojunk=len(a_lines) + len(b_lines) > 4000)
     for op, i1, i2, j1, j2 in sm.get_opcodes():
         if op == "equal":
             eq = [{"t": "eq", "ln": i1 + k + 1, "rn": j1 + k + 1,
@@ -531,10 +534,15 @@ SYNC_STATES = {
 }
 
 
+def _field_val(snap: Dict[str, Any], f: str) -> Any:
+    return _params_text(snap.get(f, [])) if f == "parameters" else _norm(snap.get(f))
+
+
 def same_snapshot(a: Optional[Dict[str, Any]], b: Optional[Dict[str, Any]]) -> bool:
+    """两份快照是否一致。只做逐字段比较，不生成差异明细（大 HTML / JS 生成差异很慢）。"""
     if a is None or b is None:
         return a is None and b is None
-    return diff_snapshots(a, b)["changed_count"] == 0
+    return all(_field_val(a, f) == _field_val(b, f) for f, _, _ in API_FIELDS + [("parameters", "", True)])
 
 
 def sync_state(prod: Optional[Dict[str, Any]], pre: Optional[Dict[str, Any]], base: Optional[Dict[str, Any]]) -> str:

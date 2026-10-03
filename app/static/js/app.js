@@ -763,6 +763,37 @@ async function pullFromProd(projectId, items, overwrite) {
     return r.data.ok_count > 0;
 }
 
+// 分批拉取 (v2.24)：每批 size 个 API 一个请求，onProgress(已完成, 总数) 用来显示进度；
+// 预发也改过、需要覆盖的放到最后统一确认一次再拉。返回成功拉取的个数
+async function pullInBatches(projectId, items, onProgress, size = 5) {
+    let ok = 0, done = 0;
+    const needOw = [], failed = [];
+    const total = items.length;
+    const runChunks = async (list, overwrite) => {
+        for (let i = 0; i < list.length; i += size) {
+            const chunk = list.slice(i, i + size);
+            const r = await API.post('/api/releases/pull', { project_id: projectId, items: chunk, overwrite });
+            if (!r || !r.status) { failed.push(...chunk.map(c => ({ ...c, msg: (r && r.msg) || '拉取失败' }))); }
+            else (r.data.results || []).forEach(x => {
+                if (x.need_overwrite && !overwrite) needOw.push({ method: x.method, url_path: x.url_path });
+                else if (x.ok) ok++;
+                else failed.push(x);
+            });
+            done += chunk.length;
+            if (onProgress) onProgress(Math.min(done, total), total);
+        }
+    };
+    await runChunks(items, false);
+    if (needOw.length && await confirmAsync('覆盖预发的改动？',
+        `${needOw.map(x => x.url_path).join('、')} 在预发也有还没发布到生产的改动，拉取后这些改动会被生产的内容覆盖。`, { okText: '覆盖并拉取' })) {
+        done = total - needOw.length;
+        await runChunks(needOw, true);
+    }
+    if (failed.length) Toast.error(failed.map(x => `${x.url_path}：${x.msg}`).join('；'));
+    if (ok) Toast.success(`已拉取 ${ok} 个`);
+    return ok;
+}
+
 // 「对比生产 / 对比预发」：当前环境的 API 与另一环境同名 API 的差异（左生产 / 右预发）
 async function compareWithOtherEnv(projectId, apiId, onPulled) {
     const r = await API.get(`/api/releases/compare?project_id=${projectId}&api_id=${apiId}&_t=${Date.now()}`);

@@ -99,52 +99,132 @@ const PULL_ACT = {
     create: ['新建', 'badge-lime'], update: ['覆盖', 'badge-violet'], same: ['已一致', 'badge-gray'],
     conflict: ['跳过：预发有未发布改动', 'badge-warning'], skip_review: ['跳过：审批中', 'badge-warning'], keep: ['保留：仅预发有', 'badge-gray'],
 };
+// 分批 (v2.24)：先取概览，再逐个项目对比 / 同步（每个项目一个请求），页面显示进度，可中途停止
 async function openPullAll() {
     const ov = document.createElement('div');
     ov.className = 'modal-overlay';
     ov.style.display = 'flex';
     ov.innerHTML = `<div class="modal" style="max-width:980px;width:95vw;">
         <div class="modal-header"><h3>从生产同步全部 <span class="badge badge-prod" style="margin-left:8px;">生产 → 预发</span></h3><button class="btn-icon" data-x>&times;</button></div>
-        <div class="modal-body" style="max-height:68vh;overflow:auto;" id="__paBody"><div class="text-muted">正在对比生产和预发…</div></div>
+        <div class="modal-body">
+            <div class="pa-progress"><div class="pa-bar"><i id="__paBar"></i></div><span id="__paTxt">读取生产项目…</span></div>
+            <div class="pa-stats" id="__paStats"></div>
+            <div id="__paList" class="pa-list"></div>
+        </div>
         <div class="modal-footer">
             <label style="display:flex;gap:6px;align-items:center;margin-right:auto;font-size:13px;"><input type="checkbox" id="__paOw"> 预发有未发布改动的也用生产覆盖</label>
-            <button class="btn btn-secondary" data-x>取消</button>
+            <button class="btn btn-secondary" id="__paCancel">取消</button>
             <button class="btn btn-primary" id="__paGo" disabled>开始同步</button>
         </div></div>`;
-    ov.querySelectorAll('[data-x]').forEach(x => x.onclick = () => ov.remove());
     document.body.appendChild(ov);
-    const body = ov.querySelector('#__paBody'), ow = ov.querySelector('#__paOw'), go = ov.querySelector('#__paGo');
-    const load = async () => {
-        go.disabled = true;
-        const r = await API.get(`/api/releases/pull-all/preview?overwrite=${ow.checked}&_t=${Date.now()}`);
-        if (!r || !r.status) { body.innerHTML = `<div class="note note-danger">${escapeHtml((r && r.msg) || '预览失败')}</div>`; return; }
-        const c = r.data.counts;
-        const stat = (n, l) => `<div><b>${n}</b><span>${l}</span></div>`;
-        body.innerHTML = `<div class="note" style="margin-bottom:14px;">只会把生产的内容同步到预发，不会改动生产。预发独有的 API 保留不删；预发已有的同名数据源不覆盖。</div>
-            <div class="pa-stats">${stat(c.create, 'API 新建')}${stat(c.update, 'API 覆盖')}${stat(c.same, '已一致')}
-                ${stat(c.conflict + c.skip_review, '跳过')}${stat(c.project_create, '项目新建')}${stat(c.ds_create, '数据源新建')}</div>`
-            + r.data.projects.map(p => `<div class="pa-proj"><div class="pa-proj-h"><b>${escapeHtml(p.name)}</b> <code>${escapeHtml(p.code)}</code>
-                    ${p.exists_in_pre ? '' : '<span class="badge badge-lime">预发新建项目</span>'}</div>
-                ${p.apis.length ? `<table class="data-table"><tbody>${p.apis.map(a => `<tr>
-                    <td style="width:46%;">${methodBadge(a.method)} <code>${escapeHtml(a.url_path)}</code> <span class="text-muted text-sm">${escapeHtml(a.name)}</span></td>
-                    <td>${syncStateBadge(a.state, a.state_label)}</td>
-                    <td style="text-align:right;"><span class="badge ${PULL_ACT[a.action][1]}">${PULL_ACT[a.action][0]}</span></td></tr>`).join('')}</tbody></table>`
-                  : '<div class="text-muted text-sm" style="padding:6px 0;">没有 API</div>'}</div>`).join('');
-        go.disabled = !(c.create + c.update + c.project_create + c.ds_create + c.same);
+    const $ = sel => ov.querySelector(sel);
+    const st = { gen: 0, running: false, stop: false, done: false, ov: null, previews: {} };
+    const setProgress = (i, n, text) => { $('#__paBar').style.width = (n ? Math.round(i / n * 100) : 0) + '%'; $('#__paTxt').textContent = text; };
+    const rowOf = code => $(`.pa-proj[data-code="${CSS.escape(code)}"]`);
+    const setRowState = (code, html) => { const r = rowOf(code); if (r) r.querySelector('.pa-st').innerHTML = html; };
+    const sum = (c) => ['create', 'update', 'same', 'conflict', 'skip_review', 'keep'].filter(k => c[k])
+        .map(k => `<span class="badge ${PULL_ACT[k][1]}">${PULL_ACT[k][0].split('：')[0]} ${c[k]}</span>`).join('') || '<span class="text-muted text-sm">没有 API</span>';
+    const renderStats = () => {
+        const t = { create: 0, update: 0, same: 0, skip: 0 };
+        Object.values(st.previews).forEach(p => { t.create += p.counts.create; t.update += p.counts.update; t.same += p.counts.same; t.skip += p.counts.conflict + p.counts.skip_review; });
+        const newProj = st.ov.projects.filter(p => !p.exists_in_pre).length;
+        const tile = (n, l) => `<div><b>${n}</b><span>${l}</span></div>`;
+        $('#__paStats').innerHTML = tile(t.create, 'API 新建') + tile(t.update, 'API 覆盖') + tile(t.same, '已一致')
+            + tile(t.skip, '跳过') + tile(newProj, '项目新建') + tile(st.ov.datasources_to_create.length, '数据源新建');
     };
-    ow.onchange = load;
-    go.onclick = async () => {
-        const msg = ow.checked ? '预发里未发布到生产的改动会被生产的内容覆盖，且不能撤销。确定同步吗？' : '确定把生产的内容同步到预发吗？';
+    const detailHtml = p => p.apis.length ? `<table class="data-table"><tbody>${p.apis.map(a => `<tr>
+            <td style="width:46%;">${methodBadge(a.method)} <code>${escapeHtml(a.url_path)}</code> <span class="text-muted text-sm">${escapeHtml(a.name)}</span></td>
+            <td>${syncStateBadge(a.state, a.state_label)}</td>
+            <td style="text-align:right;"><span class="badge ${PULL_ACT[a.action][1]}">${PULL_ACT[a.action][0]}</span></td></tr>`).join('')}</tbody></table>`
+        : '<div class="text-muted text-sm" style="padding:6px 0;">没有 API</div>';
+
+    // 预览：逐个项目对比
+    const preview = async () => {
+        const gen = ++st.gen;
+        st.previews = {};
+        $('#__paGo').disabled = true;
+        if (!st.ov) {
+            const r = await API.get(`/api/releases/pull-all/overview?_t=${Date.now()}`);
+            if (!r || !r.status) { setProgress(0, 1, (r && r.msg) || '读取生产失败'); return; }
+            st.ov = r.data;
+        }
+        const projs = st.ov.projects;
+        $('#__paList').innerHTML = (st.ov.datasources_to_create.length
+            ? `<div class="note" style="margin-bottom:12px;">将新建数据源：${st.ov.datasources_to_create.map(escapeHtml).join('、')}（预发已有的同名数据源不覆盖）</div>` : '')
+            + projs.map(p => `<div class="pa-proj" data-code="${escapeHtml(p.code)}">
+                <div class="pa-proj-h"><button type="button" class="pa-fold" title="展开 / 收起">▸</button><b>${escapeHtml(p.name)}</b> <code>${escapeHtml(p.code)}</code>
+                    ${p.exists_in_pre ? '' : '<span class="badge badge-lime">预发新建项目</span>'}
+                    <span class="text-muted text-sm">${p.api_count} 个 API</span><span class="pa-sum"></span><span class="pa-st"><span class="text-muted text-sm">等待对比</span></span></div>
+                <div class="pa-detail" hidden></div></div>`).join('');
+        ov.querySelectorAll('.pa-fold').forEach(b => b.onclick = () => {
+            const d = b.closest('.pa-proj').querySelector('.pa-detail');
+            d.hidden = !d.hidden; b.textContent = d.hidden ? '▸' : '▾';
+        });
+        renderStats();
+        for (let i = 0; i < projs.length; i++) {
+            if (gen !== st.gen) return;            // 勾选变了，重新开始
+            const p = projs[i];
+            setProgress(i, projs.length, `对比中 ${i + 1}/${projs.length}：${p.name}`);
+            setRowState(p.code, '<span class="pa-spin"></span>');
+            const r = await API.get(`/api/releases/pull-all/preview?code=${encodeURIComponent(p.code)}&overwrite=${$('#__paOw').checked}&_t=${Date.now()}`);
+            if (gen !== st.gen) return;
+            if (!r || !r.status) { setRowState(p.code, `<span class="badge badge-error">对比失败</span>`); continue; }
+            st.previews[p.code] = r.data;
+            const row = rowOf(p.code);
+            row.querySelector('.pa-sum').innerHTML = sum(r.data.counts);
+            row.querySelector('.pa-detail').innerHTML = detailHtml(r.data);
+            setRowState(p.code, '');
+            renderStats();
+        }
+        setProgress(projs.length, projs.length, `对比完成：${projs.length} 个项目`);
+        $('#__paGo').disabled = !projs.length && !st.ov.datasources_to_create.length;
+    };
+
+    // 同步：先数据源，再逐个项目，每个项目单独提交
+    const run = async () => {
+        const ow = $('#__paOw').checked;
+        const msg = ow ? '预发里未发布到生产的改动会被生产的内容覆盖，且不能撤销。确定同步吗？' : '确定把生产的内容同步到预发吗？';
         if (!await confirmAsync('从生产同步全部', msg, { okText: '开始同步' })) return;
-        go.disabled = true;
-        const r = await API.post('/api/releases/pull-all', { overwrite: ow.checked });
-        if (!r || !r.status) { Toast.error((r && r.msg) || '同步失败'); go.disabled = false; return; }
-        Toast.success(r.msg);
-        if (r.data.errors.length) Toast.error(r.data.errors.map(e => `${e.project} ${e.url_path}：${e.msg}`).join('；'));
-        ov.remove();
+        st.running = true; st.stop = false;
+        $('#__paGo').disabled = true; $('#__paOw').disabled = true;
+        $('#__paCancel').textContent = '停止';
+        const projs = st.ov.projects, total = projs.length + 1;
+        const t = { create: 0, update: 0, fail: 0 };
+        setProgress(0, total, '同步数据源…');
+        const d = await API.post('/api/releases/pull-all/datasources', {});
+        if (!d || !d.status) Toast.error((d && d.msg) || '数据源同步失败');
+        for (let i = 0; i < projs.length; i++) {
+            if (st.stop) break;
+            const p = projs[i];
+            setProgress(i + 1, total, `同步中 ${i + 1}/${projs.length}：${p.name}`);
+            setRowState(p.code, '<span class="pa-spin"></span>');
+            const r = await API.post('/api/releases/pull-all/project', { code: p.code, overwrite: ow });
+            if (!r || !r.status) { t.fail++; setRowState(p.code, `<span class="badge badge-error" title="${escapeHtml((r && r.msg) || '')}">同步失败</span>`); continue; }
+            const c = r.data.counts;
+            t.create += c.create; t.update += c.update; t.fail += r.data.errors.length;
+            setRowState(p.code, r.data.errors.length
+                ? `<span class="badge badge-warning" title="${escapeHtml(r.data.errors.map(e => e.url_path + '：' + e.msg).join('\n'))}">完成，${r.data.errors.length} 个失败</span>`
+                : '<span class="badge badge-success">✓ 已同步</span>');
+            rowOf(p.code).querySelector('.pa-sum').innerHTML = sum(c);
+        }
+        const stopped = st.stop;
+        st.running = false; st.done = true;
+        setProgress(stopped ? 0 : total, total, `${stopped ? '已停止' : '同步完成'}：API 新建 ${t.create} 个、覆盖 ${t.update} 个${t.fail ? `，${t.fail} 个失败` : ''}`);
+        if (!stopped) $('#__paBar').style.width = '100%';
+        $('#__paCancel').textContent = '关闭';
+        (t.fail ? Toast.warning : Toast.success).call(Toast, `${stopped ? '已停止' : '同步完成'}：API 新建 ${t.create}、覆盖 ${t.update}${t.fail ? `，失败 ${t.fail}` : ''}`);
         loadProjects();
     };
-    load();
+
+    const close = () => {
+        if (st.running) { st.stop = true; $('#__paCancel').textContent = '正在停止…'; $('#__paCancel').disabled = true; return; }
+        st.gen++; ov.remove();
+    };
+    $('[data-x]').onclick = close;
+    $('#__paCancel').onclick = close;
+    $('#__paOw').onchange = () => { if (!st.running && !st.done) preview(); };
+    $('#__paGo').onclick = run;
+    preview();
 }
 
 let currentPage = 1;
