@@ -4,9 +4,9 @@
 # 保存为 uv_manager.sh
 
 APP_DIR="$(dirname "$0")"
-PID_FILE="$APP_DIR/logs/public_opinion_across.pid"
-LOG_FILE="$APP_DIR/logs/public_opinion_across.log"
-UV_COMMAND="env APP_ENV=pro uv run uvicorn app.main:app --host 0.0.0.0 --port 3001  --workers 5"  # 修改为你的实际命令
+PID_FILE="$APP_DIR/logs/public_opinion_across_pre.pid"
+LOG_FILE="$APP_DIR/logs/public_opinion_across_pre.log"
+UV_COMMAND="env APP_ENV=pre uv run uvicorn app.main:app --host 0.0.0.0 --port 3002  --workers 1"  # 修改为你的实际命令
 
 start() {
     if [ -f "$PID_FILE" ] && kill -0 $(cat "$PID_FILE") 2>/dev/null; then
