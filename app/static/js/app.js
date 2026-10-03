@@ -398,12 +398,17 @@ const SSO = {
     safeNext(n) { return (typeof n === 'string' && /^\/(?![\/\\])/.test(n)) ? n : '/admin/dashboard'; },
     otherEnv() { const e = AppEnv.info(); return e.env ? (e.is_prod ? 'pre' : 'prod') : ''; },
     // 对方环境在浏览器里能否访问（no-cors 只看网络是否可达）
-    async reachable(url, ms = 1500) {
-        const ctl = new AbortController();
-        const timer = setTimeout(() => ctl.abort(), ms);
-        try { await fetch(url + '/api/releases/env', { mode: 'no-cors', cache: 'no-store', signal: ctl.signal }); return true; }
-        catch (e) { return false; }
-        finally { clearTimeout(timer); }
+    // 另一个环境是否在线且支持单点登录：加载它的 /static/img/sso.png（图片跨域也能判断成功 / 失败）。
+    // 对方没启动、或还是不支持单点登录的旧版本（没有这张图）时返回 false，不跳过去，避免停在对方的 404 页
+    reachable(url, ms = 1500) {
+        return new Promise(resolve => {
+            const img = new Image();
+            const done = ok => { clearTimeout(timer); img.onload = img.onerror = null; resolve(ok); };
+            const timer = setTimeout(() => { img.src = ''; done(false); }, ms);
+            img.onload = () => done(true);
+            img.onerror = () => done(false);
+            img.src = `${url}/static/img/sso.png?_=${Date.now()}`;
+        });
     },
     // 带登录状态打开另一个环境的页面；win 传入预先打开的新窗口（避免被拦截弹窗）
     async go(next, win) {

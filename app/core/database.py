@@ -47,7 +47,12 @@ async def get_db():
             await session.commit()
         except Exception as e:
             await session.rollback()
-            log.error(f"数据库会话异常，已回滚 | error={str(e)}")
+            # 未登录 / 无权限等 HTTP 异常是正常的业务拒绝，不算数据库异常，避免刷 ERROR 日志
+            from fastapi import HTTPException
+            if isinstance(e, HTTPException):
+                log.debug(f"请求被拒绝，会话已回滚 | status={e.status_code}")
+            else:
+                log.error(f"数据库会话异常，已回滚 | error={str(e)}")
             raise
         finally:
             await session.close()
