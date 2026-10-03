@@ -2105,3 +2105,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
 .pa-proj-h { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 14px; }
 .pa-proj td { padding-top: 8px; padding-bottom: 8px; }
 @media (max-width: 760px) { .pa-stats { grid-template-columns: repeat(3, 1fr); } }
+
+/* ---------- 弹窗标题栏 / 底栏固定，页面和弹窗不显示滚动条（仍可滚动） (v2.24) ---------- */
+.modal > .modal-header, .modal > form > .modal-header { position: sticky; top: 0; z-index: 5; background: var(--color-surface, #fff); }
+.modal > .modal-footer, .modal > form > .modal-footer { position: sticky; bottom: 0; z-index: 5; background: var(--color-surface, #fff); }
+.main-content, .modal, .modal-body { scrollbar-width: none; -ms-overflow-style: none; }
+.main-content::-webkit-scrollbar, .modal::-webkit-scrollbar, .modal-body::-webkit-scrollbar { display: none; width: 0; height: 0; }
