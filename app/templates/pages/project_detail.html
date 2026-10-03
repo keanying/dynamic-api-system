@@ -349,6 +349,7 @@ async function openSyncPanel() {
         <div class="modal-header"><h3>同步生产</h3><button class="btn-icon" data-x>&times;</button></div>
         <div class="modal-body" style="max-height:70vh;overflow:auto;" id="__syncBody"><div class="text-muted">加载中…</div></div>
         <div class="modal-footer"><span class="text-muted text-sm" id="__syncSel" style="margin-right:auto;"></span>
+            <div class="pa-progress" id="__syncProg" style="display:none;margin:0 auto 0 0;flex:1;"><div class="pa-bar"><i></i></div><span></span></div>
             <button class="btn btn-secondary" data-x>关闭</button>
             <button class="btn btn-primary" id="__syncPull" disabled>拉取所选</button></div></div>`;
     ov.querySelectorAll('[data-x]').forEach(b => b.onclick = () => ov.remove());
@@ -399,7 +400,13 @@ async function openSyncPanel() {
             const sel = [...body.querySelectorAll('.__sc:checked')].map(c => ({ method: c.dataset.m, url_path: c.dataset.u }));
             if (!sel.length) return;
             pullBtn.disabled = true;
-            if (await pullFromProd(PROJECT_ID, sel)) loadApis();
+            // 分批拉取，底栏显示进度
+            const prog = ov.querySelector('#__syncProg');
+            selInfo.style.display = 'none'; prog.style.display = '';
+            const onProgress = (d, n) => { prog.querySelector('i').style.width = Math.round(d / n * 100) + '%'; prog.querySelector('span').textContent = `拉取中 ${d}/${n}`; };
+            onProgress(0, sel.length);
+            if (await pullInBatches(PROJECT_ID, sel, onProgress)) loadApis();
+            prog.style.display = 'none'; selInfo.style.display = '';
             render();
         };
     };

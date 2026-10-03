@@ -2101,9 +2101,19 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
 .pa-stats > div { background: #f6f6f7; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
 .pa-stats b { font-size: 22px; font-weight: 600; color: var(--ui-ink); }
 .pa-stats span { font-size: 12px; color: var(--ui-muted); }
-.pa-proj { margin-bottom: 14px; }
-.pa-proj-h { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 14px; }
+.pa-proj { border-top: 1px solid var(--ui-line, #ececef); padding: 10px 0; }
+.pa-proj-h { display: flex; align-items: center; gap: 8px; font-size: 14px; flex-wrap: wrap; }
 .pa-proj td { padding-top: 8px; padding-bottom: 8px; }
+.pa-fold { border: none; background: #f1f1f3; width: 22px; height: 22px; border-radius: 7px; cursor: pointer; font-size: 11px; color: #52525b; }
+.pa-sum { display: inline-flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+.pa-st { min-width: 96px; text-align: right; display: inline-flex; justify-content: flex-end; }
+.pa-detail { margin-top: 8px; }
+.pa-progress { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; font-size: 12.5px; color: var(--ui-muted, #6b6b70); }
+.pa-bar { flex: 1; height: 8px; border-radius: 999px; background: #f1f1f3; overflow: hidden; }
+.pa-bar i { display: block; height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--ui-lime, #d6f36a), var(--ui-violet-deep, #8f78ee)); transition: width .35s ease; }
+.pa-progress span { min-width: 220px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pa-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #e4e4e7; border-top-color: var(--ui-violet-deep, #8f78ee); animation: paSpin .8s linear infinite; display: inline-block; }
+@keyframes paSpin { to { transform: rotate(360deg); } }
 @media (max-width: 760px) { .pa-stats { grid-template-columns: repeat(3, 1fr); } }
 
 /* ---------- 弹窗标题栏 / 底栏固定，页面和弹窗不显示滚动条（仍可滚动） (v2.24) ---------- */
@@ -2111,3 +2121,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-ink); }
 .modal > .modal-footer, .modal > form > .modal-footer { position: sticky; bottom: 0; z-index: 5; background: var(--color-surface, #fff); }
 .main-content, .modal, .modal-body { scrollbar-width: none; -ms-overflow-style: none; }
 .main-content::-webkit-scrollbar, .modal::-webkit-scrollbar, .modal-body::-webkit-scrollbar { display: none; width: 0; height: 0; }
+/* 同步全部：进度条和统计固定，只有项目列表滚动 */
+.pa-list { max-height: 46vh; overflow-y: auto; scrollbar-width: none; }
+.pa-list::-webkit-scrollbar { display: none; }

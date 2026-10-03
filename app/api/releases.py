@@ -479,10 +479,6 @@ async def pull_from_prod(body: PullBody, db: AsyncSession = Depends(get_db, scop
     return R_ok(data={"results": results, "ok_count": ok_count}, msg=msg)
 
 
-class PullAllBody(BaseModel):
-    overwrite: bool = False   # 预发有未发布改动的 API 也用生产覆盖
-
-
 def _pull_all_denied(user) -> Optional[str]:
     if not IS_PRE:
         return "只能在预发环境执行：方向固定为 生产 → 预发"
@@ -491,42 +487,75 @@ def _pull_all_denied(user) -> Optional[str]:
     return None
 
 
-@router.get("/pull-all/preview")
-async def pull_all_preview(overwrite: bool = False, db: AsyncSession = Depends(get_db, scope="function"),
-                           user=Depends(get_current_user)):
-    """预发 + 超管 (v2.24)：预览「从生产同步全部」会怎么处理每个项目和 API。"""
+class PullProjectBody(BaseModel):
+    code: str
+    overwrite: bool = False   # 预发有未发布改动的 API 也用生产覆盖
+
+
+@router.get("/pull-all/overview")
+async def pull_all_overview(db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
+    """预发 + 超管 (v2.24)：从生产同步全部 · 第一步，生产的项目列表和要新建的数据源（很快）。"""
     from app.services import env_sync
     denied = _pull_all_denied(user)
     if denied:
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=denied)
     try:
-        return R_ok(data=await env_sync.plan(db, overwrite))
+        return R_ok(data=await env_sync.overview(db))
     except ReleaseError as e:
         return R_fail(ErrCode.SYSTEM_ERROR, msg=str(e))
 
 
-@router.post("/pull-all")
-async def pull_all(body: PullAllBody, db: AsyncSession = Depends(get_db, scope="function"),
-                   user=Depends(get_current_user)):
-    """预发 + 超管 (v2.24)：把生产的项目、数据源、API 一次性同步到预发（只有 生产 → 预发 一个方向）。"""
+@router.get("/pull-all/preview")
+async def pull_all_preview(code: str, overwrite: bool = False, db: AsyncSession = Depends(get_db, scope="function"),
+                           user=Depends(get_current_user)):
+    """预览一个项目：每个 API 会怎么处理（前端逐个项目调用，显示进度）。"""
     from app.services import env_sync
     denied = _pull_all_denied(user)
     if denied:
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=denied)
     try:
-        res = await env_sync.run(db, user, body.overwrite)
+        return R_ok(data=await env_sync.plan_project(db, code, overwrite))
+    except ReleaseError as e:
+        return R_fail(ErrCode.SYSTEM_ERROR, msg=str(e))
+
+
+@router.post("/pull-all/datasources")
+async def pull_all_datasources(db: AsyncSession = Depends(get_db, scope="function"), user=Depends(get_current_user)):
+    """同步第一批：把预发没有的数据源从生产复制过来。"""
+    from app.services import env_sync
+    denied = _pull_all_denied(user)
+    if denied:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=denied)
+    try:
+        created = await env_sync.run_datasources(db)
+    except ReleaseError as e:
+        await db.rollback()
+        return R_fail(ErrCode.SYSTEM_ERROR, msg=str(e))
+    if created:
+        await audit(db, user, "release.pull_all", "datasource", 0, f"从生产同步数据源：{'、'.join(created)}")
+    await db.commit()
+    return R_ok(data={"created": created}, msg=f"数据源新建 {len(created)} 个")
+
+
+@router.post("/pull-all/project")
+async def pull_all_project(body: PullProjectBody, db: AsyncSession = Depends(get_db, scope="function"),
+                           user=Depends(get_current_user)):
+    """同步一个项目（前端逐个项目调用；每个项目单独提交，中途停止或失败不影响已完成的项目）。"""
+    from app.services import env_sync
+    denied = _pull_all_denied(user)
+    if denied:
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg=denied)
+    try:
+        res = await env_sync.run_project(db, user, body.code, body.overwrite)
     except ReleaseError as e:
         await db.rollback()
         return R_fail(ErrCode.SYSTEM_ERROR, msg=str(e))
     c = res["counts"]
-    await audit(db, user, "release.pull_all", "env", 0,
-                f"从生产同步全部：项目新建 {c['project_create']} 更新 {c['project_update']}，数据源新建 {c['ds_create']}，"
-                f"API 新建 {c['create']} 覆盖 {c['update']} 一致 {c['same']} 跳过 {c['conflict'] + c['skip_review']}，失败 {len(res['errors'])}")
+    await audit(db, user, "release.pull_all", "project", 0,
+                f"从生产同步项目 {body.code}：API 新建 {c['create']} 覆盖 {c['update']} 一致 {c['same']} "
+                f"跳过 {c['conflict'] + c['skip_review']}，失败 {len(res['errors'])}")
     await db.commit()
-    msg = f"已同步：API 新建 {c['create']} 个、覆盖 {c['update']} 个，项目新建 {c['project_create']} 个"
-    if res["errors"]:
-        msg += f"，{len(res['errors'])} 个失败"
-    return R_ok(data=res, msg=msg)
+    return R_ok(data=res)
 
 
 @router.get("/{release_id}")
