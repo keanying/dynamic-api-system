@@ -535,7 +535,7 @@ database:
 
 ```bash
 # 生产
-APP_ENV=prod uv run uvicorn app.main:app --host 0.0.0.0 --port 3000
+APP_ENV=prod uv run uvicorn app.main:app --host 0.0.0.0 --port 3000 --workers 5
 # 预发
 APP_ENV=pre  uv run uvicorn app.main:app --host 0.0.0.0 --port 3002
 # 本地开发热重载（改代码自动重启）
