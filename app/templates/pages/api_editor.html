@@ -323,6 +323,7 @@
                     <option value="html">HTML</option>
                     <option value="plugin">插件</option>
                     <option value="sync" id="apiTypeSyncOption">远端同步（仅超管）</option>
+                    <option value="update" id="apiTypeUpdateOption">更新（仅超管）</option>
                 </select>
             </div>
             <div class="idbar-field">
@@ -376,7 +377,7 @@
     <div class="editor-left">
     <div class="editor-tabs" role="tablist">
         <button type="button" class="editor-tab active" id="tab-logic" onclick="switchEditorTab('logic')">执行逻辑</button>
-        <button type="button" class="editor-tab" id="tab-params" data-mode="sql plugin federated" onclick="switchEditorTab('params')">参数定义 <span class="tab-count" id="paramTabCount">0</span></button>
+        <button type="button" class="editor-tab" id="tab-params" data-mode="sql plugin federated update" onclick="switchEditorTab('params')">参数定义 <span class="tab-count" id="paramTabCount">0</span></button>
         <button type="button" class="editor-tab" id="tab-basic" onclick="switchEditorTab('basic')">更多设置</button>
         <span class="tab-spacer"></span>
         <button type="button" class="btn btn-secondary btn-sm" onclick="openStructurePreview()" title="查看请求结构 / SQL 渲染中间态 / 响应结构">
@@ -530,7 +531,7 @@
     <div class="editor-pane active" id="pane-logic">
 
     <!-- 数据源选择：SQL 查询分「单个数据源 / 多个数据源」两种（后者即多源 SQL，v2.23 合并入口） -->
-    <div class="card mb-16" data-mode="sql federated sync" id="datasourceCard">
+    <div class="card mb-16" data-mode="sql federated sync update" id="datasourceCard">
         <div class="card-header">
             <h3>数据源</h3>
             <div style="display:flex; gap:8px; align-items:center; margin-left:auto;">
@@ -541,7 +542,7 @@
             </div>
         </div>
         <div class="card-body">
-            <div class="form-group" data-mode="sql sync" style="margin-bottom:0;">
+            <div class="form-group" data-mode="sql sync update" style="margin-bottom:0;">
                 <div style="display:flex; gap:8px;">
                     <select class="form-select" id="apiDatasource" style="flex:1;">
                         <option value="">-- 请选择数据源 --</option>
@@ -567,12 +568,12 @@
     </div>
 
     <!-- SQL 模板 -->
-    <div class="card mb-16" id="sqlModeCard" data-mode="sql federated">
+    <div class="card mb-16" id="sqlModeCard" data-mode="sql federated update">
         <div class="card-header">
             <h3>SQL 模板</h3>
             <div style="display:flex; gap:8px; align-items:center; margin-left:auto;">
                 <span class="text-sm text-muted" id="sqlModeHint" style="display:none;">单数据源查询</span>
-                <button type="button" class="btn btn-lime btn-sm" onclick="openQueryWizard()">
+                <button type="button" class="btn btn-lime btn-sm" id="queryWizardBtn" onclick="openQueryWizard()">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px;"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7M14 17.5h7"/></svg>
                     选表生成 SQL
                 </button>
@@ -1306,6 +1307,11 @@ async function applySyncPermission() {
             opt.disabled = true;
             opt.textContent = '远端同步（需超级管理员）';
         }
+        const uopt = document.getElementById('apiTypeUpdateOption');
+        if (uopt && !isSuper) {
+            uopt.disabled = true;
+            uopt.textContent = '更新（需超级管理员）';
+        }
         // 已经是 sync 类型但当前不是超管：整个配置区只读
         const cur = (document.getElementById('apiType')?.value || 'sql').toLowerCase();
         if (cur === 'sync' && !isSuper) {
@@ -1343,7 +1349,11 @@ function onApiTypeChange() {
   if (_pb) _pb.style.display = (type === 'sql' && !window.__hasPipeline) ? '' : 'none';
   // 插件模式下"从 SQL 解析"无意义，隐藏
   const parseBtn = document.getElementById('parseSqlParamsBtn');
-  if (parseBtn) parseBtn.style.display = (type === 'sql' || type === 'federated') ? '' : 'none';
+  if (parseBtn) parseBtn.style.display = (type === 'sql' || type === 'federated' || type === 'update') ? '' : 'none';
+  // 更新类：只写 UPDATE，不需要「选表生成 SQL」
+  const _wz = document.getElementById('queryWizardBtn');
+  if (_wz) _wz.style.display = type === 'update' ? 'none' : '';
+  if (type === 'update' && typeof _setSqlEditorDisabled === 'function') _setSqlEditorDisabled(false);
   // 多源 SQL：SQL 编辑器始终可编辑（管线开关只属于数据 API）
   const _sqlHint = document.getElementById('sqlModeHint');
   if (type === 'federated') {
@@ -1361,6 +1371,8 @@ function onApiTypeChange() {
       ? 'Python 插件：在脚本里查询、加工数据后返回'
       : (type === 'sync')
       ? '数据写入接口：按 tableName 把 data 写进数据源表（仅超管可建可调用）'
+      : (type === 'update')
+      ? '更新接口：执行一条带 WHERE 的 UPDATE，返回影响行数（仅超管可建、可测试）'
       : (type === 'federated')
       ? '一条 MySQL 语法的 SQL 关联多个数据源的表（数据源名.库名.表名）'
       : '写一条 SQL 即发布为接口，可用「选表生成 SQL」自动生成';
@@ -1777,7 +1789,7 @@ function openStructurePreview(tab) {
     let existing = document.getElementById('__structurePreview');
     if (existing) existing.remove();
     const apiTypeNow = (document.getElementById('apiType')?.value || 'sql').toLowerCase();
-    const defaultTab = tab || ((apiTypeNow === 'sql' || apiTypeNow === 'federated') ? 'sql' : 'req');
+    const defaultTab = tab || ((apiTypeNow === 'sql' || apiTypeNow === 'federated' || apiTypeNow === 'update') ? 'sql' : 'req');
     const html = `
     <div class="modal-overlay" id="__structurePreview" style="display:flex;">
         <div class="modal" style="max-width: 780px; width: 92%;">
@@ -1904,7 +1916,7 @@ async function spFetchSqlPreview() {
     const pane = document.getElementById('sp-sql');
     if (!pane) return;
     const apiTypeNow = (document.getElementById('apiType')?.value || 'sql').toLowerCase();
-    if (apiTypeNow !== 'sql' && apiTypeNow !== 'federated') {
+    if (apiTypeNow !== 'sql' && apiTypeNow !== 'federated' && apiTypeNow !== 'update') {
         pane.innerHTML = `<div class="sp-note">当前是 ${apiTypeNow === 'plugin' ? 'Python 插件' : 'HTML 页面'} API,无 SQL 渲染中间态;${apiTypeNow === 'plugin' ? '插件里通过 params 直接读取①中的请求结构。' : ''}</div>`;
         return;
     }
@@ -3003,9 +3015,9 @@ function togglePipelineMode() {
         // html(静态页面)/plugin(Python) 类型本就不用 SQL 模板，必须保持隐藏，
         // 否则会把 onApiTypeChange() 刚隐藏的 SQL 卡又显示出来。
         const _type = (document.getElementById('apiType')?.value) || 'sql';
-        if(sqlCard) sqlCard.style.display = (_type === 'sql' || _type === 'federated') ? '' : 'none';
+        if(sqlCard) sqlCard.style.display = (_type === 'sql' || _type === 'federated' || _type === 'update') ? '' : 'none';
         if(hint){ hint.textContent = _type === 'federated' ? '多数据源 SQL' : '单数据源查询'; hint.style.color = _type === 'federated' ? '#3d5a0a' : ''; }
-        _setSqlEditorDisabled(_type !== 'sql' && _type !== 'federated');
+        _setSqlEditorDisabled(_type !== 'sql' && _type !== 'federated' && _type !== 'update');
     }
 }
 
@@ -3808,13 +3820,17 @@ async function saveApi(e) {
             return;
         }
     }
+    if (apiType === 'update' && !document.getElementById('apiDatasource')?.value) {
+        Toast.error('更新类 API 必须选择数据源（要更新哪个库）');
+        return;
+    }
     const isHtml = apiType === 'html';
     const isPlugin = apiType === 'plugin';
     const isFederated = apiType === 'federated';
 
     // 关键：只有开关打开时才提交 pipeline_steps，否则强制空字符串
     // 防止单源 API 因残留 JSON 被误判为管线模式
-    const pipelineOn = !isHtml && !isPlugin && !isFederated && document.getElementById('pipelineEnabled').checked;
+    const pipelineOn = !isHtml && !isPlugin && !isFederated && apiType !== 'update' && document.getElementById('pipelineEnabled').checked;
     // 若在可视化模式，先把表单状态同步成 JSON；若在 JSON 模式，取编辑器当前值
     if (pipelineOn && typeof currentPMode !== 'undefined') {
         if (currentPMode === 'visual') {
@@ -3824,7 +3840,7 @@ async function saveApi(e) {
         }
     }
     const pipelineVal = pipelineOn ? (document.getElementById('pipelineSteps').value || '') : '';
-    if ((apiType === 'sql' || apiType === 'federated') && !pipelineOn) {
+    if ((apiType === 'sql' || apiType === 'federated' || apiType === 'update') && !pipelineOn) {
         const added = syncParamsFromSql((sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql').value) || '');
         if (added.length) Toast.info(`已自动添加参数：${added.join('、')}`);
     }
