@@ -2404,6 +2404,21 @@ function removeParam(index) {
     renderParamTree();
 }
 
+// 参数占位符外面多加了引号（':scenicId' / ":scenicId"）时自动去掉 (v2.24)：
+// 加了引号就成了普通字符串，既不会被识别成参数，执行时也不会替换成传入的值。
+// 只处理「整个引号里只有一个 :参数名」的情况，'10:30' 这类正常字符串不受影响。返回去掉引号的参数名
+function fixQuotedParams() {
+    const cur = (sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql').value) || '';
+    const fixed = [];
+    const next = cur.replace(/(['"])\s*:([A-Za-z_]\w*)\s*\1/g, (all, q, name) => { if (!fixed.includes(name)) fixed.push(name); return ':' + name; });
+    if (fixed.length) {
+        document.getElementById('apiSql').value = next;
+        if (sqlEditor) sqlEditor.setValue(next);
+        Toast.info(`参数两边不需要引号，已自动去掉：${fixed.map(n => ':' + n).join('、')}`);
+    }
+    return fixed;
+}
+
 // SQL 里用到但还没定义的 :参数 自动补上（字符串、非必填），返回新增的参数名
 function syncParamsFromSql(sql) {
     const text = String(sql || '')
@@ -2422,20 +2437,12 @@ function syncParamsFromSql(sql) {
 }
 
 function parseSqlParams() {
-    const sql = document.getElementById('apiSql').value;
-    const matches = sql.match(/:(\w+)/g);
-    if (!matches) { Toast.info('未找到参数占位符'); return; }
-
-    const names = [...new Set(matches.map(m => m.substring(1)))];
-    const existingNames = params.map(p => p.name);
-
-    names.forEach(name => {
-        if (!existingNames.includes(name)) {
-            params.push({ name, param_type: 'string', required: false, default_value: '', description: '', item_schema: '', sort_order: params.length });
-        }
-    });
-    renderParams();
-    Toast.success(`解析到 ${names.length} 个参数`);
+    fixQuotedParams();
+    const sql = (sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql').value) || '';
+    // 与保存时的自动补参数同一套规则：忽略注释和字符串里的冒号（如 '10:30'）
+    const added = syncParamsFromSql(sql);
+    if (added.length) Toast.success(`新增 ${added.length} 个参数：${added.join('、')}`);
+    else Toast.info(params.length ? 'SQL 里的参数都已定义' : '未找到参数占位符（写法 :参数名，不加引号）');
 }
 
 // 通用 SQL 格式化（关键字换行 + 缩进），供主编辑器和管线步骤共用
@@ -3841,6 +3848,7 @@ async function saveApi(e) {
     }
     const pipelineVal = pipelineOn ? (document.getElementById('pipelineSteps').value || '') : '';
     if ((apiType === 'sql' || apiType === 'federated' || apiType === 'update') && !pipelineOn) {
+        fixQuotedParams();
         const added = syncParamsFromSql((sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql').value) || '');
         if (added.length) Toast.info(`已自动添加参数：${added.join('、')}`);
     }

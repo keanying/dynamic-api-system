@@ -70,5 +70,13 @@ for q in ["UPDATE t SET a = 1", "UPDATE t SET a = (SELECT x FROM y WHERE z = 1)"
     check(f"拦截 {q[:40]!r}", _update_violation(q) is not None)
 check("普通 SQL 仍然不能执行 UPDATE", _readonly_violation("UPDATE t SET a = 1 WHERE id = 1") is not None)
 
+print("== 5. 参数占位符多加的引号自动去掉 ==")
+from app.services.sql_template import unquote_param_literals
+src = "WHERE scenic_id = ':scenicId'\nAND channel = \":channelId\" AND t = '10:30' AND c = 'a:b' -- 注释 ':x'\nAND g = ':timeTag'"
+out, fixed = unquote_param_literals(src)
+check("去掉引号", out == "WHERE scenic_id = :scenicId\nAND channel = :channelId AND t = '10:30' AND c = 'a:b' -- 注释 ':x'\nAND g = :timeTag", out)
+check("返回修正的参数名", fixed == ["scenicId", "channelId", "timeTag"], fixed)
+check("正常 SQL 原样返回", unquote_param_literals("SELECT ':' AS a, ':: x' AS b WHERE id = :id") == ("SELECT ':' AS a, ':: x' AS b WHERE id = :id", []))
+
 print(f"========= 结果: {PASS} 通过, {FAIL} 失败 =========")
 sys.exit(1 if FAIL else 0)

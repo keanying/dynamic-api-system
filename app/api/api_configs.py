@@ -15,6 +15,7 @@ from app.schemas.schemas import (
 )
 from app.api.auth import get_current_user
 from app.core.permissions import prod_write_denied
+from app.services.sql_template import unquote_param_literals
 
 log = get_logger("api_configs")
 
@@ -332,7 +333,7 @@ async def create_api(
         name=req.name, description=req.description,
         url_path=req.url_path, method=req.method,
         datasource_id=req.datasource_id,
-        sql_template=req.sql_template,
+        sql_template=unquote_param_literals(req.sql_template or "")[0],
         pipeline_steps=req.pipeline_steps or "",
         api_type=(req.api_type or "sql").lower(),
         html_content=req.html_content or "",
@@ -434,6 +435,9 @@ async def update_api(
 
     # 更新字段（禁止通过普通更新接口篡改生命周期 status，须走专用状态流转接口）
     update_fields = req.model_dump(exclude_unset=True, exclude={"parameters", "status"})
+    # 参数占位符外多加的引号（':scenicId'）自动去掉，否则参数不会被替换 (v2.24)
+    if update_fields.get("sql_template"):
+        update_fields["sql_template"] = unquote_param_literals(update_fields["sql_template"])[0]
 
     if update_fields.get("datasource_id") and update_fields["datasource_id"] != api.datasource_id:
         scope_err = await datasource_scope_error(db, project_id, update_fields["datasource_id"])
