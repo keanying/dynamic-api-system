@@ -5,7 +5,7 @@ OneData Portal 是一个轻量级的数据 API 开放平台，支持通过可视
 ## 功能特性
 
 - **项目管理**：多项目隔离，每个项目独立管理 API 和密钥
-- **API 配置**：可视化配置 SQL 模板、参数、缓存、限流等；API 类型分 **SQL / HTML / 插件 / 远端同步** 四种
+- **API 配置**：可视化配置 SQL 模板、参数、缓存、限流等；API 类型分 **SQL / HTML / 插件 / 远端同步 / 更新** 五种
 - **选表生成 SQL（v2.23）**：点选数据源、表、字段、关联、筛选条件即可生成 SQL 和参数，不用手写，见下文
 - **数据源管理**：支持 MySQL / **StarRocks** / **SelectDB** / **Apache Doris** / PostgreSQL / Redis 多种数据源，密码加密存储
 - **动态调用引擎**：SQL 参数化执行、DDL 拦截、行数限制、超时控制
@@ -92,6 +92,41 @@ $if(role in ['admin', 'super'])$
 $else$
     AND scope = 'self'
 $endif$
+```
+
+### 可选条件（参数没传就不拼进 SQL）
+
+每个可选条件用 `$if(!empty(参数))$ ... $endif$` 包起来；参数没传、传了 null 或空字符串时整段去掉。
+注意 `:参数` 外面**不要加引号**（写成 `':scenicId'` 会变成字面量字符串，不会被替换）：
+
+```sql
+SELECT DISTINCT scenic_id AS scenicId, emotion_word AS emotionWord, region AS region
+FROM ads_trf_social_opinion_drill_analysis_di
+WHERE scenic_id = :scenicId                    -- 必填
+  AND publish_time >= :qTime                   -- 必填（直接比较时间列，能用上索引）
+$if(!empty(emotionWord))$     AND emotion_word = :emotionWord          $endif$
+$if(!empty(region))$          AND region = :region                     $endif$
+$if(!empty(channel))$         AND channel = :channel                   $endif$
+$if(!empty(dimensionLevel1))$ AND dimension_level1 = :dimensionLevel1  $endif$
+```
+
+在「参数定义」里把必填参数勾上「必填」，可选参数不勾。
+
+### 更新类 API（v2.24，仅超级管理员）
+
+类型选「更新（仅超管）」：写一条 UPDATE，模板语法与 SQL 类型相同，返回 `{"affected_rows": 影响行数}`。
+
+- 只有超级管理员能创建、修改、复制、在线测试、发布到生产
+- 只允许**一条带 WHERE 的 UPDATE**：INSERT / DELETE / DDL / 多条语句都会被拒绝；
+  渲染后没有 WHERE（例如条件都放在 `$if$` 里且都没传）也会拒绝执行，防止误改整张表
+- 调用必须带 API Key（不能关闭 Key 校验），Key 要按写权限保管
+- 不走缓存；暂只支持 MySQL 系数据源（SelectDB / Doris 的表需是支持 UPDATE 的 Unique 模型）
+
+```sql
+UPDATE ads_trf_social_opinion_drill_analysis_di SET handle_flag = :handleFlag
+WHERE scenic_id = :scenicId
+  AND work_id = :workId
+  AND comment_id = :commentId
 ```
 
 ### 预览渲染

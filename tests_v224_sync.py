@@ -60,5 +60,15 @@ check("差异里只显示首尾", k["before"] == mask_key("pfk_abcdefghijklmnop"
 sql = [f for f in diff_snapshots(snap(), snap(sql="SELECT 2"))["fields"] if f["field"] == "sql_template"][0]
 check("多行字段带 split", sql["split"][0]["t"] == "chg", sql)
 
+print("== 4. 更新类 API 只允许带 WHERE 的单条 UPDATE ==")
+from app.services.engine import _update_violation, _readonly_violation
+for q in ["UPDATE t SET a = 1 WHERE id = 1", "/* c */ update t set a=1\nwhere b=2;", "UPDATE t SET nowhere = 1 WHERE x = 1"]:
+    check(f"放行 {q[:40]!r}", _update_violation(q) is None, _update_violation(q))
+for q in ["UPDATE t SET a = 1", "UPDATE t SET a = (SELECT x FROM y WHERE z = 1)", "UPDATE t SET a = 'where'",
+          "DELETE FROM t WHERE id = 1", "INSERT INTO t VALUES (1)", "UPDATE t SET a=1 WHERE id=1; DELETE FROM t",
+          "DROP TABLE t"]:
+    check(f"拦截 {q[:40]!r}", _update_violation(q) is not None)
+check("普通 SQL 仍然不能执行 UPDATE", _readonly_violation("UPDATE t SET a = 1 WHERE id = 1") is not None)
+
 print(f"========= 结果: {PASS} 通过, {FAIL} 失败 =========")
 sys.exit(1 if FAIL else 0)

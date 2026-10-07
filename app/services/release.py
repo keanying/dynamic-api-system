@@ -433,8 +433,8 @@ async def apply_release(db, snapshot: Dict[str, Any], project_code: str, method:
             project.api_key = pre_key
             log.info(f"发布时补上生产项目 Key | project={project_code}")
 
-    if (snapshot.get("api_type") or "sql") == "sync" and not is_super_admin(approver):
-        raise ReleaseError("数据同步类 API 只能由超级管理员发布到生产")
+    if (snapshot.get("api_type") or "sql") in ("sync", "update") and not is_super_admin(approver):
+        raise ReleaseError("远端同步 / 更新类 API 只能由超级管理员发布到生产")
     from app.api.api_configs import plugin_edit_denied
     if ((snapshot.get("api_type") or "sql") == "plugin" or (snapshot.get("plugin_code") or "").strip()) \
             and plugin_edit_denied(approver):
@@ -633,8 +633,8 @@ async def apply_to_pre(db, snapshot: Dict[str, Any], project: Project, api: Opti
         if api.status in (STATUS_PENDING, STATUS_APPROVED):
             raise ReleaseError("预发中的该 API 正在上线审批中，请先撤回")
     api_type = snapshot.get("api_type") or "sql"
-    if api_type == "sync" and not is_super_admin(user):
-        raise ReleaseError("远端同步类 API 只能由超级管理员拉取")
+    if api_type in ("sync", "update") and not is_super_admin(user):
+        raise ReleaseError("远端同步 / 更新类 API 只能由超级管理员拉取")
     if (api_type == "plugin" or (snapshot.get("plugin_code") or "").strip()) and plugin_edit_denied(user):
         raise ReleaseError("插件类 API 只能由超级管理员拉取")
 

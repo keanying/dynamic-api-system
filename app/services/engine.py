@@ -174,6 +174,48 @@ def _readonly_violation(sql: str):
     return None
 
 
+# ---- 更新类 API (v2.24) ----
+# 只允许「一条 UPDATE 语句 + 最外层带 WHERE」，其余写操作（INSERT / DELETE / DDL / 多语句）一律拒绝。
+# 检查的是渲染后真正要执行的 SQL：$if$ 把所有条件都去掉、只剩 UPDATE ... SET ... 的情况也会被拦下。
+_UPDATE_START_RE = re.compile(r"^\s*UPDATE\b", re.IGNORECASE)
+_WORD_RE = re.compile(r"[A-Za-z_]+")
+
+
+def _has_top_level_where(code: str) -> bool:
+    depth = 0
+    i = 0
+    while i < len(code):
+        ch = code[i]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        elif depth == 0 and (ch == "W" or ch == "w"):
+            m = _WORD_RE.match(code, i)
+            if m and m.group(0).upper() == "WHERE" and (i == 0 or not (code[i - 1].isalnum() or code[i - 1] == "_")):
+                return True
+            if m:
+                i = m.end()
+                continue
+        i += 1
+    return False
+
+
+def _update_violation(sql: str):
+    """更新类 API：检查渲染后的 SQL 是否是「一条带 WHERE 的 UPDATE」；违规返回原因，否则返回 None。"""
+    code = _code_only(sql).strip()
+    body = code.rstrip("; \t\r\n")
+    if ";" in body:
+        return "不允许一次执行多条 SQL 语句"
+    if not _UPDATE_START_RE.match(_strip_leading_comments(body)):
+        return "更新类 API 只能执行 UPDATE 语句"
+    if not _has_top_level_where(body):
+        return "UPDATE 必须带 WHERE 条件（防止误改整张表），请检查条件参数是否都没传"
+    if _OUTFILE_RE.search(body):
+        return "禁止 INTO OUTFILE / DUMPFILE"
+    return None
+
+
 def _build_cache_key(api_id: int, params: dict, version=None) -> str:
     """构建缓存 key。
 
@@ -754,6 +796,37 @@ async def _execute_single_sql_mode(api_config, params, api_params, datasource):
     return data
 
 
+async def _execute_update_mode(api_config, params, api_params, datasource):
+    """更新类 API (v2.24)：渲染 SQL 模板（语法与 SQL 类型相同）后执行一条 UPDATE，返回影响行数。"""
+    from app.services.trace_context import get_trace
+    tctx = get_trace()
+    if not (api_config.sql_template or "").strip():
+        raise Exception("该 API 未配置 UPDATE 语句")
+    if not datasource:
+        raise Exception("更新类 API 必须配置数据源")
+    if datasource.type not in MYSQL_COMPATIBLE_TYPES:
+        raise Exception(f"更新类 API 暂只支持 MySQL 系数据源，当前为 {datasource.type}")
+    if getattr(settings.query, "defaults_visible_in_template", False):
+        params = apply_param_defaults(params, api_params)
+    if tctx:
+        tctx.mark_render_start()
+    sql, bound_params = _parse_sql_params(api_config.sql_template, params, api_params)
+    if tctx:
+        tctx.mark_render_end()
+        tctx.set_rendered_sql(sql)
+        try:
+            tctx.set_executed_sql(_to_pyformat(sql), bound_params)
+        except Exception:
+            pass
+    password = decrypt_value(datasource.password_encrypted) if datasource.password_encrypted else ""
+    _q0 = time.time()
+    affected = await _execute_mysql_update(datasource, password, sql, bound_params, timeout=api_config.timeout)
+    if tctx:
+        tctx.add_query_time((time.time() - _q0) * 1000)
+    log.info(f"更新类 API 执行 | api_id={api_config.id} | name={api_config.name} | affected_rows={affected}")
+    return {"affected_rows": affected}
+
+
 async def _execute_federated_mode(api_config, params, api_params, db):
     """多源 SQL (v2.22+)：一条 MySQL 语法的 SQL 关联多个数据源（表名写成「数据源名.库名.表名」），
     见 app/services/federated.py。模板语法（:param / #{} / $if$ / $for$）与单 SQL 模式完全相同。"""
@@ -1010,8 +1083,10 @@ async def execute_api(
 
         # 2. DDL 拦截（仅对有 SQL 模板的类型；html/plugin 可能没有 sql_template）
         _sql_tpl = api_config.sql_template or ""
+        # 更新类 API 的 UPDATE 由 _update_violation 单独把关（只允许带 WHERE 的单条 UPDATE）
+        _is_update = (getattr(api_config, "api_type", "sql") or "sql").lower() == "update"
         log.debug(f"DDL 检查 | api_id={api_config.id} | sql_preview={_sql_tpl[:100]}...")
-        if _check_ddl(_sql_tpl):
+        if not _is_update and _check_ddl(_sql_tpl):
             raise Exception("禁止执行 DDL 操作")
 
         # 3. 缓存检查
@@ -1020,7 +1095,7 @@ async def execute_api(
         #    （GET 查询参数 "7" -> 7），读写 key 对不上，GET 请求的缓存永远不命中。
         # 数据同步（写入类）API 不走缓存
         _is_sync = (getattr(api_config, "api_type", "sql") or "sql").lower() == "sync"
-        if api_config.cache_enabled and not _is_sync:
+        if api_config.cache_enabled and not _is_sync and not _is_update:
             cache_key = _build_cache_key(api_config.id, params, getattr(api_config, "version", None))
             # 开了自动预热的 API：记下这次的参数组合，供后台调度器定期回填缓存。
             # 放在缓存命中判断之前，保证命中时也会刷新 last_seen（表示这个参数还活跃）。
@@ -1142,7 +1217,9 @@ async def execute_api(
 
         # 7. 分流：插件模式 > 管线模式 > 单 SQL 模式
         pipeline_raw = getattr(api_config, "pipeline_steps", None)
-        if is_federated:
+        if _is_update:
+            data = await _execute_update_mode(api_config, params, api_params, datasource)
+        elif is_federated:
             data = await _execute_federated_mode(api_config, params, api_params, db)
         elif is_plugin:
             data = await _execute_plugin_mode(
@@ -1300,6 +1377,51 @@ async def close_all_mysql_pools():
                 log.warning(f"关闭连接池失败 | key={key} | error={str(e)}")
         _mysql_pools.clear()
     log.info("业务数据源连接池已全部关闭")
+
+
+async def _execute_mysql_update(datasource: DataSource, password: str, sql: str, params: dict, timeout: int = 30) -> int:
+    """执行一条 UPDATE（连接池为 autocommit，执行即提交），返回影响行数。"""
+    violation = _update_violation(sql)
+    if not violation:
+        from app.services.ds_scope import schema_violation
+        violation = schema_violation(sql, datasource)
+    if violation:
+        log.warning(f"拦截更新 SQL | ds={datasource.name} | 原因={violation} | sql={sql[:200]}")
+        raise Exception(violation)
+    timeout = timeout or settings.query.default_timeout
+    pool = await _get_mysql_pool(datasource, password)
+    try:
+        conn = await asyncio.wait_for(pool.acquire(), timeout=timeout)
+    except asyncio.TimeoutError:
+        raise Exception(f"等待数据源连接超时（{timeout}s）：数据源「{datasource.name}」连接池已满（上限 {pool.maxsize}）")
+    mysql_sql = _to_pyformat(sql)
+
+    async def _run():
+        cur = conn.cursor() if MYSQL_DRIVER == "asyncmy" else await conn.cursor()
+        try:
+            await cur.execute(mysql_sql, params)
+            return cur.rowcount
+        finally:
+            r = cur.close()
+            if asyncio.iscoroutine(r):
+                await r
+
+    discard = False
+    try:
+        try:
+            return await asyncio.wait_for(_run(), timeout=timeout)
+        except asyncio.TimeoutError:
+            discard = True
+            raise Exception(f"更新超时（超过 {timeout}s），数据库端可能仍在执行，请稍后确认结果")
+        except Exception:
+            discard = True
+            raise
+    finally:
+        if discard:
+            _discard_conn(conn)
+        pool.release(conn)
+        if discard and MYSQL_DRIVER == "aiomysql":
+            asyncio.ensure_future(pool._wakeup())  # noqa: SLF001
 
 
 async def _execute_mysql(

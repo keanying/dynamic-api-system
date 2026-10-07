@@ -61,7 +61,8 @@ async def _verify_api_key(
     """
     # 数据同步（写库）类 API (v2.20)：不允许关闭 Key 校验，也不允许「未配置 Key 即放行」，
     # 否则任何人都能调用它往业务库写数据
-    is_sync = (getattr(api_config, "api_type", "sql") or "sql").lower() == "sync"
+    # 更新类 API (v2.24) 同样写库，规则相同
+    is_sync = (getattr(api_config, "api_type", "sql") or "sql").lower() in ("sync", "update")
 
     # 显式关闭则直接放行
     require_flag = getattr(api_config, "require_api_key", True)
