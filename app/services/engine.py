@@ -201,6 +201,37 @@ def _has_top_level_where(code: str) -> bool:
     return False
 
 
+_DELETE_START_RE = re.compile(r"^\s*DELETE\b", re.IGNORECASE)
+# 只接受单表写法 DELETE FROM 表 WHERE ...（表名前缀部分不含字符串，可直接在原 SQL 上匹配）
+_SIMPLE_DELETE_RE = re.compile(
+    r"^\s*(?:/\*.*?\*/\s*|--[^\n]*\n\s*|#[^\n]*\n\s*)*DELETE\s+FROM\s+((?:`[^`]+`|\w+)(?:\.(?:`[^`]+`|\w+))?)\s+WHERE\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _delete_violation(sql: str):
+    """删除类 API (v2.24)：检查渲染后的 SQL 是否是「单表 DELETE FROM 表 WHERE ...」；违规返回原因，否则 None。"""
+    code = _code_only(sql).strip()
+    body = code.rstrip("; \t\r\n")
+    if ";" in body:
+        return "不允许一次执行多条 SQL 语句"
+    if not _DELETE_START_RE.match(_strip_leading_comments(body)):
+        return "删除类 API 只能执行 DELETE 语句"
+    if not _has_top_level_where(body):
+        return "DELETE 必须带 WHERE 条件（防止误删整张表），请检查条件参数是否都没传"
+    if not _SIMPLE_DELETE_RE.match(sql or ""):
+        return "只支持单表删除：DELETE FROM 表名 WHERE 条件（不支持多表 / JOIN / USING）"
+    return None
+
+
+def _delete_count_sql(sql: str) -> str:
+    """把 DELETE FROM 表 WHERE 条件 改写成 SELECT COUNT(*) AS n FROM 表 WHERE 条件，用于删除前预估行数。"""
+    m = _SIMPLE_DELETE_RE.match(sql)
+    rest = sql[m.end():].rstrip().rstrip(";")
+    rest = re.sub(r"\bLIMIT\s+\S+\s*$", "", rest, flags=re.IGNORECASE)   # 预估行数时去掉 LIMIT
+    return f"SELECT COUNT(*) AS n FROM {m.group(1)} WHERE{rest}"
+
+
 def _update_violation(sql: str):
     """更新类 API：检查渲染后的 SQL 是否是「一条带 WHERE 的 UPDATE」；违规返回原因，否则返回 None。"""
     code = _code_only(sql).strip()
@@ -827,6 +858,40 @@ async def _execute_update_mode(api_config, params, api_params, datasource):
     return {"affected_rows": affected}
 
 
+async def _execute_delete_mode(api_config, params, api_params, datasource):
+    """删除类 API (v2.24)：渲染 SQL 模板后执行一条单表 DELETE，返回删除行数。
+    删除前先按同样的条件统计行数，超过「最大行数」设置就拒绝，避免条件写错删掉大量数据。"""
+    from app.services.trace_context import get_trace
+    tctx = get_trace()
+    if not (api_config.sql_template or "").strip():
+        raise Exception("该 API 未配置 DELETE 语句")
+    if not datasource:
+        raise Exception("删除类 API 必须配置数据源")
+    if datasource.type not in MYSQL_COMPATIBLE_TYPES:
+        raise Exception(f"删除类 API 暂只支持 MySQL 系数据源，当前为 {datasource.type}")
+    if getattr(settings.query, "defaults_visible_in_template", False):
+        params = apply_param_defaults(params, api_params)
+    if tctx:
+        tctx.mark_render_start()
+    sql, bound_params = _parse_sql_params(api_config.sql_template, params, api_params)
+    if tctx:
+        tctx.mark_render_end()
+        tctx.set_rendered_sql(sql)
+        try:
+            tctx.set_executed_sql(_to_pyformat(sql), bound_params)
+        except Exception:
+            pass
+    password = decrypt_value(datasource.password_encrypted) if datasource.password_encrypted else ""
+    max_rows = int(api_config.max_rows or 10000)
+    _q0 = time.time()
+    deleted = await _execute_mysql_write(datasource, password, sql, bound_params, timeout=api_config.timeout,
+                                         kind="delete", max_affected=max_rows)
+    if tctx:
+        tctx.add_query_time((time.time() - _q0) * 1000)
+    log.info(f"删除类 API 执行 | api_id={api_config.id} | name={api_config.name} | deleted_rows={deleted}")
+    return {"deleted_rows": deleted}
+
+
 async def _execute_federated_mode(api_config, params, api_params, db):
     """多源 SQL (v2.22+)：一条 MySQL 语法的 SQL 关联多个数据源（表名写成「数据源名.库名.表名」），
     见 app/services/federated.py。模板语法（:param / #{} / $if$ / $for$）与单 SQL 模式完全相同。"""
@@ -1085,8 +1150,9 @@ async def execute_api(
         _sql_tpl = api_config.sql_template or ""
         # 更新类 API 的 UPDATE 由 _update_violation 单独把关（只允许带 WHERE 的单条 UPDATE）
         _is_update = (getattr(api_config, "api_type", "sql") or "sql").lower() == "update"
+        _is_delete = (getattr(api_config, "api_type", "sql") or "sql").lower() == "delete"
         log.debug(f"DDL 检查 | api_id={api_config.id} | sql_preview={_sql_tpl[:100]}...")
-        if not _is_update and _check_ddl(_sql_tpl):
+        if not (_is_update or _is_delete) and _check_ddl(_sql_tpl):
             raise Exception("禁止执行 DDL 操作")
 
         # 3. 缓存检查
@@ -1095,7 +1161,7 @@ async def execute_api(
         #    （GET 查询参数 "7" -> 7），读写 key 对不上，GET 请求的缓存永远不命中。
         # 数据同步（写入类）API 不走缓存
         _is_sync = (getattr(api_config, "api_type", "sql") or "sql").lower() == "sync"
-        if api_config.cache_enabled and not _is_sync and not _is_update:
+        if api_config.cache_enabled and not _is_sync and not _is_update and not _is_delete:
             cache_key = _build_cache_key(api_config.id, params, getattr(api_config, "version", None))
             # 开了自动预热的 API：记下这次的参数组合，供后台调度器定期回填缓存。
             # 放在缓存命中判断之前，保证命中时也会刷新 last_seen（表示这个参数还活跃）。
@@ -1219,6 +1285,8 @@ async def execute_api(
         pipeline_raw = getattr(api_config, "pipeline_steps", None)
         if _is_update:
             data = await _execute_update_mode(api_config, params, api_params, datasource)
+        elif _is_delete:
+            data = await _execute_delete_mode(api_config, params, api_params, datasource)
         elif is_federated:
             data = await _execute_federated_mode(api_config, params, api_params, db)
         elif is_plugin:
@@ -1379,14 +1447,25 @@ async def close_all_mysql_pools():
     log.info("业务数据源连接池已全部关闭")
 
 
+class _TooManyRows(Exception):
+    """删除前预估行数超过上限（连接本身正常，可以还回池里）。"""
+
+
 async def _execute_mysql_update(datasource: DataSource, password: str, sql: str, params: dict, timeout: int = 30) -> int:
     """执行一条 UPDATE（连接池为 autocommit，执行即提交），返回影响行数。"""
-    violation = _update_violation(sql)
+    return await _execute_mysql_write(datasource, password, sql, params, timeout=timeout, kind="update")
+
+
+async def _execute_mysql_write(datasource: DataSource, password: str, sql: str, params: dict, timeout: int = 30,
+                               kind: str = "update", max_affected: Optional[int] = None) -> int:
+    """执行一条 UPDATE / DELETE（连接池为 autocommit，执行即提交），返回影响行数。
+    kind=delete 且给了 max_affected 时，先按同样条件统计行数，超过上限直接拒绝、不执行删除。"""
+    violation = _delete_violation(sql) if kind == "delete" else _update_violation(sql)
     if not violation:
         from app.services.ds_scope import schema_violation
         violation = schema_violation(sql, datasource)
     if violation:
-        log.warning(f"拦截更新 SQL | ds={datasource.name} | 原因={violation} | sql={sql[:200]}")
+        log.warning(f"拦截{'删除' if kind == 'delete' else '更新'} SQL | ds={datasource.name} | 原因={violation} | sql={sql[:200]}")
         raise Exception(violation)
     timeout = timeout or settings.query.default_timeout
     pool = await _get_mysql_pool(datasource, password)
@@ -1399,6 +1478,12 @@ async def _execute_mysql_update(datasource: DataSource, password: str, sql: str,
     async def _run():
         cur = conn.cursor() if MYSQL_DRIVER == "asyncmy" else await conn.cursor()
         try:
+            if kind == "delete" and max_affected:
+                await cur.execute(_to_pyformat(_delete_count_sql(sql)), params)
+                n = (await cur.fetchone())[0]
+                if n > max_affected:
+                    raise _TooManyRows(f"本次条件会删除 {n} 行，超过上限 {max_affected} 行，已拒绝执行"
+                                       f"（请检查条件，或在「更多设置 → 最大返回行数」调大上限）")
             await cur.execute(mysql_sql, params)
             return cur.rowcount
         finally:
@@ -1412,7 +1497,9 @@ async def _execute_mysql_update(datasource: DataSource, password: str, sql: str,
             return await asyncio.wait_for(_run(), timeout=timeout)
         except asyncio.TimeoutError:
             discard = True
-            raise Exception(f"更新超时（超过 {timeout}s），数据库端可能仍在执行，请稍后确认结果")
+            raise Exception(f"{'删除' if kind == 'delete' else '更新'}超时（超过 {timeout}s），数据库端可能仍在执行，请稍后确认结果")
+        except _TooManyRows as e:
+            raise Exception(str(e))
         except Exception:
             discard = True
             raise

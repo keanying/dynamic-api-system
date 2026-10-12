@@ -324,6 +324,7 @@
                     <option value="plugin">插件</option>
                     <option value="sync" id="apiTypeSyncOption">远端同步（仅超管）</option>
                     <option value="update" id="apiTypeUpdateOption">更新（仅超管）</option>
+                    <option value="delete" id="apiTypeDeleteOption">删除（仅超管）</option>
                 </select>
             </div>
             <div class="idbar-field">
@@ -377,7 +378,7 @@
     <div class="editor-left">
     <div class="editor-tabs" role="tablist">
         <button type="button" class="editor-tab active" id="tab-logic" onclick="switchEditorTab('logic')">执行逻辑</button>
-        <button type="button" class="editor-tab" id="tab-params" data-mode="sql plugin federated update" onclick="switchEditorTab('params')">参数定义 <span class="tab-count" id="paramTabCount">0</span></button>
+        <button type="button" class="editor-tab" id="tab-params" data-mode="sql plugin federated update delete" onclick="switchEditorTab('params')">参数定义 <span class="tab-count" id="paramTabCount">0</span></button>
         <button type="button" class="editor-tab" id="tab-basic" onclick="switchEditorTab('basic')">更多设置</button>
         <span class="tab-spacer"></span>
         <button type="button" class="btn btn-secondary btn-sm" onclick="openStructurePreview()" title="查看请求结构 / SQL 渲染中间态 / 响应结构">
@@ -531,7 +532,7 @@
     <div class="editor-pane active" id="pane-logic">
 
     <!-- 数据源选择：SQL 查询分「单个数据源 / 多个数据源」两种（后者即多源 SQL，v2.23 合并入口） -->
-    <div class="card mb-16" data-mode="sql federated sync update" id="datasourceCard">
+    <div class="card mb-16" data-mode="sql federated sync update delete" id="datasourceCard">
         <div class="card-header">
             <h3>数据源</h3>
             <div style="display:flex; gap:8px; align-items:center; margin-left:auto;">
@@ -542,7 +543,7 @@
             </div>
         </div>
         <div class="card-body">
-            <div class="form-group" data-mode="sql sync update" style="margin-bottom:0;">
+            <div class="form-group" data-mode="sql sync update delete" style="margin-bottom:0;">
                 <div style="display:flex; gap:8px;">
                     <select class="form-select" id="apiDatasource" style="flex:1;">
                         <option value="">-- 请选择数据源 --</option>
@@ -568,7 +569,7 @@
     </div>
 
     <!-- SQL 模板 -->
-    <div class="card mb-16" id="sqlModeCard" data-mode="sql federated update">
+    <div class="card mb-16" id="sqlModeCard" data-mode="sql federated update delete">
         <div class="card-header">
             <h3>SQL 模板</h3>
             <div style="display:flex; gap:8px; align-items:center; margin-left:auto;">
@@ -715,7 +716,7 @@
         </div>
         <div class="card-body">
             <div style="background:#fee2e2; border:1px solid #fecaca; color:#991b1b; padding:10px 12px; border-radius:6px; font-size:12.5px; margin-bottom:12px;">
-                ⚠ <strong>这是本系统唯一的「写库」接口</strong>：调用会真实修改数据源里的数据。
+                ⚠ <strong>这是「写库」接口</strong>：调用会真实修改数据源里的数据。
                 只有超级管理员能<strong>创建和修改</strong>；调用走 <code>xpftkey</code>（与普通 API 一致）。<br>
                 ⚠️ 持有该 API Key 的人就能往目标表写数据，请按写权限的标准保管：不要对外散发、不要写进前端代码、定期轮换。
             </div>
@@ -755,6 +756,23 @@ Header: xpftkey: &lt;项目或API的Key&gt;
                     <code>pkId</code> 可以是多个字段（联合判重）。<br>
                     <strong>出错处理</strong>：逐条写入，遇到错误就停下，<strong>已写入的保留</strong>，
                     返回 <code>failedIndex</code>（失败行号）、<code>failedReason</code>、<code>failedRow</code> 便于定位补数。
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">替换模式：按条件先删除、再插入（v2.24）</label>
+                <pre style="background:#1c1c1e;color:#e4e4e7;padding:12px;border-radius:6px;font-size:12px;line-height:1.6;overflow:auto;margin:0;">{
+  "tableName": "order_table",
+  "mode": "replace",
+  "deleteWhere": {"scenic_id": "S1", "stat_date": "2026-10-01"},
+  "data": [
+    {"scenic_id": "S1", "stat_date": "2026-10-01", "order_id": 1, "amount": 100}
+  ]
+}</pre>
+                <div class="form-hint" style="margin-top:6px;">
+                    <strong>同一个事务</strong>：删除和插入要么全部成功，要么<strong>整体回滚、数据不变</strong>，不会停在「删了没插」。<br>
+                    删除条件只能是白名单字段 = 值（多个字段同时满足），不能为空；<code>data</code> 每一行在这些字段上必须与条件一致
+                    （只能写回被删掉的那一片）；会删除的行数超过「更多设置 → 最大返回行数」时拒绝执行。仅支持 MySQL 数据源。
                 </div>
             </div>
         </div>
@@ -1312,6 +1330,11 @@ async function applySyncPermission() {
             uopt.disabled = true;
             uopt.textContent = '更新（需超级管理员）';
         }
+        const dopt = document.getElementById('apiTypeDeleteOption');
+        if (dopt && !isSuper) {
+            dopt.disabled = true;
+            dopt.textContent = '删除（需超级管理员）';
+        }
         // 已经是 sync 类型但当前不是超管：整个配置区只读
         const cur = (document.getElementById('apiType')?.value || 'sql').toLowerCase();
         if (cur === 'sync' && !isSuper) {
@@ -1349,11 +1372,11 @@ function onApiTypeChange() {
   if (_pb) _pb.style.display = (type === 'sql' && !window.__hasPipeline) ? '' : 'none';
   // 插件模式下"从 SQL 解析"无意义，隐藏
   const parseBtn = document.getElementById('parseSqlParamsBtn');
-  if (parseBtn) parseBtn.style.display = (type === 'sql' || type === 'federated' || type === 'update') ? '' : 'none';
+  if (parseBtn) parseBtn.style.display = (type === 'sql' || type === 'federated' || type === 'update' || type === 'delete') ? '' : 'none';
   // 更新类：只写 UPDATE，不需要「选表生成 SQL」
   const _wz = document.getElementById('queryWizardBtn');
-  if (_wz) _wz.style.display = type === 'update' ? 'none' : '';
-  if (type === 'update' && typeof _setSqlEditorDisabled === 'function') _setSqlEditorDisabled(false);
+  if (_wz) _wz.style.display = (type === 'update' || type === 'delete') ? 'none' : '';
+  if ((type === 'update' || type === 'delete') && typeof _setSqlEditorDisabled === 'function') _setSqlEditorDisabled(false);
   // 多源 SQL：SQL 编辑器始终可编辑（管线开关只属于数据 API）
   const _sqlHint = document.getElementById('sqlModeHint');
   if (type === 'federated') {
@@ -1373,6 +1396,8 @@ function onApiTypeChange() {
       ? '数据写入接口：按 tableName 把 data 写进数据源表（仅超管可建可调用）'
       : (type === 'update')
       ? '更新接口：执行一条带 WHERE 的 UPDATE，返回影响行数（仅超管可建、可测试）'
+      : (type === 'delete')
+      ? '删除接口：执行一条带 WHERE 的单表 DELETE，超过「最大返回行数」拒绝执行（仅超管可建、可测试）'
       : (type === 'federated')
       ? '一条 MySQL 语法的 SQL 关联多个数据源的表（数据源名.库名.表名）'
       : '写一条 SQL 即发布为接口，可用「选表生成 SQL」自动生成';
@@ -1789,7 +1814,7 @@ function openStructurePreview(tab) {
     let existing = document.getElementById('__structurePreview');
     if (existing) existing.remove();
     const apiTypeNow = (document.getElementById('apiType')?.value || 'sql').toLowerCase();
-    const defaultTab = tab || ((apiTypeNow === 'sql' || apiTypeNow === 'federated' || apiTypeNow === 'update') ? 'sql' : 'req');
+    const defaultTab = tab || ((apiTypeNow === 'sql' || apiTypeNow === 'federated' || apiTypeNow === 'update' || apiTypeNow === 'delete') ? 'sql' : 'req');
     const html = `
     <div class="modal-overlay" id="__structurePreview" style="display:flex;">
         <div class="modal" style="max-width: 780px; width: 92%;">
@@ -1916,7 +1941,7 @@ async function spFetchSqlPreview() {
     const pane = document.getElementById('sp-sql');
     if (!pane) return;
     const apiTypeNow = (document.getElementById('apiType')?.value || 'sql').toLowerCase();
-    if (apiTypeNow !== 'sql' && apiTypeNow !== 'federated' && apiTypeNow !== 'update') {
+    if (apiTypeNow !== 'sql' && apiTypeNow !== 'federated' && apiTypeNow !== 'update' && apiTypeNow !== 'delete') {
         pane.innerHTML = `<div class="sp-note">当前是 ${apiTypeNow === 'plugin' ? 'Python 插件' : 'HTML 页面'} API,无 SQL 渲染中间态;${apiTypeNow === 'plugin' ? '插件里通过 params 直接读取①中的请求结构。' : ''}</div>`;
         return;
     }
@@ -2404,6 +2429,21 @@ function removeParam(index) {
     renderParamTree();
 }
 
+// 参数占位符外面多加了引号（':scenicId' / ":scenicId"）时自动去掉 (v2.24)：
+// 加了引号就成了普通字符串，既不会被识别成参数，执行时也不会替换成传入的值。
+// 只处理「整个引号里只有一个 :参数名」的情况，'10:30' 这类正常字符串不受影响。返回去掉引号的参数名
+function fixQuotedParams() {
+    const cur = (sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql').value) || '';
+    const fixed = [];
+    const next = cur.replace(/(['"])\s*:([A-Za-z_]\w*)\s*\1/g, (all, q, name) => { if (!fixed.includes(name)) fixed.push(name); return ':' + name; });
+    if (fixed.length) {
+        document.getElementById('apiSql').value = next;
+        if (sqlEditor) sqlEditor.setValue(next);
+        Toast.info(`参数两边不需要引号，已自动去掉：${fixed.map(n => ':' + n).join('、')}`);
+    }
+    return fixed;
+}
+
 // SQL 里用到但还没定义的 :参数 自动补上（字符串、非必填），返回新增的参数名
 function syncParamsFromSql(sql) {
     const text = String(sql || '')
@@ -2422,20 +2462,12 @@ function syncParamsFromSql(sql) {
 }
 
 function parseSqlParams() {
-    const sql = document.getElementById('apiSql').value;
-    const matches = sql.match(/:(\w+)/g);
-    if (!matches) { Toast.info('未找到参数占位符'); return; }
-
-    const names = [...new Set(matches.map(m => m.substring(1)))];
-    const existingNames = params.map(p => p.name);
-
-    names.forEach(name => {
-        if (!existingNames.includes(name)) {
-            params.push({ name, param_type: 'string', required: false, default_value: '', description: '', item_schema: '', sort_order: params.length });
-        }
-    });
-    renderParams();
-    Toast.success(`解析到 ${names.length} 个参数`);
+    fixQuotedParams();
+    const sql = (sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql').value) || '';
+    // 与保存时的自动补参数同一套规则：忽略注释和字符串里的冒号（如 '10:30'）
+    const added = syncParamsFromSql(sql);
+    if (added.length) Toast.success(`新增 ${added.length} 个参数：${added.join('、')}`);
+    else Toast.info(params.length ? 'SQL 里的参数都已定义' : '未找到参数占位符（写法 :参数名，不加引号）');
 }
 
 // 通用 SQL 格式化（关键字换行 + 缩进），供主编辑器和管线步骤共用
@@ -3015,9 +3047,9 @@ function togglePipelineMode() {
         // html(静态页面)/plugin(Python) 类型本就不用 SQL 模板，必须保持隐藏，
         // 否则会把 onApiTypeChange() 刚隐藏的 SQL 卡又显示出来。
         const _type = (document.getElementById('apiType')?.value) || 'sql';
-        if(sqlCard) sqlCard.style.display = (_type === 'sql' || _type === 'federated' || _type === 'update') ? '' : 'none';
+        if(sqlCard) sqlCard.style.display = (_type === 'sql' || _type === 'federated' || _type === 'update' || _type === 'delete') ? '' : 'none';
         if(hint){ hint.textContent = _type === 'federated' ? '多数据源 SQL' : '单数据源查询'; hint.style.color = _type === 'federated' ? '#3d5a0a' : ''; }
-        _setSqlEditorDisabled(_type !== 'sql' && _type !== 'federated' && _type !== 'update');
+        _setSqlEditorDisabled(_type !== 'sql' && _type !== 'federated' && _type !== 'update' && _type !== 'delete');
     }
 }
 
@@ -3820,8 +3852,8 @@ async function saveApi(e) {
             return;
         }
     }
-    if (apiType === 'update' && !document.getElementById('apiDatasource')?.value) {
-        Toast.error('更新类 API 必须选择数据源（要更新哪个库）');
+    if ((apiType === 'update' || apiType === 'delete') && !document.getElementById('apiDatasource')?.value) {
+        Toast.error(apiType === 'delete' ? '删除类 API 必须选择数据源（要删哪个库的数据）' : '更新类 API 必须选择数据源（要更新哪个库）');
         return;
     }
     const isHtml = apiType === 'html';
@@ -3830,7 +3862,7 @@ async function saveApi(e) {
 
     // 关键：只有开关打开时才提交 pipeline_steps，否则强制空字符串
     // 防止单源 API 因残留 JSON 被误判为管线模式
-    const pipelineOn = !isHtml && !isPlugin && !isFederated && apiType !== 'update' && document.getElementById('pipelineEnabled').checked;
+    const pipelineOn = !isHtml && !isPlugin && !isFederated && apiType !== 'update' && apiType !== 'delete' && document.getElementById('pipelineEnabled').checked;
     // 若在可视化模式，先把表单状态同步成 JSON；若在 JSON 模式，取编辑器当前值
     if (pipelineOn && typeof currentPMode !== 'undefined') {
         if (currentPMode === 'visual') {
@@ -3840,7 +3872,8 @@ async function saveApi(e) {
         }
     }
     const pipelineVal = pipelineOn ? (document.getElementById('pipelineSteps').value || '') : '';
-    if ((apiType === 'sql' || apiType === 'federated' || apiType === 'update') && !pipelineOn) {
+    if ((apiType === 'sql' || apiType === 'federated' || apiType === 'update' || apiType === 'delete') && !pipelineOn) {
+        fixQuotedParams();
         const added = syncParamsFromSql((sqlEditor ? sqlEditor.getValue() : document.getElementById('apiSql').value) || '');
         if (added.length) Toast.info(`已自动添加参数：${added.join('、')}`);
     }

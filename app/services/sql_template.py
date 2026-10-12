@@ -665,6 +665,27 @@ def split_literals(sql: str) -> list:
     return _SQL_LITERAL_RE.split(sql or "")
 
 
+_QUOTED_PARAM_RE = re.compile(r"""^(['"])\s*:([A-Za-z_]\w*)\s*\1$""")
+
+
+def unquote_param_literals(sql: str):
+    """把整个字符串只有一个参数占位符的写法（':scenicId' / ":scenicId"）还原成 :scenicId (v2.24)。
+
+    加了引号就成了普通字符串：不会被识别成参数，执行时也不会替换成传入的值，查询永远查不到数据。
+    只处理「引号里只有 :参数名」的字符串，'10:30' 之类的正常字符串和注释不受影响。
+    返回 (修正后的 SQL, 去掉引号的参数名列表)。
+    """
+    parts = split_literals(sql)
+    fixed = []
+    for i in range(1, len(parts), 2):
+        m = _QUOTED_PARAM_RE.match(parts[i])
+        if m:
+            parts[i] = ":" + m.group(2)
+            if m.group(2) not in fixed:
+                fixed.append(m.group(2))
+    return ("".join(parts), fixed) if fixed else (sql, [])
+
+
 def sub_outside_literals(pattern, repl, sql: str) -> str:
     """仅在字符串/注释之外做正则替换，字面量原样保留。
     pattern: 已编译正则或字符串; repl: 替换串或函数。
