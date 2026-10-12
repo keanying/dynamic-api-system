@@ -5,7 +5,7 @@ OneData Portal 是一个轻量级的数据 API 开放平台，支持通过可视
 ## 功能特性
 
 - **项目管理**：多项目隔离，每个项目独立管理 API 和密钥
-- **API 配置**：可视化配置 SQL 模板、参数、缓存、限流等；API 类型分 **SQL / HTML / 插件 / 远端同步 / 更新** 五种
+- **API 配置**：可视化配置 SQL 模板、参数、缓存、限流等；API 类型分 **SQL / HTML / 插件 / 远端同步 / 更新 / 删除** 六种
 - **选表生成 SQL（v2.23）**：点选数据源、表、字段、关联、筛选条件即可生成 SQL 和参数，不用手写，见下文
 - **数据源管理**：支持 MySQL / **StarRocks** / **SelectDB** / **Apache Doris** / PostgreSQL / Redis 多种数据源，密码加密存储
 - **动态调用引擎**：SQL 参数化执行、DDL 拦截、行数限制、超时控制
@@ -131,6 +131,32 @@ WHERE scenic_id = :scenicId
   AND work_id = :workId
   AND comment_id = :commentId
 ```
+
+### 删除类 API（v2.24，仅超级管理员）
+
+类型选「删除（仅超管）」：写一条单表 DELETE，返回 `{"deleted_rows": 删除行数}`。权限、API Key 规则与更新类相同。
+
+- 只允许 `DELETE FROM 表 WHERE 条件`：多表 / JOIN / USING、多条语句、其它写操作都会被拒绝；渲染后没有 WHERE 也拒绝
+- **删除前先按同样条件统计行数**，超过「更多设置 → 最大返回行数」就拒绝执行，防止条件写错删掉大量数据
+
+### 远端同步 · 替换模式（v2.24）：按条件先删除、再插入
+
+同步 API 请求里加 `"mode": "replace"` 和 `deleteWhere`，删除和插入在**同一个数据库事务**里完成，
+任何一步失败整体回滚，表不会停在「删了没插」的状态：
+
+```json
+{
+  "tableName": "sync_stat",
+  "mode": "replace",
+  "deleteWhere": {"scenic_id": "S1", "stat_date": "2026-10-01"},
+  "data": [{"scenic_id": "S1", "stat_date": "2026-10-01", "channel": "douyin", "amount": 10}]
+}
+```
+
+- 删除条件只能是白名单字段 = 值（AND 组合），不能为空；`data` 每行在这些字段上必须与条件一致（只能写回被删掉的那一片）
+- 会删除的行数超过 API「最大返回行数」时拒绝执行
+- 仅支持 MySQL：SelectDB / Doris / StarRocks 不支持把 DELETE 和 INSERT 放进同一事务，替换模式会直接拒绝
+- 不带 `mode` 时仍是原来的「按 pkId 有则更新、无则插入」
 
 ### 预览渲染
 

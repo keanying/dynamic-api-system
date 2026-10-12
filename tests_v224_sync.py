@@ -78,5 +78,32 @@ check("去掉引号", out == "WHERE scenic_id = :scenicId\nAND channel = :channe
 check("返回修正的参数名", fixed == ["scenicId", "channelId", "timeTag"], fixed)
 check("正常 SQL 原样返回", unquote_param_literals("SELECT ':' AS a, ':: x' AS b WHERE id = :id") == ("SELECT ':' AS a, ':: x' AS b WHERE id = :id", []))
 
+print("== 6. 删除类 API：只允许带 WHERE 的单表 DELETE ==")
+from app.services.engine import _delete_violation, _delete_count_sql
+for q in ["DELETE FROM t WHERE a = 1", "delete from `db`.`t` where a = 1 limit 10;", "/* c */ DELETE FROM t\nWHERE a = 'x;y'"]:
+    check(f"放行 {q[:40]!r}", _delete_violation(q) is None, _delete_violation(q))
+for q in ["DELETE FROM t", "DELETE FROM t WHERE a=1; DROP TABLE t", "DELETE t1 FROM t1 JOIN t2 ON t1.id = t2.id WHERE t2.x = 1",
+          "DELETE FROM t USING t, t2 WHERE t.id = t2.id", "UPDATE t SET a = 1 WHERE b = 1", "TRUNCATE TABLE t"]:
+    check(f"拦截 {q[:40]!r}", _delete_violation(q) is not None)
+check("删除前统计行数的 SQL", _delete_count_sql("DELETE FROM t WHERE a = 1 LIMIT 5;").strip() == "SELECT COUNT(*) AS n FROM t WHERE a = 1")
+check("普通 SQL 仍不能执行 DELETE", _readonly_violation("DELETE FROM t WHERE a = 1") is not None)
+
+print("== 7. 同步替换模式的请求校验 ==")
+from app.services.data_sync import validate_replace, SyncError
+wl = {"t": ["scenic_id", "stat_date", "amount"]}
+def bad(p):
+    try:
+        validate_replace(p, wl); return False
+    except SyncError:
+        return True
+ok = {"tableName": "t", "mode": "replace", "deleteWhere": {"scenic_id": "S1"}, "data": [{"scenic_id": "S1", "amount": 1}]}
+check("合法请求通过", validate_replace(ok, wl)[1] == {"scenic_id": "S1"})
+check("没有删除条件拒绝", bad(dict(ok, deleteWhere={})))
+check("删除条件值为空拒绝", bad(dict(ok, deleteWhere={"scenic_id": ""})))
+check("删除条件字段不在白名单拒绝", bad(dict(ok, deleteWhere={"x": 1})))
+check("数据行超出删除范围拒绝", bad(dict(ok, data=[{"scenic_id": "S2", "amount": 1}])))
+check("各行字段不一致拒绝", bad(dict(ok, data=[{"scenic_id": "S1", "amount": 1}, {"scenic_id": "S1"}])))
+check("data 为空拒绝", bad(dict(ok, data=[])))
+
 print(f"========= 结果: {PASS} 通过, {FAIL} 失败 =========")
 sys.exit(1 if FAIL else 0)

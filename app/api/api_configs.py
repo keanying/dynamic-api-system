@@ -290,10 +290,10 @@ async def create_api(
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="插件类 API 只能由超级管理员创建")
 
     # 更新类 API (v2.24)：执行 UPDATE 写业务库，只有超级管理员能创建
-    if (getattr(req, "api_type", "sql") or "sql").lower() == "update":
+    if (getattr(req, "api_type", "sql") or "sql").lower() in ("update", "delete"):
         from app.core.permissions import is_super_admin
         if not is_super_admin(_user):
-            return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="更新类 API 只能由超级管理员创建")
+            return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="更新 / 删除类 API 只能由超级管理员创建")
 
     # 数据同步 API (v2.17+)：写入类接口，只有超级管理员能创建
     if (getattr(req, "api_type", "sql") or "sql").lower() == "sync":
@@ -461,8 +461,8 @@ async def update_api(
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED,
                       msg="远端同步类 API 只能由超级管理员修改")
     # 更新类 API (v2.24)：改成 / 改掉 / 修改更新类，都只有超管可以
-    if "update" in (_old_type, _new_type) and not _is_sa(_user):
-        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="更新类 API 只能由超级管理员修改")
+    if {"update", "delete"} & {_old_type, _new_type} and not _is_sa(_user):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="更新 / 删除类 API 只能由超级管理员修改")
     # 插件类 API (v2.20)：判定方式同上面的 sync
     _plugin_submitted = (update_fields.get("plugin_code") or "").strip()
     _touch_plugin = (_old_type == "plugin") or (_new_type == "plugin") or bool(_plugin_submitted)
@@ -595,8 +595,8 @@ async def copy_api(
     _src_type = (api.api_type or "sql").lower()
     if _src_type == "sync" and not is_super_admin(_user):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="远端同步类 API 只能由超级管理员复制")
-    if _src_type == "update" and not is_super_admin(_user):
-        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="更新类 API 只能由超级管理员复制")
+    if _src_type in ("update", "delete") and not is_super_admin(_user):
+        return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="更新 / 删除类 API 只能由超级管理员复制")
     if (_src_type == "plugin" or (getattr(api, "plugin_code", "") or "").strip()) and plugin_edit_denied(_user):
         return R_fail(ErrCode.AUTH_PERMISSION_DENIED, msg="插件类 API 只能由超级管理员复制")
 
