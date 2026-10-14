@@ -1686,8 +1686,38 @@ _STDLIB_RETRY_HINT = re.compile("[\\\\\ud800-\udfff]")
 _JSON_LITERALS = {"true": True, "false": False, "null": None, "NaN": float("nan"), "Infinity": float("inf")}
 
 
+# JavaScript 能精确表示的最大整数（2^53 - 1）。超过它的数字传到前端会被改掉末几位
+_JS_SAFE_INT = 9007199254740991
+
+
+def _keep_as_text(text, value) -> bool:
+    """字符串解析成数字后，前端会丢精度 / 配置要求保留字符串时，返回 True（应原样返回字符串）(v2.24)。
+
+    典型场景：CAST(work_id AS CHAR) 得到 "7461234567890123456"，原来会被解析回数字，
+    浏览器里变成 7461234567890123000。
+    """
+    if isinstance(value, bool) or value is None:
+        return not getattr(settings.query, "parse_numeric_strings", True)
+    if isinstance(value, int):
+        return abs(value) > _JS_SAFE_INT or not getattr(settings.query, "parse_numeric_strings", True)
+    if isinstance(value, float):
+        digits = sum(ch.isdigit() for ch in text.split("e")[0].split("E")[0])
+        return digits > 15 or not getattr(settings.query, "parse_numeric_strings", True)
+    if isinstance(value, str):   # 文本本身是带引号的 JSON 字符串 "\"x\""
+        return not getattr(settings.query, "parse_numeric_strings", True)
+    return False
+
+
 def _loads_json_text(text):
-    """解析 JSON 文本；不是合法 JSON 时原样返回（语义同原 format_as_json）。"""
+    """解析 JSON 文本；不是合法 JSON 时原样返回（语义同原 format_as_json）。
+    v2.24：解析成数字但前端会丢精度时（超过 2^53），保持原字符串。"""
+    value = _loads_json_text_raw(text)
+    if value is not text and not isinstance(value, (dict, list)) and _keep_as_text(text, value):
+        return text
+    return value
+
+
+def _loads_json_text_raw(text):
     body = text.strip(" \t\n\r")
     if body[:1] in ("t", "f", "n", "N", "I"):
         return _JSON_LITERALS.get(body, text)

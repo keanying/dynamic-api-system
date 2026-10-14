@@ -84,6 +84,10 @@ query:
   # 开启会改变「配置了默认值、且在条件里判断该参数」的 API 的结果，
   # 先运行 python scripts/check_param_defaults.py 查看受影响的 API
   defaults_visible_in_template: false
+  # 返回结果里纯数字字符串是否转成数字（v2.24）：
+  #   true（默认，保持原行为）："123" -> 123；但超过 16 位、前端 JavaScript 会丢精度的数字一律保持字符串
+  #   false：纯数字 / true / false / null 字符串都原样返回，只有 {...} [...] 形式的 JSON 文本才解析成结构
+  parse_numeric_strings: true
   # 慢查询阈值 (毫秒)
   slow_query_threshold: 500
   # 慢查询告警阈值 (毫秒)

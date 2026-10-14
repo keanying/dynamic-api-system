@@ -158,6 +158,13 @@ WHERE scenic_id = :scenicId
 - 仅支持 MySQL：SelectDB / Doris / StarRocks 不支持把 DELETE 和 INSERT 放进同一事务，替换模式会直接拒绝
 - 不带 `mode` 时仍是原来的「按 pkId 有则更新、无则插入」
 
+### 返回值里的 JSON 文本与数字字符串（v2.24）
+
+存 JSON 的字段（如 `entity_tags = '["a","b"]'`）会自动解析成数组 / 对象返回。纯数字字符串按历史行为会转成数字，
+但**超过 2^53（约 16 位）的数字一律保持字符串**：前端 JavaScript 无法精确表示这么大的整数，
+`CAST(work_id AS CHAR)` 得到的 19 位 ID 原来会被转回数字、在浏览器里末几位被改掉。
+如需所有纯数字字符串都原样返回，在 `config.yaml` 设置 `query.parse_numeric_strings: false`。
+
 ### 预览渲染
 
 在 API 编辑器右上角点 **预览渲染** 可以用当前测试参数预先看到最终 SQL，每个控制块的求值结果（keep/drop/loop×N）都会列出来，便于调试。

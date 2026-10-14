@@ -105,5 +105,20 @@ check("数据行超出删除范围拒绝", bad(dict(ok, data=[{"scenic_id": "S2"
 check("各行字段不一致拒绝", bad(dict(ok, data=[{"scenic_id": "S1", "amount": 1}, {"scenic_id": "S1"}])))
 check("data 为空拒绝", bad(dict(ok, data=[])))
 
+print("== 8. 数字字符串：前端会丢精度的保持字符串 ==")
+from app.services.engine import _clean_value
+from app.core.config import settings as _st
+check("19 位 ID 字符串保持字符串", _clean_value("7461234567890123456") == "7461234567890123456")
+check("2^53 以内仍按原规则转数字", _clean_value("9007199254740991") == 9007199254740991 and _clean_value("123") == 123)
+check("2^53 + 1 保持字符串", _clean_value("9007199254740992") == "9007199254740992")
+check("超过 15 位有效数字的小数保持字符串", _clean_value("12345678901234567.25") == "12345678901234567.25")
+check("JSON 结构仍解析", _clean_value('["a","b"]') == ["a", "b"] and _clean_value('{"a":1}') == {"a": 1})
+check("前导零不当数字", _clean_value("0012") == "0012")
+_old = _st.query.parse_numeric_strings
+_st.query.parse_numeric_strings = False
+check("开关关闭：纯数字 / true 原样返回", _clean_value("123") == "123" and _clean_value("true") == "true")
+check("开关关闭：JSON 结构仍解析", _clean_value("[1,2]") == [1, 2])
+_st.query.parse_numeric_strings = _old
+
 print(f"========= 结果: {PASS} 通过, {FAIL} 失败 =========")
 sys.exit(1 if FAIL else 0)

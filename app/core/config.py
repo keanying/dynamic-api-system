@@ -93,6 +93,10 @@ class QueryConfig:
     mysql_driver: str = "asyncmy"
     # 单 SQL 模式下参数默认值是否对 $if$/$for$ 条件可见 (v2.21+)，与流水线模式一致
     defaults_visible_in_template: bool = False
+    # 纯数字字符串（如 CAST(id AS CHAR) 的结果）是否解析成数字 (v2.24)。
+    # true：保持原有行为（"123" -> 123），但超出 JavaScript 安全整数范围的始终保持字符串；
+    # false：纯数字 / true / false / null 这类字符串都原样返回，只有 {...} [...] 才解析成结构
+    parse_numeric_strings: bool = True
     ddl_keywords: List[str] = field(default_factory=lambda: [
         "DROP", "CREATE", "ALTER", "TRUNCATE",
         "INSERT", "UPDATE", "DELETE", "GRANT", "REVOKE"
@@ -306,6 +310,7 @@ def load_config() -> FullConfig:
             slow_query_alert_threshold=query_raw.get("slow_query_alert_threshold", 1000),
             mysql_driver=_env("MYSQL_DRIVER", query_raw.get("mysql_driver", "asyncmy")),
             defaults_visible_in_template=bool(query_raw.get("defaults_visible_in_template", False)),
+            parse_numeric_strings=bool(query_raw.get("parse_numeric_strings", True)),
             ddl_keywords=query_raw.get("ddl_keywords", [
                 "DROP", "CREATE", "ALTER", "TRUNCATE",
                 "INSERT", "UPDATE", "DELETE", "GRANT", "REVOKE"
