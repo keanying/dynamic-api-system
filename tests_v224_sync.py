@@ -120,5 +120,12 @@ check("开关关闭：纯数字 / true 原样返回", _clean_value("123") == "12
 check("开关关闭：JSON 结构仍解析", _clean_value("[1,2]") == [1, 2])
 _st.query.parse_numeric_strings = _old
 
+print("== 9. 同步写库：数组 / 对象值转成 JSON 字符串 ==")
+from app.services.data_sync import build_statements
+_, wb, _, ub, _, ib = build_statements("t", ["id"], {"id": 1, "tags": [{"type": "景区地名", "value": "九嶷山"}], "ext": {"a": 1}, "n": 3})
+check("数组转 JSON 字符串（中文不转义）", ib["ins_1"] == '[{"type":"景区地名","value":"九嶷山"}]', ib)
+check("对象转 JSON 字符串", ib["ins_2"] == '{"a":1}' and ub["set_1"] == '{"a":1}')
+check("普通值原样", ib["ins_0"] == 1 and ib["ins_3"] == 3 and wb["pk_0"] == 1)
+
 print(f"========= 结果: {PASS} 通过, {FAIL} 失败 =========")
 sys.exit(1 if FAIL else 0)

@@ -1257,6 +1257,11 @@ async def execute_api(
                 f"elapsed={elapsed:.2f}ms | {sync_result}"
             )
             # 同步类不写缓存（写入型操作缓存没有意义）
+            # 中途有行失败（遇错即停）：status 保持 true（前面的行已写入），但提示写清楚，不再说「同步完成」
+            if isinstance(sync_result, dict) and "failedIndex" in sync_result:
+                msg = (f"第 {sync_result['failedIndex']} 行写入失败，已停止：{sync_result.get('failedReason', '')}"
+                       f"（之前的 {sync_result.get('processed', 0)} 行已写入）")
+                return {"status": True, "data": sync_result, "msg": msg}
             return {"status": True, "data": sync_result, "msg": "同步完成"}
 
         # 5. 获取参数定义

@@ -190,7 +190,7 @@ async def execute_replace(api_config, params: dict, datasource, password: str, t
     where_sql = " AND ".join(f"{_q(c)} = %(w_{i})s" for i, c in enumerate(scope))
     where_binds = {f"w_{i}": v for i, v in enumerate(scope.values())}
     insert_sql = f"INSERT INTO {_q(table)} ({', '.join(_q(c) for c in cols)}) VALUES ({', '.join(['%s'] * len(cols))})"
-    values = [tuple(r[c] for c in cols) for r in rows]
+    values = [tuple(_db_value(r[c]) for c in cols) for r in rows]
 
     log.info(f"数据同步（替换）开始 | api_id={api_config.id} | table={table} | 条件={scope} | 插入行数={len(rows)}")
     pool = await _get_mysql_pool(datasource, password)
@@ -240,6 +240,14 @@ async def execute_replace(api_config, params: dict, datasource, password: str, t
     return {"tableName": table, "mode": "replace", "deleteWhere": scope, "deleted": deleted, "inserted": len(rows)}
 
 
+def _db_value(v):
+    """写库前的值转换 (v2.24)：数组 / 对象（如 entity_tags 直接传了 JSON 数组）转成 JSON 字符串，
+    否则数据库驱动会报 "expected tuple, got list"。其余原样。"""
+    if isinstance(v, (list, dict)):
+        return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
+    return v
+
+
 def _q(name: str) -> str:
     """给标识符加反引号。name 已经过 _IDENT_RE 校验，这里只做包裹。"""
     return f"`{name}`"
@@ -254,7 +262,7 @@ def build_statements(table: str, pk: List[str], row: dict) -> Tuple[str, dict, s
     for i, k in enumerate(pk):
         ph = f"pk_{i}"
         where_parts.append(f"{_q(k)} = %({ph})s")
-        where_binds[ph] = row[k]
+        where_binds[ph] = _db_value(row[k])
     where_sql = " AND ".join(where_parts)
 
     select_sql = f"SELECT 1 FROM {_q(table)} WHERE {where_sql} LIMIT 1"
@@ -266,7 +274,7 @@ def build_statements(table: str, pk: List[str], row: dict) -> Tuple[str, dict, s
         for i, c in enumerate(set_cols):
             ph = f"set_{i}"
             set_parts.append(f"{_q(c)} = %({ph})s")
-            set_binds[ph] = row[c]
+            set_binds[ph] = _db_value(row[c])
         update_sql = f"UPDATE {_q(table)} SET {', '.join(set_parts)} WHERE {where_sql}"
         update_binds = {**set_binds, **where_binds}
     else:
@@ -277,7 +285,7 @@ def build_statements(table: str, pk: List[str], row: dict) -> Tuple[str, dict, s
     for i, c in enumerate(cols):
         ph = f"ins_{i}"
         ins_parts.append(f"%({ph})s")
-        ins_binds[ph] = row[c]
+        ins_binds[ph] = _db_value(row[c])
     insert_sql = (
         f"INSERT INTO {_q(table)} ({', '.join(_q(c) for c in cols)}) "
         f"VALUES ({', '.join(ins_parts)})"
