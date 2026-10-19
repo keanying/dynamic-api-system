@@ -127,5 +127,17 @@ check("数组转 JSON 字符串（中文不转义）", ib["ins_1"] == '[{"type":
 check("对象转 JSON 字符串", ib["ins_2"] == '{"a":1}' and ub["set_1"] == '{"a":1}')
 check("普通值原样", ib["ins_0"] == 1 and ib["ins_3"] == 3 and wb["pk_0"] == 1)
 
+print("== 10. 写入类 API 调用日志：完整记录返回结果 ==")
+from app.services.call_log_writer import clip_utf8, write_outcome, is_write_api
+from types import SimpleNamespace as _NS
+check("同步 / 更新 / 删除算写入类", all(is_write_api(_NS(api_type=t)) for t in ("sync", "update", "delete")) and not is_write_api(_NS(api_type="sql")))
+_long = "九嶷山🔥" * 20000
+_c = clip_utf8(_long, 60000)
+check("按 UTF-8 字节截断（中文 / emoji 不超 TEXT 上限）", len(_c.encode("utf-8")) <= 60000 and _c.endswith("[已截断]"))
+check("未超长原样返回", clip_utf8('{"a":"九嶷山"}') == '{"a":"九嶷山"}')
+check("成功记 success", write_outcome({"status": True, "data": {"processed": 3}, "msg": "同步完成"}) == ("success", ""))
+check("中途失败（status=true）记 error + 提示", write_outcome({"status": True, "data": {"failedIndex": 1}, "msg": "第 1 行写入失败"}) == ("error", "第 1 行写入失败"))
+check("校验失败记 error", write_outcome({"status": False, "data": None, "msg": "含未登记字段"}) == ("error", "含未登记字段"))
+
 print(f"========= 结果: {PASS} 通过, {FAIL} 失败 =========")
 sys.exit(1 if FAIL else 0)

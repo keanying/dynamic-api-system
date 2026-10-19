@@ -15,6 +15,7 @@ from app.core.logging import get_logger
 from app.models.models import ApiConfig, CallLog
 from app.schemas.schemas import TestApiRequest
 from app.services.engine import execute_api
+from app.services import call_log_writer
 from app.services.trace_context import TraceContext, set_trace, reset_trace
 from app.api.auth import get_current_user
 
@@ -65,21 +66,36 @@ async def test_api_execution(
         reset_trace(_tok)
 
     elapsed = (time.time() - start_time) * 1000
+    resp = {
+        "status": exec_result["status"],
+        "code": 0 if exec_result["status"] else ErrCode.GW_SQL_EXECUTE_FAILED.value,
+        "msg": exec_result["msg"],
+        "data": exec_result["data"],
+        "trace_id": trace_id,
+    }
     try:
         ok = bool(exec_result["status"])
+        req_logged = json.dumps(req.params, default=str, ensure_ascii=False)[:5000]
+        resp_logged = json.dumps(exec_result.get("data"), default=str, ensure_ascii=False)[:5000] if ok else ""
+        status_logged, err_logged = ("success" if ok else "error"), ("" if ok else str(exec_result.get("msg", "")))
+        if call_log_writer.is_write_api(api_config):
+            # 写入类：与网关一致，请求和返回的完整响应都记录
+            req_logged = call_log_writer.clip_utf8(json.dumps(req.params, default=str, ensure_ascii=False))
+            resp_logged = call_log_writer.clip_utf8(json.dumps(resp, default=str, ensure_ascii=False))
+            status_logged, err_logged = call_log_writer.write_outcome(resp)
         log_entry = CallLog(
             api_id=api_config.id,
             project_id=api_config.project_id,
             api_name=api_config.name,
             url_path=api_config.url_path,
             method=api_config.method,
-            request_params=json.dumps(req.params, default=str, ensure_ascii=False)[:5000],
-            response_status="success" if ok else "error",
+            request_params=req_logged,
+            response_status=status_logged,
             response_time_ms=elapsed,
             status_code=200 if ok else 500,
-            error_message="" if ok else str(exec_result.get("msg", ""))[:2000],
+            error_message=err_logged[:2000],
             client_ip=client_ip,
-            response_data=json.dumps(exec_result.get("data"), default=str, ensure_ascii=False)[:5000] if ok else "",
+            response_data=resp_logged,
             is_slow_query=elapsed >= settings.query.slow_query_threshold,
             call_source="test",
             trace_id=trace_id,
@@ -94,10 +110,4 @@ async def test_api_execution(
     else:
         log.warning(f"在线测试失败 | api_id={api_id} | name={api_config.name} | msg={exec_result['msg']}")
 
-    return {
-        "status": exec_result["status"],
-        "code": 0 if exec_result["status"] else ErrCode.GW_SQL_EXECUTE_FAILED.value,
-        "msg": exec_result["msg"],
-        "data": exec_result["data"],
-        "trace_id": trace_id,
-    }
+    return resp

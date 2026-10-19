@@ -1256,6 +1256,8 @@ async def execute_api(
                 f"{_tag}数据同步完成 | api_id={api_config.id} | name={api_config.name} | "
                 f"elapsed={elapsed:.2f}ms | {sync_result}"
             )
+            if tctx and isinstance(sync_result, dict):
+                tctx.set_row_count(sync_result.get("processed", sync_result.get("inserted", 0)))
             # 同步类不写缓存（写入型操作缓存没有意义）
             # 中途有行失败（遇错即停）：status 保持 true（前面的行已写入），但提示写清楚，不再说「同步完成」
             if isinstance(sync_result, dict) and "failedIndex" in sync_result:
@@ -1323,7 +1325,12 @@ async def execute_api(
 
         elapsed = (time.time() - start_time) * 1000
         if tctx:
-            tctx.set_row_count(len(data) if isinstance(data, list) else 0)
+            if isinstance(data, list):
+                tctx.set_row_count(len(data))
+            elif isinstance(data, dict) and (_is_update or _is_delete):
+                tctx.set_row_count(data.get("affected_rows", data.get("deleted_rows", 0)))
+            else:
+                tctx.set_row_count(0)
 
         if elapsed > settings.query.slow_query_threshold:
             log.warning(f"{_tag}慢查询 | api_id={api_config.id} | name={api_config.name} | elapsed={elapsed:.2f}ms | threshold={settings.query.slow_query_threshold}ms")

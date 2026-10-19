@@ -171,7 +171,8 @@ async function showLogDetail(logId) {
                 <div class="font-mono" style="word-break:break-all;cursor:pointer;color:#8f78ee;" onclick="copyTrace('${escapeHtml(log.trace_id || '')}')">${escapeHtml(log.trace_id || '-')}</div>
             </div>
         </div>
-        ${log.request_params ? `<div class="mb-16"><span class="text-muted text-sm">请求参数</span><div class="test-result" style="margin-top:6px;">${escapeHtml(jsonPretty(log.request_params))}</div></div>` : ''}
+        ${log.response_data ? `<div class="mb-16"><span class="text-muted text-sm">响应结果</span><div class="test-result" style="margin-top:6px; max-height:320px; overflow:auto;">${escapeHtml(jsonPretty(log.response_data))}</div></div>` : ''}
+        ${log.request_params ? `<div class="mb-16"><span class="text-muted text-sm">请求参数</span><div class="test-result" style="margin-top:6px; max-height:320px; overflow:auto;">${escapeHtml(jsonPretty(log.request_params))}</div></div>` : ''}
         ${log.rendered_sql ? `<div class="mb-16"><span class="text-muted text-sm">渲染后 SQL（模板展开、条件求值后）</span><div class="test-result" style="margin-top:6px;">${escapeHtml(log.rendered_sql)}</div></div>` : ''}
         ${log.executed_sql ? `<div class="mb-16"><span class="text-muted text-sm">执行 SQL（提交数据库的参数化语句 + 绑定值）</span><div class="test-result" style="margin-top:6px;">${escapeHtml(log.executed_sql)}</div></div>` : ''}
         ${log.error_message ? `<div class="mb-16"><span class="text-muted text-sm">错误信息</span><div class="test-result" style="margin-top:6px; background: #7f1d1d;">${escapeHtml(log.error_message)}</div></div>` : ''}

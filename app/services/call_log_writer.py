@@ -35,6 +35,39 @@ _dropped = 0
 _last_drop_warn = 0.0
 
 
+# ---- 写入类 API（数据同步 / 更新 / 删除）的日志：记录返回给调用方的完整响应 ----
+# 查询类 API 的日志只截前 5000 字符的数据预览；写入类的返回本身很小，但事后对账要看到
+# 「对方到底收到了什么」，所以请求和响应都按字节截断后整段落库（TEXT 列上限 65535 字节）。
+WRITE_API_TYPES = ("sync", "update", "delete")
+WRITE_LOG_MAX_BYTES = 60000
+
+
+def is_write_api(api_config) -> bool:
+    return (getattr(api_config, "api_type", "sql") or "sql").lower() in WRITE_API_TYPES
+
+
+def clip_utf8(text: str, max_bytes: int = WRITE_LOG_MAX_BYTES) -> str:
+    """按 UTF-8 字节截断（按字符截断时中文、emoji 可能超出 TEXT 列长度，严格模式下整批日志写入失败）。"""
+    if not text:
+        return ""
+    raw = text.encode("utf-8")
+    if len(raw) <= max_bytes:
+        return text
+    marker = "…[已截断]"
+    return raw[: max_bytes - len(marker.encode("utf-8"))].decode("utf-8", errors="ignore") + marker
+
+
+def write_outcome(result: dict) -> tuple:
+    """写入类 API 的日志状态：(response_status, error_message)。
+    数据同步中途某行失败时接口仍返回 status=true（前面的行已写入），日志按失败记，便于筛出来。"""
+    data = result.get("data")
+    if not result.get("status"):
+        return "error", str(result.get("msg", ""))
+    if isinstance(data, dict) and "failedIndex" in data:
+        return "error", str(result.get("msg", ""))
+    return "success", ""
+
+
 def start(session_factory) -> None:
     global _queue, _task, _session_factory
     _session_factory = session_factory

@@ -399,11 +399,12 @@ async def gateway_handler(
     elapsed = (time.time() - start_time) * 1000
     ok = bool(result.get("status"))
     data = result.get("data")
+    is_write = call_log_writer.is_write_api(api_config)
     # v2.20: 结果统一成「序列化好的 JSON 字节」（开了缓存的 API 由引擎直接给出，
     # 命中缓存时无需解析；未开缓存的在这里序列化一次），日志预览也从这份字节里截取
     entry = data if isinstance(data, result_cache.CachedResult) else result_cache.CachedResult.from_data(data, compress=False)
     response_data = entry.preview(5000) if ok else ""
-    if _GATEWAY_INFO:
+    if _GATEWAY_INFO and not is_write:
         log.info(
             f"网关响应 | api_id={api_config.id} | api_name={api_config.name} | {method} {full_url} | "
             f"状态={'成功' if ok else '失败'} | elapsed={elapsed:.1f}ms | rows={tctx.row_count} | "
@@ -412,19 +413,49 @@ async def gateway_handler(
             f"data_preview={(response_data[:500] if data else 'null')}"
         )
 
+    # 7. 在返回中加入 code 字段和 trace_id
+    if result.get("status"):
+        result["code"] = 0
+    else:
+        result["code"] = ErrCode.GW_SQL_EXECUTE_FAILED.value
+    result["trace_id"] = trace_id
+
+    # 拼装响应：data 部分直接用序列化好的字节；客户端支持 gzip 且数据较大时，
+    # 用预压缩块拼出 gzip 流（大结果传输量通常降到 1/10 左右）
+    # 写入类（同步/更新/删除）返回很小，不压缩，日志直接记录这份原样发出的响应体
+    gzip_min = int(getattr(settings.gateway, "gzip_min_bytes", 0) or 0)
+    gzip_ok = (
+        not is_write and gzip_min > 0 and entry.length >= gzip_min
+        and "gzip" in request.headers.get("accept-encoding", "").lower()
+    )
+    body, gz = result_cache.build_response_body(result, entry, gzip_ok)
+
     # 6.5 建档 + 回填：登记一条完整的调用日志（含关键节点），由后台批量落库
     try:
+        response_status = "success" if ok else "error"
+        error_message = "" if ok else str(result.get("msg", ""))
+        req_logged = request_params_json[:5000]
+        if is_write:
+            # 写入类：请求、返回给调用方的完整响应体都原样记录（含 code/msg/trace_id、失败行）
+            response_status, error_message = call_log_writer.write_outcome(result)
+            response_data = call_log_writer.clip_utf8(body.decode("utf-8", errors="replace"))
+            req_logged = call_log_writer.clip_utf8(request_params_json)
+            log.info(
+                f"写入类 API 响应 | api_id={api_config.id} | api_name={api_config.name} | {method} {full_url} | "
+                f"状态={'成功' if response_status == 'success' else '失败'} | elapsed={elapsed:.1f}ms | "
+                f"rows={tctx.row_count} | client_ip={client_ip} | response={response_data[:20000]}"
+            )
         fields = dict(
             api_id=api_config.id,
             project_id=api_config.project_id,
             api_name=api_config.name,
             url_path=full_url,
             method=method,
-            request_params=request_params_json[:5000],
-            response_status="success" if ok else "error",
+            request_params=req_logged,
+            response_status=response_status,
             response_time_ms=elapsed,
             status_code=200 if ok else 500,
-            error_message="" if ok else str(result.get("msg", ""))[:2000],
+            error_message=error_message[:2000],
             client_ip=client_ip,
             response_data=response_data,
             is_slow_query=elapsed >= settings.query.slow_query_threshold,
@@ -436,21 +467,6 @@ async def gateway_handler(
     except Exception as log_err:
         log.warning(f"记录调用日志失败 | trace_id={trace_id} | error={str(log_err)}")
 
-    # 7. 在返回中加入 code 字段和 trace_id
-    if result.get("status"):
-        result["code"] = 0
-    else:
-        result["code"] = ErrCode.GW_SQL_EXECUTE_FAILED.value
-    result["trace_id"] = trace_id
-
-    # 拼装响应：data 部分直接用序列化好的字节；客户端支持 gzip 且数据较大时，
-    # 用预压缩块拼出 gzip 流（大结果传输量通常降到 1/10 左右）
-    gzip_min = int(getattr(settings.gateway, "gzip_min_bytes", 0) or 0)
-    gzip_ok = (
-        gzip_min > 0 and entry.length >= gzip_min
-        and "gzip" in request.headers.get("accept-encoding", "").lower()
-    )
-    body, gz = result_cache.build_response_body(result, entry, gzip_ok)
     headers = {"Vary": "Accept-Encoding"}
     if gz:
         headers["Content-Encoding"] = "gzip"
